@@ -33,10 +33,14 @@ void main() {
   });
   tearDown(() => tmp.delete(recursive: true));
 
+  // One file per program text: the zip writer stamps the time into the
+  // archive, so two archives made a moment apart differ byte for byte,
+  // while the app always installs from one fixed file.
+  final bundles = <String, List<int>>{};
   Future<HelperInstallResult> install(String program, {int build = 142, String version = '1.12.0'}) =>
       installClaudeHelper(
           stableDir: dir,
-          bundleBytes: bundleOf(program),
+          bundleBytes: bundles.putIfAbsent(program, () => bundleOf(program)),
           version: version,
           build: build,
           os: 'linux',
