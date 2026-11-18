@@ -114,12 +114,14 @@ def pubspec_version():
 
 
 def tool_names_from_source():
-    """The tool names registered in lib/mcp/tools.dart and its part
-    tools_speech.dart (fallback when the program cannot be run on this
-    computer)."""
+    """The tool names registered in lib/mcp/tools.dart and its parts
+    (every lib/mcp/tools*.dart, so a new part file is picked up by
+    itself); the fallback when the program cannot be run on this computer
+    and the list the built program is compared with."""
     names = []
-    for name in ("tools.dart", "tools_speech.dart", "tools_selftest.dart"):
-        with open(os.path.join(ROOT, "lib", "mcp", name), encoding="utf-8") as f:
+    folder = os.path.join(ROOT, "lib", "mcp")
+    for name in sorted(n for n in os.listdir(folder) if re.fullmatch(r"tools(_\w+)?\.dart", n)):
+        with open(os.path.join(folder, name), encoding="utf-8") as f:
             names += re.findall(r"^\s{6,10}name: '([a-z_]+)',$", f.read(), re.M)
     return [{"name": n} for n in names]
 
