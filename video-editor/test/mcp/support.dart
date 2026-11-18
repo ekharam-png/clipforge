@@ -11,6 +11,8 @@ import 'package:clipforge/mcp/environment.dart';
 import 'package:clipforge/mcp/export_jobs.dart';
 import 'package:clipforge/mcp/mcp_protocol.dart';
 import 'package:clipforge/mcp/tools.dart';
+import 'package:clipforge/mcp/transcribe_jobs.dart';
+import 'package:clipforge/media/transcribe/transcription_service.dart';
 import 'package:clipforge/media/ffmpeg_command.dart' show FontPaths;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -133,9 +135,12 @@ class Bench {
       bool fonts = true,
       String Function()? newId,
       ExportLauncher? exportLauncher,
-      Future<bool> Function(int pid)? isAlive}) {
+      Future<bool> Function(int pid)? isAlive,
+      TranscriptionService Function(String root)? speech,
+      Duration speechHeartbeat = const Duration(milliseconds: 40)}) {
     final tmp = Directory.systemTemp.createTempSync('clipforge_mcp_test_');
     final root = Directory.current.path;
+    final service = speech?.call(p.join(tmp.path, 'ClipForge'));
     final tools = ClipForgeTools(
       projectsDir: ProjectsDir(p.join(tmp.path, 'ClipForge', 'projects'), 'test'),
       media: MediaTools(
@@ -151,6 +156,11 @@ class Bench {
       newId: newId,
       exportLauncher: exportLauncher,
       isAlive: isAlive,
+      speech: service,
+      transcribeLauncher: service == null
+          ? null
+          : inProcessTranscribeLauncher((_) => service,
+              heartbeat: speechHeartbeat),
     );
     final server = McpServer(name: kServerName, version: kServerVersion, tools: tools.tools);
     return Bench._(tmp, tools, Client(server));

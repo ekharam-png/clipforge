@@ -9,6 +9,7 @@ import '../playback/timeline_player.dart';
 import '../gallery_search.dart';
 import '../music_search.dart';
 import '../services.dart';
+import '../speech/speech_service.dart';
 import 'sound_renders.dart';
 
 enum ItemKind { clip, audio, title, overlay }
@@ -128,6 +129,7 @@ class EditorSession {
     ProcessedSoundCache soundCache = const NoProcessedSoundCache(),
     this.gallery = const NoGallerySearch(),
     this.music = const NoMusicSearch(),
+    this.speech,
   }) : sounds = SoundRenders(
           engine: engine,
           cache: soundCache,
@@ -158,6 +160,34 @@ class EditorSession {
 
   /// "Add music" > "Find free music" (Openverse).
   final MusicSearch music;
+
+  /// Speech-to-text (1.11). Null on phones: nothing about speech is shown.
+  final SpeechService? speech;
+
+  /// The stored transcripts of this project's sounds, by
+  /// [SpeechSource.key]; filled by [loadTranscripts].
+  final ValueNotifier<Map<String, Transcript>> transcripts =
+      ValueNotifier(const {});
+
+  /// The Transcript column is shown (computers only).
+  final ValueNotifier<bool> showTranscript = ValueNotifier(false);
+
+  Transcript? transcriptOf(String path, int audioTrack) =>
+      transcripts.value['$path|$audioTrack'];
+
+  /// Reads the transcripts the project's clips have (after opening, and
+  /// when media was added).
+  Future<void> loadTranscripts() async {
+    final service = speech;
+    if (service == null) return;
+    try {
+      final found = await service.transcriptsOf(
+          project.id, speechSourcesOfProject(project));
+      if (!_disposed) transcripts.value = found;
+    } catch (_) {
+      // No transcripts is a normal state.
+    }
+  }
 
   final ValueNotifier<Selection?> selection = ValueNotifier(null);
 
@@ -359,6 +389,8 @@ class EditorSession {
     cropTarget.dispose();
     cropRatio.dispose();
     showHistory.dispose();
+    showTranscript.dispose();
+    transcripts.dispose();
     copiedSettings.dispose();
     snapping.dispose();
     snapLine.dispose();

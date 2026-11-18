@@ -18,6 +18,7 @@ import 'media_jobs.dart';
 import 'sound_filters.dart';
 import 'processed_sound.dart' show parseProgressTimeMs;
 import 'sound_align_job.dart';
+import 'jump_check.dart';
 import 'sound_render_job.dart';
 import 'video_encoder.dart';
 
@@ -26,7 +27,8 @@ class ProcessMediaEngine
         MediaEngine,
         ThumbnailStripEngine,
         SilenceJobEngine,
-        SoundAlignEngine {
+        SoundAlignEngine,
+        JumpCheckEngine {
   /// [ffmpegPath] / [ffprobePath]: executables to run. When null, a binary
   /// next to the application executable is preferred, then the PATH.
   ///
@@ -243,6 +245,11 @@ class ProcessMediaEngine
           {int videoAudioTrack = 0, int voiceAudioTrack = 0}) =>
       alignSoundWith(_ffmpeg, probe, videoPath, voicePath,
           videoAudioTrack: videoAudioTrack, voiceAudioTrack: voiceAudioTrack);
+
+  @override
+  Future<List<double?>> jumpScores(
+          String path, List<({int beforeMs, int afterMs})> cuts) =>
+      jumpScoresWith(_ffmpeg, path, cuts);
 
   @override
   ExportJob renderClipSound(Clip clip, String outputPath) => SoundRenderJob(

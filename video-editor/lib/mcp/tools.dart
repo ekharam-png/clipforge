@@ -19,16 +19,27 @@ import '../core/model/title_layout.dart';
 import '../core/storage/project_lock.dart';
 import '../core/storage/project_store.dart';
 import '../core/subtitles/srt.dart';
+import '../core/transcript/captions.dart';
+import '../core/transcript/cut_plan.dart';
+import '../core/transcript/fillers.dart';
+import '../core/transcript/speech_edits.dart';
+import '../core/transcript/transcript_store.dart';
+import '../core/transcript/transcript_timeline.dart';
 import '../core/editor/sound_tracks.dart' show VoiceProblem;
 import '../media/clip_silences.dart';
+import '../media/jump_check.dart';
 import '../media/media_api.dart';
 import '../media/sound_align.dart';
+import '../media/transcribe/transcription_service.dart';
 import '../media/video_encoder.dart' show kSmallMaxRateKbps;
 import 'environment.dart';
 import 'export_jobs.dart';
 import 'mcp_protocol.dart';
 import 'report.dart';
 import 'summary.dart';
+import 'transcribe_jobs.dart';
+
+part 'tools_speech.dart';
 
 const String kServerName = 'clipforge';
 const String kServerTitle = 'ClipForge video editor';
@@ -105,6 +116,16 @@ const String kServerInstructions =
     'are trimmed, cut, moved or sped up they move along, and one whose '
     'footage is removed completely is removed too. Music does NOT move; '
     'check it with get_project after cutting.\n'
+    'SPEECH: transcribe turns what is said into text with word times '
+    '(a background job like exports: poll get_transcribe_status). Then '
+    'get_transcript reads it (compact; page long talks), find_in_transcript '
+    'finds a phrase, captions_from_transcript makes captions, '
+    'remove_fillers cuts "um" / "uh" (dry_run is true by default) and '
+    'make_short turns a part of the timeline into a new upright project. '
+    'transcribe never downloads anything by itself: when a language pack '
+    'is missing it says which and how big; ask the user, then pass '
+    'download_pack true. You can read what is SAID; you still cannot see '
+    'the picture.\n'
     'If a tool says FFmpeg is missing, pass the install instruction on to '
     'the user; call get_status to see what was found.';
 
@@ -237,6 +258,34 @@ List<({int startMs, int endMs})> silencesToCut(
     }
   }
   return (titles: out, skipped: skipped);
+}
+
+/// The warning for an edit that moved the picture ([before] -> [after])
+/// while sound that is NOT linked to a clip sits on a speech track: such
+/// sound stays at its timeline time (like music), so it is now out of sync
+/// with the picture. Null when the cut did not change or nothing is
+/// unlinked.
+String? unlinkedSpeechWarning(Project before, Project after) {
+  if (timelineKey(before) == timelineKey(after)) return null;
+  final loose = [
+    for (final a in after.audio)
+      if (after.trackById(a.trackId)?.speech == true &&
+          !(a.belongsToClip && a.linked))
+        a,
+  ];
+  if (loose.isEmpty) return null;
+  final tracks = {
+    for (final a in loose) after.trackById(a.trackId)?.name ?? a.trackId,
+  };
+  return '${loose.length} sound item(s) on the speech track(s) '
+      '${tracks.map((t) => '"$t"').join(', ')} are NOT linked to a clip '
+      '(${loose.take(3).map((a) => '"${p.basename(a.path)}"').join(', ')}'
+      '${loose.length > 3 ? ', …' : ''}), so they did not move with this cut '
+      'and are now OUT OF SYNC with the picture. A voice recorded '
+      'separately must be linked to follow cuts: undo, then add it with '
+      'add_voice (a new file) or link the existing sound with align_audio '
+      '(audio_id, clip_id); after that every cut and remove_silences takes '
+      'picture and voice together.';
 }
 
 /// A key for the cut of [project]: which parts of which files play, in
@@ -478,13 +527,33 @@ class ClipForgeTools {
     String? stateDir,
     this.isAlive,
     this.hostName,
+    TranscriptionService? speech,
+    TranscribeLauncher? transcribeLauncher,
   })  : store = FileProjectStore(projectsDir.path),
+        speechRoot = p.dirname(p.normalize(p.absolute(projectsDir.path))),
         _newId = newId ?? const Uuid().v4,
         jobs = ExportJobStore(stateDir ??
             p.join(p.dirname(p.normalize(p.absolute(projectsDir.path))), 'claude-jobs')) {
     this.exportLauncher = exportLauncher ??
         inProcessLauncher(() async => await media.requireEngine());
+    this.speech = speech ??
+        TranscriptionService(
+            rootDir: speechRoot, appVersion: BuildInfo.current.version);
+    transcribeJobs = TranscribeJobStore(p.join(jobs.dir, 'transcribe'));
+    this.transcribeLauncher = transcribeLauncher ??
+        inProcessTranscribeLauncher((_) => this.speech);
   }
+
+  /// The ClipForge folder (`<Documents>/ClipForge`): language packs are in
+  /// its `models` folder, shared with the app.
+  final String speechRoot;
+
+  /// Speech-to-text on this computer.
+  late final TranscriptionService speech;
+
+  /// The transcribe jobs, and where they run.
+  late final TranscribeJobStore transcribeJobs;
+  late final TranscribeLauncher transcribeLauncher;
 
   final ProjectsDir projectsDir;
   final MediaTools media;
@@ -527,8 +596,12 @@ class ClipForgeTools {
         .map((i) => '"${i.name}" (project_id ${i.id})')
         .join(', ');
     if (byName.length > 1) {
-      throw ToolError('${byName.length} projects are called "$wanted". '
-          'Use the project_id instead: ${listing(byName)}.');
+      throw ToolError('${byName.length} projects are called "$wanted", so '
+          'the name alone does not say which. Use the project_id of the '
+          'one you mean: ${byName.take(20).map((i) => 'project_id ${i.id} '
+              '(last changed ${i.updatedAt.toLocal().toString().split('.').first}, '
+              '${clock(i.durationMs)} long)').join('; ')}. Ask the user '
+          'which one if that does not settle it.');
     }
     throw ToolError('There is no project with the id or name "$wanted" in '
         '${store.rootPath}. '
@@ -729,6 +802,22 @@ class ClipForgeTools {
               if (!kept.contains(t.id)) t,
           ];
     var message = done.message;
+    if (!changed && !dryRun && !_saysNothingItself.hasMatch(message)) {
+      // Not "Updated the settings ... Nothing was changed": only the truth.
+      // (What it had to say besides - its notes - is kept.)
+      final note = message.indexOf(' Note: ');
+      message = 'Nothing was changed: the project already had these values, '
+          'or what was asked is outside the allowed range.'
+          '${note < 0 ? '' : message.substring(note)}';
+    } else if (dryRun) {
+      // A dry run did nothing: say what it WOULD do.
+      for (final e in _wouldForms.entries) {
+        if (message.startsWith('${e.key} ')) {
+          message = 'Would ${e.value}${message.substring(e.key.length)}';
+          break;
+        }
+      }
+    }
     if (lost.isNotEmpty) {
       message += ' ${lost.length} title(s) / caption(s) were removed along '
           'with the footage they were on: '
@@ -736,14 +825,17 @@ class ClipForgeTools {
           '${lost.length > 5 ? ', …' : ''}.';
     }
     if (notes.isNotEmpty) message += ' ${notes.join('. ')}.';
-    if (!changed) {
-      message += '\nNothing was changed in the project (it already had these '
-          'values, or the request was outside the allowed range).';
+    if (!changed && !message.startsWith('Nothing was changed')) {
+      message += '\nNothing ${dryRun ? 'would be' : 'was'} changed in the '
+          'project (it already has these values, or the request is outside '
+          'the allowed range).';
     }
     if (dryRun) {
-      message = 'DRY RUN - nothing was saved. This is what the edit would do: '
-          '$message';
+      message = 'DRY RUN - nothing was saved. $message';
     }
+    final extraWarnings = [
+      for (final w in (done.extra['_warnings'] as List?) ?? const []) '$w',
+    ];
     return _projectResult(
       message,
       dryRun ? after.copyWith(updatedAt: loaded.project.updatedAt) : after,
@@ -751,17 +843,41 @@ class ClipForgeTools {
       detail: args['detail'] as String?,
       warnings: [
         if (shortened.isNotEmpty) shortCaptionWarning(shortened),
+        ?unlinkedSpeechWarning(loaded.project, after),
+        ...extraWarnings,
       ],
       extra: {
         'changed': changed && !dryRun,
         if (dryRun) 'dryRun': true,
         if (dryRun) 'wouldChange': changed,
-        ...done.extra,
+        ...{...done.extra}..remove('_warnings'),
         if (lost.isNotEmpty) 'titlesRemovedWithFootage': [for (final t in lost) t.id],
       },
       maxTitles: kSummaryTitles,
     );
   }
+
+  /// Messages that already say that (and why) nothing happened; any
+  /// other message of an edit that changed nothing is replaced.
+  static final RegExp _saysNothingItself =
+      RegExp(r'^(No |Nothing |There (is|are) no |None )');
+
+  /// Past tense at the start of a message -> what a dry run says.
+  static const Map<String, String> _wouldForms = {
+    'Separated': 'separate',
+    'Removed': 'remove',
+    'Updated': 'update',
+    'Applied': 'apply',
+    'Copied': 'copy',
+    'Set': 'set',
+    'Trimmed': 'trim',
+    'Added': 'add',
+    'Imported': 'import',
+    'Put': 'put',
+    'Cut': 'cut',
+    'Moved': 'move',
+    'Changed': 'change',
+  };
 
   // Undo / redo of Claude's own edits --------------------------------------
   //
@@ -1268,6 +1384,8 @@ class ClipForgeTools {
   static const Set<String> _noDetail = {
     'get_status', 'list_projects', 'get_project', 'export_srt', 'export_video', //
     'get_export_status', 'cancel_export', 'list_sound_tracks',
+    'transcribe', 'get_transcribe_status', 'cancel_transcribe',
+    'get_transcript', 'find_in_transcript', 'list_auto_cuts',
   };
 
   /// Tools that change many clips at once and so take `dry_run`.
@@ -1731,8 +1849,16 @@ class ClipForgeTools {
             min: -90,
             max: 0),
         'min_silence_ms': _int(
-            'Only silences at least this long are found, in ms. Default 700.',
+            'Only silences at least this long are found, in ms. Default 700. '
+            'A larger value (1000-1500) cuts fewer, longer pauses: gentler.',
             min: 100),
+        'max_cuts_per_minute': _int(
+            'Guard rail: at most this many cuts a minute (the longest pauses '
+            'are cut first). Default: no limit. The answer always says how '
+            'many cuts a minute it makes; above about 6 a talking-head video '
+            'starts to look jumpy.',
+            min: 1,
+            max: 60),
       },
       required: const ['project_id'],
       destructive: true,
@@ -2528,6 +2654,7 @@ class ClipForgeTools {
       destructive: true,
       handler: _cancelExport,
     ),
+    ..._speechToolDefs,
   ];
 
   // Handlers ----------------------------------------------------------------
@@ -2545,6 +2672,7 @@ class ClipForgeTools {
       for (final r in jobs.list())
         if (r.isActive) r,
     ];
+    final speechStatus = await _speechStatus();
     final text = StringBuffer()
       ..writeln('$kServerTitle MCP server.')
       ..writeln('Version: ${BuildInfo.current.describe()}')
@@ -2562,6 +2690,7 @@ class ClipForgeTools {
       ..writeln('Export jobs: ${jobs.dir} (exports run in '
           '${exportLauncher.description}); '
           '${running.isEmpty ? 'none running' : '${running.length} running: ${running.map((r) => '${r.id} "${r.projectName}" ${(r.progress * 100).floor()}%').join(', ')}'}.')
+      ..writeln(speechStatus.text)
       ..writeln()
       ..writeln('Running on $os.')
       ..writeln('Projects folder chosen by: ${projectsDir.source}')
@@ -2606,6 +2735,7 @@ class ClipForgeTools {
       'jobsDir': jobs.dir,
       'exportsRun': exportLauncher.description,
       'runningExports': [for (final r in running) r.id],
+      'transcription': speechStatus.data,
       'note': kCloseProjectRule,
     });
   }
@@ -2702,8 +2832,21 @@ class ClipForgeTools {
       throw ToolError('The project could not be created in ${store.rootPath}: '
           '${e.message}');
     }
-    return _projectResult('Created the project "${project.name}".', project,
+    return _projectResult(
+        'Created the project "${project.name}".'
+        '${project.name == name ? '' : ' (A project called "$name" already exists, so this one got a number.)'}',
+        project,
         detail: a['detail'] as String?, extra: {'changed': true});
+  }
+
+  /// The note for a new project whose name got " (2)" because [asked]
+  /// (or, without one, [fallback]) was taken.
+  static String _numbered(String got, String? asked, String fallback) {
+    final wanted = (asked ?? '').trim().isEmpty ? fallback : asked!.trim();
+    return got == wanted
+        ? ''
+        : ' (A project called "$wanted" already exists, so this one got a '
+            'number.)';
   }
 
   Future<ToolResult> _duplicateProject(Map<String, dynamic> a, ToolCall call) async {
@@ -2716,7 +2859,8 @@ class ClipForgeTools {
     }
     return _projectResult(
         'Copied "${source.project.name}" to the new project "${copy.name}" '
-        '(project_id ${copy.id}). The original is unchanged.',
+        '(project_id ${copy.id}). The original is unchanged.'
+        '${_numbered(copy.name, a['name'] as String?, '${source.project.name} copy')}',
         copy,
         detail: a['detail'] as String?,
         extra: {'changed': true, 'sourceProjectId': source.project.id},
@@ -3135,6 +3279,8 @@ class ClipForgeTools {
       final perClip = <Map<String, dynamic>>[];
       final allCuts = <Map<String, dynamic>>[];
       var total = 0;
+      final maxPerMinute = _i(a, 'max_cuts_per_minute');
+      var heldBack = 0;
       var analysed = 0;
       for (final clip in targets) {
         if (call.isCancelled) throw ToolError('Cancelled.');
@@ -3189,7 +3335,20 @@ class ClipForgeTools {
             ? found['${own.path}|${own.audioTrack}|${own.channel.name}']!
             : silentInAll(lists, minMs: minSilence);
         analysed++;
-        final cuts = silencesToCut(clip, silences);
+        var cuts = silencesToCut(clip, silences);
+        if (maxPerMinute != null && cuts.isNotEmpty) {
+          // Guard rail: at most this many cuts a minute, the longest
+          // pauses first.
+          final room = (clip.durationMs / 60000 * maxPerMinute).ceil();
+          final keep = room < 1 ? 1 : room;
+          if (cuts.length > keep) {
+            heldBack += cuts.length - keep;
+            final longest = [...cuts]
+              ..sort((x, y) => (y.endMs - y.startMs).compareTo(x.endMs - x.startMs));
+            cuts = longest.take(keep).toList()
+              ..sort((x, y) => x.startMs.compareTo(y.startMs));
+          }
+        }
         final index = before.clips.indexWhere((c) => c.id == clip.id);
         for (final c in cuts) {
           allCuts.add({
@@ -3203,26 +3362,41 @@ class ClipForgeTools {
           });
         }
         final removed = cuts.isEmpty ? 0 : e.removeSourceRanges(clip.id, cuts);
+        // Remembered in the project, so each can be listed and put back
+        // (list_auto_cuts, restore_cut).
+        if (removed > 0) {
+          logSilenceCuts(e, clip.path, cuts, by: 'claude', newId: _newId);
+        }
         total += removed;
         perClip.add({'clipId': clip.id, 'file': p.basename(clip.path), 'gapsRemoved': removed});
       }
       final saved = before.durationMs - e.project.durationMs;
       final dryRun = a['dry_run'] == true;
+      final perMinute = before.durationMs <= 0
+          ? 0.0
+          : total / (before.durationMs / 60000);
       final extra = {
         'gapsRemoved': total,
         'removedMs': saved,
-        'clips': perClip,
+        'cutsPerMinute': double.parse(perMinute.toStringAsFixed(1)),
+        if (heldBack > 0) 'heldBackByMaxPerMinute': heldBack,
+        'clips': perClip.length > 40 ? perClip.take(40).toList() : perClip,
+        if (perClip.length > 40) 'clipsOmitted': perClip.length - 40,
         'threshold': threshold ?? 'auto',
-        'cuts': allCuts.take(500).toList(),
-        if (allCuts.length > 500) 'cutsOmitted': allCuts.length - 500,
+        // Every cut ONCE, here (the text only shows the first few).
+        'cuts': allCuts.take(300).toList(),
+        if (allCuts.length > 300) 'cutsOmitted': allCuts.length - 300,
       };
       final listing = !dryRun || allCuts.isEmpty
           ? ''
-          : '\nCuts (timeline position now, length):\n${[
-              for (final c in allCuts.take(60))
-                '  ${clock(c['timelineStartMs'] as int)} -${c['removedMs']} ms '
-                    '(clip #${c['clipIndex']}, source ${c['sourceStartMs']}–${c['sourceEndMs']})',
-            ].join('\n')}${allCuts.length > 60 ? '\n  … ${allCuts.length - 60} more (structured "cuts" has up to 500)' : ''}';
+          : '\nFirst cuts (timeline position now, length; all of them are in '
+              'the structured "cuts"): ${[
+              for (final c in allCuts.take(8))
+                '${clock(c['timelineStartMs'] as int)} -${c['removedMs']} ms',
+            ].join(', ')}${allCuts.length > 8 ? ', … ${allCuts.length - 8} more' : ''}.';
+      final pace = ' That is ${perMinute.toStringAsFixed(1)} cut(s) a minute'
+          '${perMinute > kCutBudgetPerMinute ? ' - a lot for a video where the speaker is seen: it can look jumpy. Consider a longer min_silence_ms or max_cuts_per_minute ${kCutBudgetPerMinute.round()}, and tell the user the number' : ''}.'
+          '${heldBack > 0 ? ' $heldBack shorter pause(s) were left in (max_cuts_per_minute).' : ''}';
       final how = threshold != null
           ? 'threshold $threshold dB'
           : 'automatic threshold${used.isEmpty ? '' : ': ${used.join('; ')}'}';
@@ -3240,7 +3414,7 @@ class ClipForgeTools {
           '${e.project.titles.isEmpty ? '' : ' Titles and captions moved with their picture.'}'
           '${e.project.audio.any((x) => !x.linked) ? ' Music was NOT moved; check that it still fits.' : ''}'
           '${e.project.audio.any((x) => x.linked) ? ' Separated sound followed its clips.' : ''}'
-          ' ($how.)$listing',
+          '$pace ($how.)$listing',
           extra);
     });
   }
@@ -3402,9 +3576,12 @@ class ClipForgeTools {
         if (dropped > 0) '$dropped subtitle(s) were left out because their part of the recording is not on the timeline',
         ..._pastEnd(e.project, added),
       ];
+      final origin = originNote(e.project);
       return _Done(
           _withNotes('Imported ${added.length} caption(s) from ${cues.length} subtitle(s).', notes),
           {
+            // Also where warnings belong, not only in the sentence.
+            if (origin != null) '_warnings': [origin],
             'captionsAdded': added.length,
             'cuesInFile': cues.length,
             'cuesDropped': dropped,
@@ -4218,16 +4395,14 @@ class ClipForgeTools {
     final options = ExportOptions(
         quality: quality, useHardwareEncoder: hardware, fps: fps, format: format);
 
-    // A rough time up front, from the speed of the last export here.
-    double? rate;
-    for (final r in all) {
-      final v = r.result?['megapixelSecondsPerSecond'];
-      if (r.status == kJobFinished && v is num && r.host == localHostName()) {
-        rate = v.toDouble();
-        break;
-      }
-    }
-    final estimate = estimateRenderMs(project, options, measuredRate: rate);
+    // A rough time up front, from the speed of the last export OF THE SAME
+    // KIND here (graphics card / processor / sound only).
+    final speeds = <String, double>{
+      for (final kind in const ['sound', 'video-gpu', 'video-cpu'])
+        if (rememberedSpeed(all, kind, host: localHostName()) != null)
+          kind: rememberedSpeed(all, kind, host: localHostName())!,
+    };
+    final estimate = estimateRenderMs(project, options, speeds: speeds);
 
     final lock = await checkProjectLock(loaded.dir, isAlive: isAlive, hostName: hostName);
     final small = smallExportNote(project, quality, format);
@@ -4260,7 +4435,8 @@ class ClipForgeTools {
       createdAt: DateTime.now(),
       projectDurationMs: project.durationMs,
       estimateMs: estimate.ms,
-      estimateBasis: estimate.basis,
+      estimateBasis: 'between ${durationText(estimate.lowMs)} and '
+          '${durationText(estimate.highMs)}; ${estimate.basis}',
       heartbeatAt: DateTime.now(),
       host: localHostName(),
       runner: exportLauncher.description,
@@ -4364,7 +4540,7 @@ class ClipForgeTools {
         final eta = v.etaMs == null ? '' : ', about ${durationText(v.etaMs!)} left';
         text = '${started ? 'The export of "${r.projectName}" has started' : 'The export of "${r.projectName}" is ${v.status}'} '
             '(job_id ${r.id}): $percent% after ${durationText(v.elapsedMs)}$eta'
-            '${started ? ' (first estimate for the whole render: ${durationText(r.estimateMs)}, ${r.estimateBasis})' : ''}. '
+            '${started ? ' (first estimate for the whole render: about ${durationText(r.estimateMs)}, ${r.estimateBasis}; the time left is corrected from the real progress as it runs)' : ''}. '
             'It runs in ${r.runner}${r.runner.startsWith('a separate') ? ' and keeps going if this server is restarted' : ''}. '
             'Call get_export_status with job_id ${r.id} and wait_seconds '
             '$kMaxStatusWait until it says finished (do not start the export '

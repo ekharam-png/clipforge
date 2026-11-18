@@ -1255,7 +1255,8 @@ List<String> buildTitleDraws({
     for (var li = 0; li < lines.length; li++) {
       if (lines[li].trim().isEmpty) continue;
       final path = _joinPath(workDir, 'title_${n}_$li.txt');
-      textFiles[path] = lines[li];
+      // Right-to-left lines get direction marks (see bidiLine).
+      textFiles[path] = bidiLine(lines[li]);
       // Each line is centred on the block's centre line. The baseline is
       // placed so that capital letters are vertically centred on the
       // line; "ascent" keeps it independent of the glyphs used.

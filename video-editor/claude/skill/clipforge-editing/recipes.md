@@ -7,7 +7,8 @@ ask them to open the project in ClipForge.
 
 Contents: Podcast clean-up · Podcast with music · Sound only · Family
 montage · Sport highlight · Vertical version · Vertical with the person in
-shot · Picture-in-picture · Shorts from a long video · Finished look
+shot · Picture-in-picture · Captions from speech · Remove filler words,
+gently · Find the best shorts in a long video · Finished look
 
 ## Podcast clean-up
 
@@ -21,9 +22,9 @@ shot · Picture-in-picture · Shorts from a long video · Finished look
 4. `set_clip_properties` with `clip_id: "all"`: `denoise: true`,
    `voice_focus: 50`.
 5. Optional: speed 1.1–1.25 on all clips (ask; say the new length).
-6. Captions: only from an .srt they already have (`import_srt`; use
+6. Captions: `transcribe`, then `captions_from_transcript` (see "Captions
+   from speech"); or from an .srt they already have (`import_srt`; use
    `time_base: "source"` when the .srt was made from the uncut recording).
-   Automatic subtitles are not available yet.
 7. Export. Ask them to listen to two or three cuts: words must not be
    chopped.
 
@@ -142,45 +143,71 @@ if MP3 is refused because this FFmpeg cannot make it, offer M4A).
    second camera should start. Lining up by sound is not available.
 6. Export; ask them to watch the first seconds of the overlay for sync.
 
-## Shorts from a long video
+## Captions from speech
 
-Be honest first: **you cannot watch or listen, so you cannot pick the best
-moments yourself yet.** Say this in one sentence, then offer what works
-today:
+1. `transcribe` with the `language` they speak ("en", "ru", "he"). If it
+   answers that a language pack is needed, tell them the sizes and ask
+   which (see SKILL.md); then call again with `quality` and
+   `download_pack: true`. Poll `get_transcribe_status` to the end.
+2. `captions_from_transcript` with `dry_run: true`; show them the first
+   few. Upright video gets shorter lines by itself.
+3. For real (add `replace_existing: true` when captions are already
+   there). Style with `position`, `style`, `font` as for any title.
+4. Ask them to read the captions in ClipForge before exporting: names and
+   numbers are where speech recognition goes wrong. Small packs make more
+   mistakes, most of all in Hebrew; offer the Medium pack when they
+   complain.
 
-1. **Their times (best).** "Tell me the moments you want, like 12:30–13:10,
-   and I will make a short from each."
-2. **Structure from the sound.** `remove_silences` with `dry_run: true` on
-   the long project lists every pause with its position and length. Long
-   pauses (2 s and more) usually separate topics or answers. Offer the
-   stretches between long pauses that are 20–60 s long as candidates, by
-   time only ("0:42–1:15, 3:05–3:50 …"), and ask them to listen and choose.
-   Do not describe what is said there; you do not know.
-3. **An .srt, when one exists.** Ask whether they have a subtitle file for
-   the recording (from YouTube, a phone, another app). If yes, read it (or
-   `export_srt` if the captions are already in the project): now you know
-   the words and their times, and can suggest moments by topic, with the
-   quote and the time. Still ask them to confirm.
+## Remove filler words, gently
 
-Then, for each chosen moment:
+1. `transcribe` (as above). A transcript made by the FFmpeg filter rarely
+   contains "um" at all and has no exact word times: say so, and suggest
+   whisper.cpp or faster-whisper if they care about fillers.
+2. `remove_fillers` (dry run, strength "light" by default). Tell them the
+   numbers plainly: found, would cut, cuts per minute, time saved, how many
+   were left because the picture would jump.
+3. On "go ahead": `dry_run: false`. Then give them the times in `riskiest`
+   to watch.
+4. "It feels jumpy": `list_auto_cuts` with `sort: "risk"`, `restore_cut`
+   the worst, or `cut_id: "all"`. "Take out more": `strength: "normal"`,
+   dry run first. `"strong"` only when they ask or for sound only.
+5. Also cutting pauses? Add up the cuts per minute of `remove_silences`
+   and `remove_fillers`; stay near 6 a minute or below for a talking head
+   (`remove_silences` takes `max_cuts_per_minute` and a longer
+   `min_silence_ms`).
 
-1. `duplicate_project` named "Short 1 – <their words>" (never cut the long
-   project itself).
-2. Keep only that part: for one clip, `trim_clip` with source times; for a
-   cut-up project, `split_at` at both ends and `remove_clip` the rest
-   (use `get_project` `from_ms` / `to_ms` to find the clips).
-3. `aspect: "9:16"`, then `fit: "blur"`, or `"fill"` + `position_x` after
-   asking where the person is (see above).
-4. Optional: `remove_silences`, a title for the first 2–3 s, captions from
-   the .srt (`import_srt` with `time_base: "source"` keeps them in place
-   after the cut).
-5. `video_size: "1080p"`, export with `quality: "small"` into a "shorts"
-   folder next to the original. Start one export, poll it to the end, then
-   the next.
+## Find the best shorts in a long video
 
-When automatic transcription arrives in ClipForge this recipe improves:
-you will be able to read what is said and propose moments yourself. Until
-then, do not pretend to.
+You can read what is said, so you can propose moments. You still cannot
+see the picture: say so once.
+
+1. **Transcribe**: `transcribe` (language, pack as above), poll
+   `get_transcribe_status`.
+2. **Read**: `get_transcript` (default text; page with `offset` until
+   there is no `nextOffset`). A 25-minute talk is one or two answers.
+3. **Propose 3–5 moments**, each 20–60 s, that stand on their own: a
+   complete thought, a story with its ending, a strong claim, a funny
+   exchange. Give for each the times as m:ss, a one-line reason, and the
+   first words, for example: "12:31–13:08 — why sourdough fails the first
+   time ('The mistake everyone makes…')". Start at the start of a sentence
+   and end at the end of one: use `find_in_transcript` or
+   `get_transcript` with `format: "words"` around the spot for the exact
+   times, and leave about 300 ms before the first word and after the last.
+4. **Wait for their choice.** They may change times or drop some.
+5. **For each approved moment**: `make_short` with `from_ms`, `to_ms` and a
+   `name`. It copies the project, keeps only that part (titles, captions
+   and linked voices follow), makes it upright 9:16 at 1080p and adds
+   captions from the speech. The long project is not changed.
+6. Upright framing: `set_clip_properties` `"all"` on the short with
+   `fit: "blur"`, or `"fill"` + `position_x` after asking where the person
+   is in the picture.
+7. **Export** each short (`export_video`, `quality: "small"` suits phones),
+   one at a time: start, poll `get_export_status` to the end, then the
+   next. Tell them where the files are and ask them to watch each once.
+
+No transcript possible (no speech program)? Then work from their times
+("12:30–13:10") or from the long pauses `remove_silences` `dry_run: true`
+lists, and say that you are choosing blind.
 
 ## Finished look
 

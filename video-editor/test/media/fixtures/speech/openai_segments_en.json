@@ -1,0 +1,36 @@
+{
+  "text": " Welcome back to the show. Today we talk about bread.",
+  "segments": [
+    {
+      "id": 0,
+      "seek": 0,
+      "start": 0.0,
+      "end": 2.6,
+      "text": " Welcome back to the show.",
+      "tokens": [
+        1,
+        2
+      ],
+      "temperature": 0.0,
+      "avg_logprob": -0.2,
+      "compression_ratio": 1.1,
+      "no_speech_prob": 0.01
+    },
+    {
+      "id": 1,
+      "seek": 0,
+      "start": 2.6,
+      "end": 5.4,
+      "text": " Today we talk about bread.",
+      "tokens": [
+        1,
+        2
+      ],
+      "temperature": 0.0,
+      "avg_logprob": -0.2,
+      "compression_ratio": 1.1,
+      "no_speech_prob": 0.01
+    }
+  ],
+  "language": "en"
+}

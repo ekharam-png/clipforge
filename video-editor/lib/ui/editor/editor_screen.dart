@@ -28,6 +28,9 @@ import '../widgets.dart';
 import 'clip_actions.dart';
 import 'export_dialog.dart';
 import 'history_panel.dart';
+import 'speech_actions.dart';
+import 'transcript_panel.dart';
+import '../speech/speech_service.dart';
 import 'import_actions.dart';
 import 'leave_flow.dart';
 import 'music_actions.dart';
@@ -222,6 +225,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           soundCache: ref.read(processedSoundCacheProvider),
           gallery: ref.read(gallerySearchProvider),
           music: ref.read(musicSearchProvider),
+          speech: ref.read(speechServiceProvider),
         );
         _autosaver = Autosaver(editor, store);
       });
@@ -233,6 +237,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       s.selection.addListener(_updateMenu);
       s.snapping.addListener(_updateMenu);
       s.copiedSettings.addListener(_updateMenu);
+      s.showTranscript.addListener(_updateMenu);
+      s.transcripts.addListener(_updateMenu);
+      unawaited(s.loadTranscripts());
       // Timeline snapping is an app setting (on unless turned off).
       final prefs = ref.read(appPrefsProvider);
       // Phones: lighter preview decoding unless turned off (More sheet).
@@ -407,6 +414,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       toggleSnapping: _inFront(() => _setSnapping(s, !s.snapping.value)),
       snapping: s.snapping.value,
       showShortcuts: _inFront(() => showHelpArticle(context, 'keyboard-shortcuts')),
+      // Computers only: without a speech service there is no Speech menu.
+      speech: s.speech == null
+          ? null
+          : SpeechMenu(
+              transcribe: f(canTranscribe(p),
+                  () => showTranscribeDialog(context, s, clip: clip)),
+              captions:
+                  f(canTranscribe(p), () => captionsFromSpeech(context, s)),
+              fillers:
+                  f(canTranscribe(p), () => removeFillerWords(context, s)),
+              showTranscript: _inFront(() => _toggleTranscript(s)),
+              transcriptShown: s.showTranscript.value,
+              autoCuts: f(p.autoCuts.isNotEmpty, () => showAutoCuts(context, s)),
+            ),
     );
   }
 
@@ -677,6 +698,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     FocusManager.instance.removeListener(_onFocusChanged);
+    // First of all, and whatever else goes wrong below: this editor no
+    // longer has the project open (Claude's tools look at the mark).
+    _lock?.release();
     _exitListener.dispose();
     _tour.removeListener(_onTour);
     _tour.detachEditor(_tourHooks);
@@ -731,7 +755,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     _closing = true;
     try {
       final ok = await _readyToLeave(LeaveReason.backToProjects);
-      if (ok && mounted) Navigator.of(context).pop();
+      if (ok && mounted) {
+        // Saved and leaving: the project is no longer open here.
+        _lock?.release();
+        Navigator.of(context).pop();
+      }
     } finally {
       _closing = false;
     }
@@ -756,6 +784,26 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       return AppExitResponse.exit;
     } finally {
       _askingToQuit = false;
+    }
+  }
+
+  /// Shows or hides the Transcript column; in a narrow window it opens as
+  /// a dialog instead (computers only).
+  void _toggleTranscript(EditorSession s) {
+    if (s.speech == null) return;
+    if (MediaQuery.sizeOf(context).width < kWideLayoutWidth) {
+      showDialog<void>(
+        context: context,
+        builder: (dialog) => Dialog(
+          child: SizedBox(
+            width: 360,
+            height: MediaQuery.sizeOf(dialog).height * 0.7,
+            child: TranscriptPanel(session: s),
+          ),
+        ),
+      );
+    } else {
+      s.showTranscript.value = !s.showTranscript.value;
     }
   }
 
@@ -941,6 +989,21 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                                   )
                                 : const SizedBox.shrink(),
                           ),
+                          if (s.speech != null)
+                            ValueListenableBuilder<bool>(
+                              valueListenable: s.showTranscript,
+                              builder: (context, shown, _) => shown
+                                  ? Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const VerticalDivider(width: 1),
+                                        SizedBox(
+                                            width: 300,
+                                            child: TranscriptPanel(session: s)),
+                                      ],
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
                         ],
                       ),
                     ),
@@ -1032,6 +1095,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     isSelected: shown,
                     icon: const Icon(Icons.history, semanticLabel: 'History'),
                     onPressed: () => _toggleHistory(s),
+                  ),
+                ),
+              if (!narrow && s.speech != null)
+                ValueListenableBuilder<bool>(
+                  valueListenable: s.showTranscript,
+                  builder: (context, shown, _) => IconButton(
+                    key: const ValueKey('transcript-button'),
+                    tooltip: shown ? 'Hide transcript' : 'Transcript',
+                    isSelected: shown,
+                    icon: const Icon(Icons.subject, semanticLabel: 'Transcript'),
+                    onPressed: () => _toggleTranscript(s),
                   ),
                 ),
               TourAnchor(

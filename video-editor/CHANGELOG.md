@@ -4,6 +4,27 @@ Newest first. The version you have is in Help > About ClipForge (and at the
 bottom of the project list). This file is also the "What's new" page in the
 app's Help.
 
+## 1.11.0 – 18 November 2026
+
+- Speech to text, on the computer (Windows, Mac, Linux; not on phones). ClipForge can turn what is said in a video into text with the time of every word. Select a clip, open **Sound** and click **Transcribe speech…** (also Edit > Speech).
+  - It uses a speech program that is already on the computer and finds it by itself: FFmpeg 8 with its "whisper" filter, whisper.cpp, faster-whisper or OpenAI whisper. If none is there, it says in plain words what to install.
+  - Language packs, only when you ask. Nothing is bundled and nothing is downloaded by itself; the app stays the same size. Each language offers Small (about 140 MB: quick, more mistakes), Medium (about 470 MB: good) and Large (about 1.6 GB: best, every language). The size is shown before you press **Download**; **Remove** frees the space again. Packs for all languages are shared, never downloaded twice.
+  - With a voice recorded separately, the voice files are transcribed, one per speaker.
+  - The text stays right through cuts, speed changes and **Remove silences**: you transcribe once.
+- **Captions from speech…** writes the captions for you: one or two lines, split at sentences and pauses, in the look your captions have, one Undo step. "Um" and "uh" are left out.
+- Hebrew and Arabic titles and captions are now laid out right to left, in the preview and in the exported video: the full stop, question mark or number at the end of a line is on the correct side.
+- **Remove filler words…** cuts "um", "uh" and the like, gently by default so the video does not get jumpy: **Light**, **Normal** or **Strong**; a list to review with each filler's time, length and whether the picture would jump there; cuts kept apart; a short dissolve where the picture changes a little.
+- **Automatic cuts…** lists everything **Remove filler words…** and **Remove silences** cut out, with **Put back** for one cut and **Put back all**.
+- **Transcript**: a column that shows what is said, phrase by phrase, with times and speakers. Click a phrase to go there; search for a word.
+- Claude control:
+  - Claude can now read what is said (it still cannot see the picture): it transcribes in the background, reads and searches the transcript, makes captions, removes fillers gently (always showing the numbers first), and can put any automatic cut back.
+  - "Find the best shorts in a long video": Claude reads the transcript, proposes moments with a reason, and makes each one a new upright project with captions.
+  - Claude never downloads a language pack by itself: it tells you the size and asks first.
+  - Two projects can no longer end up with the same name: a new one gets "(2)". When a name is not enough to tell projects apart, Claude gets the ids and dates.
+  - Shorter answers again (long lists of ids are counted, not listed; silence cuts are listed once), clearer wording when nothing changed or in a dry run, a warning when a voice that is not linked to its clip goes out of sync after a cut.
+- Fixed: the "open in the app" mark could stay on the first project of a session. It now always belongs to the project that is really open.
+- New help pages (computer only): "Transcribe speech", "Captions from speech", "Remove filler words", "The transcript".
+
 ## 1.10.0 – 17 November 2026
 
 - **Voice recorded separately.** A voice that was recorded on its own file while the camera filmed (a separate microphone, a recorder, or Zoom's sound file per person) can now be put under the picture and kept there:

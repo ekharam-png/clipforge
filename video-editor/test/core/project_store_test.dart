@@ -59,9 +59,15 @@ void main() {
     final a = await store.create('');
     final b = await store.create('   ');
     expect(a.name, 'Untitled');
-    expect(b.name, 'Untitled');
+    // 1.11: no two projects with the same name.
+    expect(b.name, 'Untitled (2)');
+    expect((await store.create('untitled')).name, 'untitled (3)');
     expect(a.id, isNot(b.id));
-    expect(await store.list(), hasLength(2));
+    expect(await store.list(), hasLength(3));
+    final copy = await store.duplicate(a.id);
+    expect(copy.name, 'Untitled copy');
+    expect((await store.duplicate(a.id)).name, 'Untitled copy (2)');
+    expect((await store.duplicate(a.id, name: 'Untitled')).name, 'Untitled (4)');
   });
 
   test('save then load round-trips', () async {
@@ -278,7 +284,8 @@ void main() {
       expect((await store.duplicate('orig', name: '  Second cut ')).name, 'Second cut');
       expect((await store.duplicate('orig', name: '   ')).name, 'Trip copy');
       final again = await store.duplicate((await store.duplicate('orig')).id);
-      expect(again.name, 'Trip copy copy');
+      // 1.11: the second copy of "Trip" is "Trip copy (2)"; its copy:
+      expect(again.name, 'Trip copy (2) copy');
       expect((await store.list()).map((i) => i.id).toSet().length, 5);
     });
 

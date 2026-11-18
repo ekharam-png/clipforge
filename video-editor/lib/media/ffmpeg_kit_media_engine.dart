@@ -19,6 +19,7 @@ import 'media_common.dart';
 import 'media_jobs.dart';
 import 'sound_filters.dart';
 import 'sound_align_job.dart';
+import 'jump_check.dart';
 import 'sound_render_job.dart';
 import 'media_fonts.dart';
 import 'video_encoder.dart';
@@ -28,7 +29,8 @@ class FfmpegKitMediaEngine
         MediaEngine,
         ThumbnailStripEngine,
         SilenceJobEngine,
-        SoundAlignEngine {
+        SoundAlignEngine,
+        JumpCheckEngine {
   FfmpegKitMediaEngine({
     FontResolver? fontResolver,
     this.thumbnailDir,
@@ -169,6 +171,11 @@ class FfmpegKitMediaEngine
           {int videoAudioTrack = 0, int voiceAudioTrack = 0}) =>
       alignSoundWith(_ffmpeg, probe, videoPath, voicePath,
           videoAudioTrack: videoAudioTrack, voiceAudioTrack: voiceAudioTrack);
+
+  @override
+  Future<List<double?>> jumpScores(
+          String path, List<({int beforeMs, int afterMs})> cuts) =>
+      jumpScoresWith(_ffmpeg, path, cuts);
 
   @override
   ExportJob renderClipSound(Clip clip, String outputPath) => SoundRenderJob(

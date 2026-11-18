@@ -145,7 +145,7 @@ Last.''');
     String? top(String q) => search.search(q).firstOrNull?.article.id;
 
     test('finds the right article despite typos', () {
-      expect(top('trascirpe'), 'auto-subtitles');
+      expect(top('trascirpe'), 'transcribe-speech');
       expect(top('musci'), 'music');
       expect(top('vocie'), 'voice-focus');
       expect(top('vocie focus'), 'voice-focus');

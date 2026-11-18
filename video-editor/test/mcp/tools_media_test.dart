@@ -126,7 +126,7 @@ void main() {
       // A dry run lists the cut and saves nothing.
       final saved = (await b.store.load(id)).toJson();
       final dry = await c.ok('remove_silences', {'project_id': id, 'dry_run': true});
-      expect(dry.text, allOf(startsWith('DRY RUN'), contains('Would remove 1 silent gap(s)'), contains('Cuts (timeline position now')));
+      expect(dry.text, allOf(startsWith('DRY RUN'), contains('Would remove 1 silent gap(s)'), contains('First cuts (timeline position now')));
       final cut = (dry.data['cuts'] as List).single as Map;
       expect(cut['timelineStartMs'], closeTo(1650, 60));
       expect(cut['removedMs'], closeTo(1200, 100));

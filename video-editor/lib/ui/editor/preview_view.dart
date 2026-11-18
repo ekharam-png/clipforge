@@ -664,7 +664,8 @@ class _TitleItemState extends State<_TitleItem> {
       TitleAlign.right => TextAlign.right,
     };
     Widget text(TextStyle s) => Text(
-          block.lines.join('\n'),
+          // Right-to-left lines get direction marks, as in the export.
+          block.lines.map(bidiLine).join('\n'),
           textAlign: align,
           softWrap: false,
           textScaler: TextScaler.noScaling,

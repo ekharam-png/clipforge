@@ -33,15 +33,22 @@ Reference files (read only when needed):
 
 ## What you can and cannot know
 
-**You cannot see or hear the video.** You know only what the tools report:
-file names, lengths, sizes, where the silences are, caption text, and what
-is on the timeline. So:
+**You cannot see the picture.** Since ClipForge 1.11 you CAN know what is
+said: `transcribe` turns the speech into text with times, and
+`get_transcript` / `find_in_transcript` let you read and search it. Apart
+from that you know only what the tools report: file names, lengths, sizes,
+where the silences are, caption text, and what is on the timeline. So:
 
 - Never say something "looks great" or "sounds better". Say what you changed
   and ask them to watch or listen in ClipForge.
-- When a choice depends on the picture or the sound (where the person
-  stands, which moment is the goal, whether the music is too loud), ask.
-  Ask for times as shown in ClipForge ("at about 1:20").
+- When a choice depends on the picture or on how it sounds (where the
+  person stands, which moment is the goal, whether the music is too loud),
+  ask. Ask for times as shown in ClipForge ("at about 1:20").
+- A transcript is what a program heard, not the truth: names, numbers and
+  quiet words come out wrong, more so with a small language pack and in
+  Hebrew. Quote it as "the transcript says…", and let them read captions
+  before they publish. Before a video is transcribed you still cannot see
+  or hear it at all.
 
 ## The workflow, every time
 
@@ -123,6 +130,37 @@ The file appears under its name only when complete. Report the place, the
 length and the size. Sound only (podcasts): `format: "m4a"` (always works)
 or `"mp3"`. Details in [tools.md](tools.md).
 
+## Speech: transcripts, captions, fillers, shorts
+
+- **Transcribe once.** `transcribe` (give the `language` when you know it)
+  starts a background job; poll `get_transcribe_status` like an export. The
+  transcript belongs to the media FILE and stays right through every cut,
+  so it does not matter whether you transcribe before or after editing.
+- **Nothing is ever downloaded without the owner's yes.** When a language
+  pack is missing, `transcribe` says which sizes exist (Small about 140 MB:
+  quick, more mistakes; Medium about 470 MB: good; Large about 1.6 GB:
+  best) and stops. Tell them the size in plain words, ask, and only then
+  call again with `quality` and `download_pack: true`. When no speech
+  program is installed at all, pass on what `get_status` says is needed.
+- `get_transcript` is compact by default (one line per phrase); page long
+  talks with `offset`. Use `format: "words"` only around a cut point.
+- `captions_from_transcript`: dry run, show a few, then add. Ask them to
+  read the captions through.
+- **Removing filler words: gentle.** ALWAYS `remove_fillers` with the
+  default dry run first and the default `strength: "light"`. Tell the owner
+  the numbers in plain words: "I would remove 23 of 61 fillers, about 3
+  cuts a minute, saving 19 seconds; 9 were left because the picture would
+  jump." Only then `dry_run: false`. Never use `"strong"` unless the owner
+  asks for it or the result is sound only. After cutting, give them the 3–5
+  times from `riskiest` to watch. If they say it feels jumpy:
+  `restore_cut` for the riskiest ones, or `cut_id: "all"`.
+- **A budget for cuts.** `remove_silences` and `remove_fillers` both report
+  cuts per minute. For a video where the speaker is seen, keep the total at
+  about 6 a minute or less; do not run both hard on the same video without
+  adding the two numbers up. `list_auto_cuts` shows what was cut so far.
+- `make_short` copies the project and keeps one part; the long project is
+  never cut.
+
 ## Rules that are easy to get wrong
 
 - Times are whole milliseconds. "Timeline" = position in the finished
@@ -150,17 +188,19 @@ or `"mp3"`. Details in [tools.md](tools.md).
 
 ## Not available yet (say so plainly if asked)
 
-- **Automatic subtitles from speech (transcription).** Planned. Today
-  captions come from an .srt file they already have (`import_srt`) or from
-  text they give you (`add_caption`).
-- Removing filler words ("um", "uh"), AI music removal (separating a voice
-  from music), lining up two CAMERAS by their sound (a separately recorded
-  voice can be lined up: `add_voice`), stretching a voice that drifts,
-  searching for music
-  from here, recording a voice-over, anything on the phone (the tools work
-  on the computer only).
-- Seeing or hearing the video (see above). "Find the funniest part" needs
-  their times; see "Shorts from a long video" in [recipes.md](recipes.md).
+- Speech-to-text when no speech program is on the computer (see
+  [troubleshooting.md](troubleshooting.md)), and on the phone: it is a
+  computer-only feature.
+- Editing by changing the transcript text in the app (there is no such
+  editor; you do the cutting with the tools).
+- AI music removal (separating a voice from music), lining up two CAMERAS
+  by their sound (a separately recorded voice can be lined up:
+  `add_voice`), stretching a voice that drifts, searching for music from
+  here, recording a voice-over, anything on the phone (the tools work on
+  the computer only).
+- Seeing the picture (see above). "Find the funniest part" works from what
+  is SAID; see "Find the best shorts in a long video" in
+  [recipes.md](recipes.md).
 
 ## Picking a recipe
 
@@ -174,6 +214,8 @@ or `"mp3"`. Details in [tools.md](tools.md).
 | "make it upright / for TikTok / Reels" | Vertical version |
 | "keep me in the picture in the upright one" | Vertical with the person in shot |
 | "put the second camera in the corner" | Picture-in-picture |
-| "make shorts / clips from this long video" | Shorts from a long video |
+| "make shorts / clips from this long video", "find the best moments" | Find the best shorts in a long video |
+| "add subtitles", "caption what I say" | Captions from speech |
+| "take out the ums" | Remove filler words, gently |
 | "just the sound / an MP3" | Sound only |
 | "make it look finished" | Finished look |

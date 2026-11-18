@@ -2,7 +2,8 @@
 
 Read this first in a new session. It records what was built, why, how it fits
 together, how to build and test it, and what is still open. Last updated
-17 November 2026 (1.10.0: voice recorded separately, lined up by sound).
+18 November 2026 (1.11.0: speech to text, captions from speech, gentle
+filler removal, shorts for Claude; computers only).
 
 ## What ClipForge is
 
@@ -61,7 +62,7 @@ shared with a few friends later.
 - `claude/CLAUDE.md` (guide for Claude Code), `claude/skill/clipforge-editing/`
   (the skill), `docs/tools/build_claude_bundles.py` (.mcpb extension and
   skill zip), `docs/claude-setup.html` (owner's setup guide).
-- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1393 tests (1.10.0; 1321 at 1.9.0).
+- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1516 tests (1.11.0; 1393 at 1.10.0).
   `integration_test/real_app_test.dart` — drives the real app on Linux.
 
 ## What was built, and why
@@ -1145,6 +1146,318 @@ read twice); the bottom sheet with a real phone keyboard; by ear / by eye
 devices (Linux e2e ran with a null audio output); several sound players (two voices + music) on
 the shipped libmpv builds; Claude using add_voice in a real session.
 
+## Speech to text, captions, fillers, shorts (1.11.0, 18 Nov 2026)
+
+Goal: voice -> text with word times, so that (a) the app makes captions and
+removes filler words and (b) Claude can read what is said, pick short clips,
+cut and caption them.
+
+**Owner decisions (do not reopen without asking):**
+- Speech-to-text runs ON THE COMPUTER ONLY (Windows / macOS / Linux).
+  Nothing about it shows on phones: no menu, no button, nothing greyed out
+  (`speechServiceProvider` gives null on Android / iOS and every entry
+  point is built only when `EditorSession.speech != null`).
+- No "edit by text" editor. The Transcript column is read-only; Claude does
+  the cutting through the MCP tools.
+- No big files. Nothing is bundled, nothing downloads by itself; the app
+  download keeps its size. Language packs are optional, per language, three
+  sizes the user picks from, size shown first, a Remove button, total space
+  shown. No pack is preselected. Large may be offered but never starts on
+  its own. Claude must ask first (`download_pack`).
+- "Remove filler words" is gentle by default (owner: too many cuts make
+  the video jumpy, especially when the speaker moves): strengths, guard
+  rails, a jump check, everything logged and restorable, Claude told not
+  to overdo it.
+
+### Where the code is
+- `lib/core/transcript/` (pure): `transcript.dart` (model, estimated
+  words, tidy), `transcript_store.dart`, `transcript_timeline.dart`
+  (source -> timeline, speech sources, phrases, find), `captions.dart`,
+  `fillers.dart`, `cut_plan.dart` (strengths, guard rails), `speech_edits.dart`
+  (apply cuts, auto-cut log, put back, keep one part for shorts).
+- `lib/media/transcribe/` (pure, dart:io): `transcription.dart` (backend
+  interface, `ProcessHost`), `backends.dart`, `whisper_output.dart`
+  (parsers), `speech_models.dart` (packs, `ModelStore`), `model_download.dart`,
+  `transcription_service.dart`. `lib/media/jump_check.dart`.
+- `lib/mcp/transcribe_jobs.dart`, `lib/mcp/tools_speech.dart` (a `part` of
+  tools.dart).
+- `lib/ui/speech/speech_service.dart` (the app's thin layer + provider),
+  `lib/ui/editor/speech_actions.dart` (dialogs), `transcript_panel.dart`.
+
+### Backends (pluggable: `TranscriptionBackend`)
+1. `FfmpegWhisperBackend`: the SYSTEM ffmpeg's `whisper` filter (FFmpeg 8+,
+   found with `ffmpeg -filters`; never the FFmpeg inside the app, which has
+   no such filter). Options, from the FFmpeg filter documentation as
+   remembered: `model=<ggml file>`, `language=auto|<code>`, `queue=20`
+   (seconds gathered per recognition; the doc recommends large for
+   accuracy), `use_gpu=true`, `destination=transcript.json`, `format=json`
+   (one `{"start":ms,"end":ms,"text":"..."}` per line, text NOT escaped:
+   the parser is tolerant), `vad_model=<file>` only when a
+   `ggml-silero-*.bin` sits in the models folder. The run's working
+   directory is a temp folder so `destination` needs no escaping; the model
+   path goes through `escapeFilterPath`. It times PHRASES only -> word
+   times are ESTIMATED (spread over the phrase by word length,
+   `WordTiming.estimated`). It has no prompt option, so whisper drops
+   nearly all "um"s (owner's real run: one "um" in 23 minutes).
+2. `WhisperCliBackend`: a program on the PATH / usual folders (WinGet
+   links, scoop, chocolatey, pip `Scripts` folders, Homebrew, ~/.local/bin)
+   or a path in `speech-settings.json` (`programPath`). Tried in this
+   order: `whisper-ctranslate2`, `faster-whisper-xxl`, `faster-whisper`,
+   `whisper-cli`, `whisper-cpp`, `whisper`; the KIND is read from its
+   `--help` (so a program merely called "whisper" is not used).
+   - whisper.cpp: `-m <ggml> -f <16 kHz wav> -l <lang> -ml 1 -sow -oj -of
+     <out> -pp --prompt <filler prompt>`: one word per entry = measured
+     word times (token JSON `-ojf` is also parsed).
+   - faster-whisper / OpenAI: `<file> --model <name> --output_dir <dir>
+     --output_format json --word_timestamps True [--language] [--initial_prompt]`.
+     They keep and fetch their OWN models; ClipForge looks in their usual
+     caches (`~/.cache/whisper/<name>.pt`, the Hugging Face hub folder) and
+     treats a missing one like a missing pack (consent first).
+   - `PYTHONIOENCODING=utf-8` is set (Python on Windows otherwise fails
+     printing Russian / Hebrew).
+   - The filler prompt (`fillerPrompt`: "Um, uh, like, you know…", Russian
+     and Hebrew versions) makes whisper keep hesitation sounds. Effect not
+     measured.
+3. **Built-in backend: not built, on purpose** (decision): it needs a
+   native library (whisper.cpp via FFI or sherpa-onnx) in three desktop
+   builds that cannot be built or tested in the cloud container. The seam
+   is `TranscriptionBackend` + `TranscriptionService.backends`: one more
+   class, registered first; packs, store, mapping, UI and tools stay.
+
+"auto" picks a backend that can start with NO download first; among equals
+whisper.cpp > faster-whisper > OpenAI > FFmpeg filter (measured word times
+before estimated). GPU: FFmpeg runs with `use_gpu=true`; whisper.cpp falls
+back by itself ("Unsupported GPU: …" on the owner's RTX 4070 laptop), and
+if the run fails outright it is repeated once with `use_gpu=false`. The
+transcript records `device` ("graphics card" / "processor" / '') from the
+program's log (`deviceFromLog`, heuristics).
+The sound for CLI programs is first written as 16 kHz mono WAV by the
+system ffmpeg (`-map 0:a:<track>`); a Python program gets the file as it
+is when there is no ffmpeg.
+
+### Language packs (`speech_models.dart`)
+Standard whisper.cpp ggml files into `<ClipForge>/models/`:
+
+| | Small (~140 MB) | Medium (~470 MB) | Large (~1.6 GB) |
+|---|---|---|---|
+| English | base.en | small.en | large-v3-turbo |
+| Russian, Hebrew, others, Automatic | base | small | large-v3-turbo |
+
+"tiny" is not offered (too many mistakes). The all-languages files are
+shared and also serve English (someone with `base` needs no `base.en`).
+Quality "auto" = the largest installed pack that can do the language (the
+dialog lets the user pick another). `models.json` in that folder overrides
+/ adds table entries (url, sha256, size…) without a new build;
+`speech-settings.json` holds `modelPath` ("Use a model file I have…"),
+`programPath`, `ffmpegPath` (shared by app and MCP).
+Download (`model_download.dart`): `.part` file, HTTP Range resume, 60 s
+idle timeout, SHA-256 of the whole file, then rename. A wrong hash is kept
+as `<file>.unverified` and NOT used (`ModelStore.acceptUnverified` exists;
+the app does not show a "use anyway" button yet — the user can point at
+the file with "Use a model file I have…").
+**UNVERIFIED:** the URLs
+(`huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-*.bin`) and the
+approximate sizes; the build container cannot reach that host and no real
+download was made. The built-in table carries NO SHA-256 values (they could
+not be checked and a wrong one would reject a good file): a complete
+download is accepted when it starts like a whisper.cpp model file
+(`looksLikeWhisperModel`). To pin hashes later, read the "SHA256" on each
+file's page and put them in the table (or `models.json`).
+
+### Data
+- One transcript per SOURCE FILE and audio stream:
+  `<project>/transcripts/<fingerprint>_a<track>.json` (fingerprint =
+  `mediaFingerprint`: size + first / last 256 KB, so a moved or relinked
+  file keeps its transcript). Words `[text, startMs, endMs]` in source
+  time, grouped in segments; language, requested language, model, quality,
+  backend, wordTiming, device. Never in project.json. Asking again with
+  the same settings is a cache hit (`Transcript.madeWith`).
+  `FileProjectStore.duplicate` copies the folder (make_short relies on it).
+  Project bundles (.clipforge.zip) do NOT carry transcripts yet.
+- Source -> timeline (`timelineWords`): for every clip of the file,
+  `timeline = clipStart + (source - in) / speed`, words whose middle is
+  outside the trimmed part dropped. Nothing is stored on the timeline, so
+  cuts, speed, reordering and Remove silences need no bookkeeping.
+- Linked voices (1.10): `speechSourcesOf` gives the voice files of a clip
+  instead of its own sound, with `time in voice file = clip time + offset`
+  and the track's name as the speaker. The audio channel choice (left /
+  right only) is ignored for transcription.
+- `Project.autoCuts` (additive JSON key, only written when not empty):
+  kind (filler / silence), file, source in / out removed, word, when, by
+  (app / claude), jump score, smoothed.
+
+### Captions (`captions.dart`)
+1–2 lines, default 37 characters (UI slider 32–42), new caption at a
+sentence end, a pause of 600 ms, a speaker change, a cut; a comma once two
+thirds full; min 1 s, max 6 s, 200 ms linger, never overlapping; lines are
+also checked against the real title layout (`captionLineFits`), so upright
+video gets shorter lines and nothing is re-wrapped. Hesitation sounds are
+left out. Style = the project's newest caption, else `CaptionDefaults`.
+**Right-to-left (found while checking the title pipeline):** preview and
+export both laid lines out with a left-to-right base direction, which put
+a Hebrew line's closing full stop / question mark / number on the wrong
+side. `bidiLine` (title_layout.dart) now wraps a line whose first strong
+letter is Hebrew / Arabic in RIGHT-TO-LEFT MARKs (U+200F, zero width in
+`estimateTextWidth`), used by `preview_view` and by the export's text
+files. Checked by eye with FFmpeg 6.1 (libfribidi) in all eight font
+files: correct order, no stray glyph. This changes every Hebrew title, not
+only captions (for the better). FFmpeg 8 drawtext: unverified.
+
+### Remove filler words: gentle (`cut_plan.dart`)
+
+| | Light (default) | Normal | Strong |
+|---|---|---|---|
+| shortest cut (filler + its pause) | 350 ms | 200 ms | 80 ms |
+| must stand alone between pauses | yes, 120 ms both sides | no | no |
+| closest two cuts | 2.5 s | 1.5 s | 0.7 s |
+| most cuts in any minute | 4 | 8 | no limit |
+| shortest piece of clip left | 0.6 s | 0.6 s | 0.6 s |
+| jumpy picture (score >= 0.5) | left in | left in | cut |
+| slight change (score >= 0.2) | cut + 150 ms dissolve | same | same |
+
+When cuts compete (too close, minute full) the LONGER one wins. A cut runs
+from 40 ms after the previous word to 40 ms before the next, at most
+150 ms beyond the filler. Fillers under another speaker's words are never
+cut. Lists per language (`kDefaultFillers`): sounds (um, uh, er…; э-э, эм,
+мм…; אה, אממ…) and filler WORDS that are also real words (like, you know;
+ну, как бы, типа; כאילו) — the words are listed but never ticked /
+cut unless asked. Comparison ignores case, punctuation, drawn-out letters.
+**Jump check** (`jump_check.dart`): the frame 40 ms before the cut against
+the frame 10 ms after it, 32x18 grey, fast seek, 8 cuts per ffmpeg run;
+score = mean absolute difference / 25 grey levels. Under a full-frame
+overlay: 0. **Smoothing decision:** the existing transition mechanism
+takes 100 ms and up, so a slight jump gets a 150 ms crossfade on the piece
+after the cut (picture dissolve; the sound crossfades with it). Estimated
+word times (FFmpeg filter): nothing is ticked in the app, MCP refuses to
+cut without `allow_estimated_times`.
+**Put back** (`restoreAutoCut`): when the piece ending at the cut and the
+next clip starting at its end are still neighbours, they become one clip
+again (titles on the later piece are re-added, moved by the length that
+returns); otherwise the removed part comes back as its own clip after the
+last piece of that file before it. One undo step. Remove silences (app
+and MCP) writes log entries too. The app's play button in the review list
+plays the spot AS IT IS NOW (1.5 s before to 1.5 s after) — it does not
+preview the cut applied (not built).
+
+### App (computers)
+Sound panel of a clip: **Transcribe speech…**, then **Captions from
+speech…**, **Remove filler words…**, **Automatic cuts…**; Edit > Speech
+(both menu bars) has the same plus Transcript; top bar Transcript button
+(column 300 px; a dialog in a narrow window). The app's transcription
+never downloads: packs only through the Download buttons.
+Phones: silences cut there are logged, but there is no Automatic cuts
+list.
+
+### MCP (57 tools)
+`transcribe` (job in `<ClipForge>/claude-jobs/transcribe/`, worker
+`clipforge-mcp --transcribe-job <file>`, same heartbeat / cancel / lost
+rules as exports), `get_transcribe_status`, `cancel_transcribe`,
+`get_transcript` (text by default: `start-end [m:ss] Speaker: text`; 3500
+words = 389 phrases ≈ 35 KB in one answer; `segments` / `words`, paging,
+both time bases), `find_in_transcript`, `captions_from_transcript`,
+`remove_fillers` (dry run default TRUE, strength light), `list_auto_cuts`,
+`restore_cut`, `make_short` (duplicate -> `keepTimelineRange` -> shape ->
+1080p -> captions). `get_status` has a `transcription` block (programs,
+packs, what can be downloaded, running jobs). `remove_silences` gained
+`max_cuts_per_minute`, reports cuts per minute, logs its cuts.
+
+### For the owner (relay this)
+- **Zero-install route:** any whisper program on the PATH, or the system
+  FFmpeg with the whisper filter, is picked up automatically; with a
+  language pack already in `Documents\ClipForge\models` (or a model file
+  chosen with "Use a model file I have…") nothing is downloaded at all.
+- **Day one on Windows:** (1) the winget FFmpeg they already have (8.x
+  with the whisper filter) on the PATH; (2) one language pack — either
+  click Download in **Transcribe speech…** (Small English ≈ 140 MB) or
+  copy the `ggml-base.en.bin` they already used into
+  `Documents\ClipForge\models\`; (3) for Claude: the 1.11 `clipforge-mcp`
+  (extension) — same FFmpeg. For filler removal with exact word times and
+  more "um"s found: install whisper.cpp (`whisper-cli.exe` on the PATH) or
+  `pip install whisper-ctranslate2`; ClipForge then prefers it.
+- **Claude Code can also run whisper itself** on a file, write an .srt and
+  bring it in with `import_srt` (`time_base: "source"`), as the owner did
+  in their test (539 captions placed correctly).
+
+### From the owner's "Claude control test 3" report (1.9.0), same version
+- **Fixed — app lock.** The `.open-in-app` mark could stay on the first
+  project of a session. In widget tests the lifecycle was already right
+  (new test `app_lock_test.dart`: A, list, B, list passes on the old code
+  too), so the exact cause on Windows is NOT reproduced; the likely one is
+  an editor whose `dispose` did not get as far as releasing the lock (the
+  release sat after other clean-up). Now: the release is the FIRST thing in
+  `dispose` and also happens in `_close` before the route pops, and
+  `AppProjectLock.acquire` ends every other lock this app process holds
+  (one editor at a time), heartbeat included. Why the 1.9 test missed it:
+  it pumped one editor alone and replaced it with an empty widget; it
+  never went back to the list or opened a second project. Note also that
+  two projects were both called "T3 Podcast" in that test: Claude may have
+  looked at the other one.
+- **Verified — multi-mic.** `tools_v110_test`: one video + TWO linked
+  speaker files, camera muted; remove_silences dry run and real cut
+  picture and both voices together at unchanged offsets and listen to the
+  speech tracks. New warning (`unlinkedSpeechWarning`) when unlinked sound
+  on a speech track is left behind by a cut, pointing to add_voice /
+  align_audio.
+- **Done — names.** `FileProjectStore.freeName`: create / duplicate /
+  make_short give "(2)", "(3)"… and say so; an ambiguous name lists ids,
+  dates and lengths. (Renaming to a taken name in the app is not blocked.)
+- **Done — estimates.** Speed remembered per kind (video on the graphics
+  card / on the processor / sound only, by the encoder that really ran),
+  titles / overlays / sound items counted in, a range in the answer, time
+  left corrected from real progress as before. Sound-only default 20x.
+- **Done — smaller answers.** Changed ids: 12 listed + counts; silence
+  cuts once (structured), 8 in the text. **Not done:** the `media` table
+  with short keys in get_project (clip paths are still repeated).
+- **Done — wording.** "Nothing was changed" alone (notes kept); dry runs
+  say "Would …"; History says "Lined up title" / "Outline on title"; the
+  "small" note no longer claims x264 for a graphics card export; the
+  subtitle "different cut" note is in `warnings`.
+- **Not done:** old -> new values on single-clip edits, and the list of
+  settings a dry run of apply_to_all / copy_clip_settings would change.
+- **Already fine — align right.** `x` is the block's centre, but
+  `layoutTitleBlock.place` clamps the block inside a 2 % margin, so x = 1
+  means "against the right margin": the existing real-ffmpeg pixel test
+  (`v17_integration_test`, "alignment holds") finds the text's right edge
+  at 610–630 of 640; a layout assertion was added in
+  `tools_v111_report_test`.
+
+### Verified (here) / not verified
+Runs on 18 Nov 2026 (Linux container, FFmpeg 6.1.1, no whisper filter):
+`flutter analyze` clean; `flutter test` 1516 passed; Linux e2e passed
+(step 7j: "20 words via whisper-cpp", 4 captions, jump to a phrase);
+`flutter build linux --release` and `dart run bin/build_mcp.dart` built;
+the built clipforge-mcp lists 57 tools and, with a shell script as
+whisper-cli, ran a transcribe job in its separate worker process, then
+get_transcript, make_short and a remove_fillers dry run (whose real jump
+check left the filler in on a moving test picture). New tests:
+`test/core/transcript_test.dart`, `cut_plan_test.dart`,
+`test/media/transcribe_test.dart`, `model_download_test.dart`,
+`jump_check_test.dart`, `test/mcp/tools_v111_test.dart`,
+`tools_v111_report_test.dart`, `test/ui/speech_ui_test.dart`,
+`app_lock_test.dart`; screenshots `editor_desktop_transcribe_*`,
+`_transcript*`, `_speech_captions`, `_fillers`, `_auto_cuts`,
+`_hebrew_captions` (looked at; the test font has no Hebrew letters, so
+the Hebrew transcript screenshot shows boxes — real systems have them).
+Verified with fakes and fixtures only — **no real speech program ran**:
+parsers against hand-written recorded-style outputs
+(`test/media/fixtures/speech/`), backends against a pretend computer
+(`FakeHost`), the downloader against a local test HTTP server, MCP jobs
+with the same fakes, the app with `FakeSpeech`; the Linux e2e (step 7j)
+runs the REAL service and real ffmpeg (WAV) with a shell script standing
+in for whisper-cli. Real: FFmpeg 6.1 drawtext for right-to-left text (by
+eye), the jump check on synthetic video, `keepTimelineRange` / captions /
+fillers through the real editor.
+Not verified: any real whisper output (formats were written from memory:
+whisper.cpp `-oj` field names, the FFmpeg filter's JSON lines and option
+names, Python CLI option names); FFmpeg 8 at all; the pack URLs and
+hashes; a real download; GPU detection strings; Windows PATH / pip
+Scripts discovery and `.cmd` shims; whether Homebrew's FFmpeg has the
+filter; transcription quality and speed in Russian / Hebrew; the filler
+prompt's effect; jump thresholds on real faces; the 150 ms dissolve by
+eye; Claude using the tools in a real session; the Windows worker process
+for transcribe jobs (same caveat as export jobs: Claude Code ending the
+process tree ends the job).
+
 ## One-click Claude install, the skill, test documents (17 Nov 2026, no app change)
 
 The owner had to hand-edit `claude_desktop_config.json` (Claude Desktop from
@@ -1469,7 +1782,7 @@ tester, and must say exactly which build they ran).
    `ClipForge-<version>-claude-skill.zip`; the owner's guide is
    `docs/claude-setup.html`.
 
-History so far: 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
+History so far: 1.11 speech to text on computers (transcribe, captions from speech, gentle filler removal with put back, Transcript column, shorts for Claude, right-to-left text), unique project names, app lock fix; 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
 Claude control; 1.3 Voice focus, quit crash fix, drag and drop, graphics
 card; 1.4 help and tour, Windows menu bar, instant sound, History, long
 videos, version numbers.
@@ -1497,8 +1810,9 @@ Not verified:
 
 ## Not built yet
 
-- Automatic subtitles from speech — **needs owner decision**: on-device
-  (adds ~75–150 MB, slow on phones) or a paid online service.
+- Speech to text on phones, a speech engine built into the app (1.11 uses a
+  program installed on the computer), transcripts inside project bundles,
+  previewing a filler cut before applying it.
 - Searchable music library — built in 1.8 (Openverse); Jamendo direct needs a client_id.
 - Voiceover recording — no microphone in the build container.
 - Saved (user-made) title styles and intro / outro templates (one-tap filters and built-in title styles exist since 1.7).
@@ -1534,7 +1848,7 @@ building** until they report results. Read the checklist marks first.
 export PATH=/opt/sdk/flutter/bin:$PATH ANDROID_HOME=/opt/sdk/android
 cd video-editor
 flutter analyze
-flutter test                                   # all tests (1393)
+flutter test                                   # all tests (1516)
 flutter build apk --release --split-per-abi --target-platform android-arm64
 dart run bin/build_mcp.dart -o build/clipforge-mcp
 # real app on Linux:

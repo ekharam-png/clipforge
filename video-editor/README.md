@@ -479,6 +479,7 @@ and the skill zip (`skill`); CI runs it and uploads the results.
 | Projects | list, show, create, duplicate, rename; shape (original, 9:16, 16:9, 1:1, 4:5); lower music under speech |
 | Clips | add videos and photos, trim, split, remove, reorder; speed, volume, mute, fit, audio clean-up, voice focus, sound track / left or right side, brightness / contrast / saturation, zoom, transitions; cut out silences; relink a moved file |
 | Text | titles, captions, import and export of `.srt` subtitles (also subtitles made for the uncut recording) |
+| Speech (1.11) | transcribe in the background, read and search what is said, captions from speech, remove filler words gently, list and put back automatic cuts, make a short from one part |
 | Music | add, move, trim, volume, fades, remove |
 | Voice | add a separately recorded voice lined up with the video; line up, nudge or unlink a sound that is already there |
 | Output | export an MP4 in full or small (720p) quality, with progress |

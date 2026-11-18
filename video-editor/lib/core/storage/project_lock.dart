@@ -218,10 +218,26 @@ class AppProjectLock {
 
   String get token => _token;
 
+  /// The locks this app process holds now. The app shows one editor at a
+  /// time, so a new lock ends every other one: whatever happened to the
+  /// editor that held it (1.9 left the mark, and its heartbeat, on the
+  /// first project of a session when that editor's clean-up did not get
+  /// as far as the lock), the mark is always on the project that is open.
+  static final Set<AppProjectLock> _held = {};
+
+  /// True between [acquire] and [release].
+  bool get isHeld => _held.contains(this);
+
   /// Writes the lock (replacing a leftover one) and starts the heartbeat.
-  /// Failures are ignored: the lock is a safety net, not a requirement.
-  /// Synchronous (a tiny file), so it also works inside widget tests.
+  /// Any other lock of this app is released first. Failures are ignored:
+  /// the lock is a safety net, not a requirement. Synchronous (a tiny
+  /// file), so it also works inside widget tests.
   void acquire() {
+    for (final other in _held.toList()) {
+      if (!identical(other, this)) other.release();
+    }
+    _held.add(this);
+    _released = false;
     _openedAt = DateTime.now();
     _write();
     _timer?.cancel();
@@ -252,7 +268,9 @@ class AppProjectLock {
   /// Stops the heartbeat and deletes the lock when it is still ours.
   void release() {
     _released = true;
+    _held.remove(this);
     _timer?.cancel();
+    _timer = null;
     try {
       final file = lockFileOf(projectDir);
       if (!file.existsSync()) return;

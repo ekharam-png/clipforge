@@ -108,6 +108,47 @@ recorders ran at slightly different speeds; ClipForge does not stretch
 sound. Splitting the video and voice into shorter parts is not supported
 either; say so.
 
+## Speech-to-text: "no speech program was found"
+
+`transcribe` needs a program on the computer; ClipForge finds these by
+itself (`get_status` lists what it found):
+
+- **FFmpeg 8 or newer with the whisper filter.** On Windows:
+  `winget install ffmpeg` in PowerShell, then restart Claude. This is the
+  simplest route and needs a language pack (below).
+- **whisper.cpp** (`whisper-cli`; on a Mac `brew install whisper-cpp`):
+  times every word and keeps more "um"s. Uses the same language packs.
+- **faster-whisper** (`pip install whisper-ctranslate2`) or **OpenAI
+  whisper** (`pip install openai-whisper`): time every word; they keep
+  their own models and fetch them themselves the first time.
+
+If you can run commands yourself (Claude Code), you may also run a whisper
+program directly on the file, write an .srt and bring it in with
+`import_srt` (`time_base: "source"`). Ask first.
+
+## Speech-to-text: "a language pack is needed"
+
+Nothing is downloaded without the owner's yes. Tell them: Small (about
+140 MB) is quick with more mistakes, Medium (about 470 MB) is good, Large
+(about 1.6 GB) is best. English has its own Small and Medium; the others
+share files, and Large covers every language. After their answer:
+`transcribe` with `quality` and `download_pack: true`. Packs live in the
+`models` folder next to the projects folder and can be removed in the app
+(Transcribe speech…).
+
+## The transcript or the captions are wrong
+
+Speech recognition makes mistakes. Say so; offer a larger pack
+(`quality: "medium"`, `force: true`), giving the `language` instead of
+"auto", or fixing single captions with `update_title`.
+
+## Removing fillers found nothing, or made the video jumpy
+
+- Found nothing: speech programs often leave "um" out, the FFmpeg filter
+  nearly always. whisper.cpp / faster-whisper keep more.
+- Jumpy: `list_auto_cuts` `sort: "risk"`, then `restore_cut` for the
+  worst, or `cut_id: "all"`. Use `strength: "light"` next time.
+
 ## Something they ask for does not exist
 
 Say so plainly and offer the nearest thing that works (SKILL.md, "Not

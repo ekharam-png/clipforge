@@ -692,3 +692,40 @@ int _otherAdvance(int r, bool bold, TitleFont font) {
   if (_isWide(r)) return (kWideAdvance * 1000).round();
   return t.$5;
 }
+
+/// True when [line] reads right to left: its first letter with a direction
+/// is Hebrew or Arabic (digits, spaces and punctuation have none).
+bool isRtlLine(String line) {
+  for (final r in line.runes) {
+    if ((r >= 0x0590 && r <= 0x08FF) ||
+        (r >= 0xFB1D && r <= 0xFDFF) ||
+        (r >= 0xFE70 && r <= 0xFEFC) ||
+        r == 0x200F) {
+      return true;
+    }
+    if (r == 0x200E) return false;
+    if ((r >= 0x41 && r <= 0x5A) ||
+        (r >= 0x61 && r <= 0x7A) ||
+        (r >= 0xC0 && r <= 0x24F) ||
+        (r >= 0x370 && r <= 0x52F) ||
+        r >= 0x3040) {
+      return false;
+    }
+  }
+  return false;
+}
+
+/// [line] as it must be handed to whatever draws it (the preview's text
+/// and the export's drawtext) so that a right-to-left line is laid out
+/// right to left as a whole: both lay text out with a LEFT-to-right base
+/// direction, which leaves a Hebrew line's closing full stop, question
+/// mark or number at the wrong (right-hand) end. A RIGHT-TO-LEFT MARK
+/// (U+200F, zero width, counted as zero by [estimateTextWidth]) at both
+/// ends makes everything between them resolve right to left. Checked with
+/// FFmpeg 6.1 (libfribidi) in all four title fonts: no stray glyph.
+/// Left-to-right lines are returned unchanged.
+String bidiLine(String line) {
+  if (!isRtlLine(line)) return line;
+  const rlm = '\u200F';
+  return '${line.startsWith(rlm) ? '' : rlm}$line${line.endsWith(rlm) ? '' : rlm}';
+}

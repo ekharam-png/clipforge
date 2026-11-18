@@ -468,7 +468,9 @@ Future<void> runExportJob(ExportJobStore store, String id, MediaEngine engine,
           'encoderDescription': encoderDescription(encoder),
         },
         if (running.warnings.isNotEmpty) 'warnings': running.warnings,
-        // Speed of this computer, for the next estimate.
+        // Speed of this computer, for the next estimate of this kind.
+        if (took > 0 && info != null && info.durationMs > 0)
+          'timesRealTime': info.durationMs / took,
         if (took > 0 && info != null && r.format == 'video')
           'megapixelSecondsPerSecond': info.width *
               info.height /
@@ -556,31 +558,105 @@ Future<JobView> viewJob(ExportJobRecord r,
 /// at about 3x real time.
 const double kDefaultRenderRate = 2.7;
 
-/// A rough render time for [project]: output pixels x length divided by
-/// the speed this computer showed last time ([measuredRate], megapixel-
-/// seconds per second; [kDefaultRenderRate] when unknown), plus a little
-/// per clip. Sound only: about 40x real time.
-({int ms, String basis}) estimateRenderMs(Project project, ExportOptions options,
-    {double? measuredRate}) {
+/// Sound-only exports when nothing better is known: about 20x real time
+/// (the owner's 22:41 M4A took 1:10).
+const double kDefaultAudioSpeed = 20;
+
+/// What kind of export a job is, for remembering speeds: "sound",
+/// "video on the graphics card" or "video on the processor". Speeds are
+/// only comparable within one kind (the owner's graphics card rendered
+/// 22 minutes in 1:28 where the processor estimate said 7:48).
+String exportKind({required bool audioOnly, required bool hardware}) =>
+    audioOnly ? 'sound' : (hardware ? 'video-gpu' : 'video-cpu');
+
+/// The kind a finished job turned out to be (the encoder that really ran).
+String? exportKindOf(ExportJobRecord r) {
+  final res = r.result;
+  if (r.status != kJobFinished || res == null) return null;
+  return exportKind(
+      audioOnly: r.format != 'video',
+      hardware: res['hardwareEncoder'] == true);
+}
+
+/// The speed this computer showed in its last finished export of [kind]
+/// among [jobs] (newest first): megapixel-seconds per second for video,
+/// times real time for sound. Null when there is none.
+double? rememberedSpeed(List<ExportJobRecord> jobs, String kind, {String? host}) {
+  for (final r in jobs) {
+    if (host != null && r.host != host) continue;
+    if (exportKindOf(r) != kind) continue;
+    final v = kind == 'sound'
+        ? r.result!['timesRealTime']
+        : r.result!['megapixelSecondsPerSecond'];
+    if (v is num && v > 0.05) return v.toDouble();
+  }
+  return null;
+}
+
+/// A rough render time for [project], with a range:
+///  * video: output pixels x length / the speed of the last export OF THE
+///    SAME KIND on this computer ([speeds]: kind -> speed, see
+///    [rememberedSpeed]); with the graphics card asked for, the card's
+///    remembered speed, else the processor's; [kDefaultRenderRate] when
+///    nothing is remembered;
+///  * what else there is to draw and mix slows it down: titles and
+///    captions (2 % each, at most +60 %), overlay items (+25 % while any
+///    is used), sound items beyond the first (1 % each, at most +20 %);
+///  * sound only: length / remembered speed ([kDefaultAudioSpeed]).
+/// The range is wide on purpose (0.6x..1.7x; 0.4x..2.5x without a
+/// remembered speed): once the render runs, the time left is worked out
+/// from its real progress instead.
+({int ms, int lowMs, int highMs, String basis, bool rough}) estimateRenderMs(
+    Project project, ExportOptions options,
+    {double? measuredRate, Map<String, double> speeds = const {}}) {
   final seconds = project.durationMs / 1000;
-  final perClipMs = 40 * project.clips.length + 30 * project.titles.length;
-  if (options.format.audioOnly) {
+  final perClipMs = 40 * project.clips.length;
+  ({int ms, int lowMs, int highMs, String basis, bool rough}) range(
+      int ms, bool known, String basis) {
+    final lo = known ? 0.6 : 0.4, hi = known ? 1.7 : 2.5;
     return (
-      ms: (seconds / 40 * 1000).round() + perClipMs ~/ 4 + 1000,
-      basis: 'sound only renders at roughly 40x real time',
+      ms: ms,
+      lowMs: (ms * lo).round(),
+      highMs: (ms * hi).round(),
+      basis: basis,
+      rough: !known,
     );
+  }
+
+  if (options.format.audioOnly) {
+    final known = speeds['sound'];
+    final speed = known ?? kDefaultAudioSpeed;
+    final mix = 1 + (project.audio.length * 0.02).clamp(0.0, 0.5);
+    return range(
+        (seconds / speed * mix * 1000).round() + perClipMs ~/ 4 + 1000,
+        known != null,
+        known != null
+            ? 'from the speed of the last sound-only export on this computer'
+            : 'rough: sound only usually renders at about '
+                '${kDefaultAudioSpeed.round()}x real time');
   }
   final size = exportSize(project, options.quality);
   final mp = size.width * size.height / 1e6 * (options.fps / 30);
-  final rate = (measuredRate != null && measuredRate > 0.05) ? measuredRate : kDefaultRenderRate;
-  final ms = (mp * seconds / rate * 1000).round() + perClipMs + 2000;
-  return (
-    ms: ms,
-    basis: measuredRate != null && measuredRate > 0.05
-        ? 'from the speed of the last export on this computer'
-        : 'a rough guess for an ordinary computer (the next estimate uses '
-            'the speed measured by this export)',
-  );
+  final gpu = options.useHardwareEncoder ? speeds['video-gpu'] : null;
+  final cpu = speeds['video-cpu'] ?? measuredRate;
+  final rate = gpu ?? cpu ?? kDefaultRenderRate;
+  final known = gpu != null || cpu != null;
+  final titles = (project.titles.length * 0.02).clamp(0.0, 0.6);
+  final overlays = project.overlays.isEmpty ? 0.0 : 0.25;
+  final sounds =
+      ((project.audio.length - 1).clamp(0, 1000) * 0.01).clamp(0.0, 0.2);
+  final work = 1 + titles + overlays + sounds;
+  final ms = (mp * seconds / rate * work * 1000).round() + perClipMs + 2000;
+  final extras = [
+    if (project.titles.isNotEmpty) '${project.titles.length} title(s) / caption(s)',
+    if (project.overlays.isNotEmpty) '${project.overlays.length} overlay item(s)',
+    if (project.audio.length > 1) '${project.audio.length} sound items',
+  ];
+  return range(
+      ms,
+      known,
+      '${gpu != null ? 'from the speed of the last export on the graphics card here' : cpu != null ? 'from the speed of the last export on the processor here${options.useHardwareEncoder ? ' (a graphics card, if this computer has one, is faster)' : ''}' : 'rough: a guess for an ordinary computer without a graphics card encoder; the next estimate uses the speed this export measures'}'
+      '${extras.isEmpty ? '' : '; counted in: ${extras.join(', ')}'}');
 }
 
 /// "1 min 05 s", "12 s".

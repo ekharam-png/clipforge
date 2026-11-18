@@ -16,6 +16,7 @@ import '../services.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'clip_panels.dart' show ChoiceRow;
+import '../../core/transcript/speech_edits.dart';
 import 'session.dart';
 
 const _uuid = Uuid();
@@ -510,7 +511,19 @@ class _SilenceDialogState extends State<_SilenceDialog> {
     final cuts = _cuts;
     if (cuts == null) return;
     // One call, one undo step.
-    final removed = widget.session.editor.removeSourceRanges(widget.clipId, cuts);
+    // Remembered in the project (1.11), so each can be put back later.
+    final e = widget.session.editor.editor;
+    final path = _clip?.path;
+    var removed = 0;
+    e.transaction(() {
+      removed = e.removeSourceRanges(widget.clipId, cuts);
+      if (removed > 0 && path != null) {
+        logSilenceCuts(e, path, cuts, newId: const Uuid().v4);
+      }
+    },
+        label: cuts.length == 1
+            ? 'Removed 1 silence'
+            : 'Removed ${cuts.length} silences');
     Navigator.of(context).pop(removed);
   }
 

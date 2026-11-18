@@ -216,7 +216,7 @@ void main() {
           id: 'x', name: 'x', createdAt: DateTime(2026), updatedAt: DateTime(2026),
           clips: [b.video('a', source: 600000)]);
       final guess = estimateRenderMs(project, const ExportOptions());
-      expect(guess.basis, contains('rough guess'));
+      expect(guess.basis, contains('rough'));
       final fast = estimateRenderMs(project, const ExportOptions(), measuredRate: 20);
       expect(fast.ms, lessThan(guess.ms));
       expect(fast.basis, contains('last export'));

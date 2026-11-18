@@ -1,6 +1,6 @@
 # ClipForge tools
 
-All 47 tools of the `clipforge` MCP server (ClipForge 1.10). A test in the
+All 57 tools of the `clipforge` MCP server (ClipForge 1.11). A test in the
 ClipForge repository fails when a tool is missing from this file.
 
 General rules:
@@ -24,7 +24,7 @@ General rules:
 
 | Tool | What it does | Arguments worth knowing |
 |---|---|---|
-| `get_status` | Version, program path, projects folder, title fonts, FFmpeg found or not, running exports. Call first. | none |
+| `get_status` | Version, program path, projects folder, title fonts, FFmpeg found or not, running exports, and for speech-to-text: which speech programs and language packs are on the computer. Call first. | none |
 | `list_projects` | All projects, newest first, with id, name, length. | none |
 | `get_project` | The timeline: clips, music, overlays, titles, size and why, warnings, whether it is open in the app. | `clip_offset` / `clip_limit` (60, max 300), `title_offset` / `title_limit`, `from_ms` / `to_ms` |
 | `create_project` | New empty project. | `name`, `aspect` ("original", "9:16", "16:9", "1:1", "4:5") |
@@ -48,7 +48,7 @@ General rules:
 | `copy_clip_settings` | Look, fit / zoom, crop / position, and (video to video) speed and sound from one clip to others. Not trim, transition, fades. | `from_clip_id`, `to_clip_ids` (ids or `["all"]`), `dry_run` |
 | `apply_to_all` | Like the app's "Apply to all clips". | `look`, `speed`, `sound` (true / false), `dry_run` |
 | `freeze_frame` | Holds the picture at a timeline time; the video gets longer. | `at_ms`, `duration_ms` |
-| `remove_silences` | Cuts the quiet gaps out of one clip, or all video clips when `clip_id` is left out. Keeps 150 ms of quiet around speech. | `dry_run`, `threshold_db` (leave out: automatic), `min_silence_ms`, `min_caption_ms` |
+| `remove_silences` | Cuts the quiet gaps out of one clip, or all video clips when `clip_id` is left out. Keeps 150 ms of quiet around speech. Says how many cuts a minute it makes; every cut is remembered (`list_auto_cuts`, `restore_cut`). | `dry_run`, `threshold_db` (leave out: automatic), `min_silence_ms` (longer = gentler), `max_cuts_per_minute`, `min_caption_ms` |
 
 `set_clip_properties` settings:
 
@@ -176,3 +176,39 @@ General rules:
 - When a track is lowered under speech the answer has a "Music under
   speech" report. It is worked out from the timeline, not measured.
 - Never export over an existing file unless they ask (`overwrite`).
+
+## Speech: what is said (1.11, computer only)
+
+Needs a speech program on the computer (`get_status` lists what was found:
+the system FFmpeg's whisper filter, whisper.cpp, faster-whisper or OpenAI
+whisper) and, for the first two, a language pack. **Nothing is downloaded
+unless `download_pack` is true** — ask the owner first.
+
+| Tool | What it does | Arguments worth knowing |
+|---|---|---|
+| `transcribe` | Speech to text with a time for every word, as a background job. One transcript per media file (per speaker for linked voices), kept in the project folder, valid through every cut. Files already done are skipped. | `language` ("auto", "en", "ru", "he", …), `quality` ("auto" = largest pack installed, "small", "medium", "large"), `download_pack`, `clip_id`, `backend`, `force`, `wait_seconds` |
+| `get_transcribe_status` | How the job is doing; `wait_seconds` up to 45. Without `job_id`: recent jobs. | `job_id`, `wait_seconds` |
+| `cancel_transcribe` | Stops the job; finished files keep their transcripts. | `job_id` |
+| `get_transcript` | What is said, with times. Default: timeline time, one line per phrase ("start-end [m:ss] Speaker: text", ms). | `format` ("text", "segments", "words"), `time_base` ("timeline", "source"), `from_ms` / `to_ms`, `clip_id`, `offset` / `limit` |
+| `find_in_transcript` | Where a word or phrase is said: times, clip, speaker, the words around it. | `phrase`, `prefix`, `limit` |
+| `captions_from_transcript` | Captions from the speech: 1–2 lines of about 32–42 characters, split at sentences and pauses, never overlapping; the project's caption look; Hebrew drawn right to left. | `dry_run`, `from_ms` / `to_ms`, `max_line_chars`, `max_lines`, `min_duration_ms`, `max_duration_ms`, `replace_existing`, `keep_filler_sounds`, title style arguments |
+| `remove_fillers` | Cuts "um", "uh", "э-э", "אה"… out, gently. **Dry run by default.** Reports found / cut / left because too close / left because the picture would jump, time saved, cuts per minute, the 5 riskiest cuts. | `strength` ("light" default, "normal", "strong"), `dry_run`, `include_word_fillers`, `fillers`, `language`, `allow_estimated_times`, `jump_check`; advanced: `min_cut_ms`, `min_distance_ms`, `max_cuts_per_minute`, `min_piece_ms`, `pad_ms` |
+| `list_auto_cuts` | The automatic cuts the project remembers (fillers and silences): id, word, file and part removed, by whom, jump score, dissolve; totals. | `kind`, `sort` ("time", "risk"), `offset` / `limit` |
+| `restore_cut` | Puts a cut back (the two pieces become one clip again), or all of them. | `cut_id` (an id or "all"), `kind`, `dry_run` |
+| `make_short` | A NEW project with only one part of this one's timeline: upright 9:16 by default, 1080p, captions from the speech. The original is untouched. | `from_ms`, `to_ms`, `name`, `shape`, `captions` |
+
+`remove_fillers` strengths (every one leaves no piece shorter than 0.6 s):
+
+| | light | normal | strong |
+|---|---|---|---|
+| shortest cut | 350 ms, standing alone between pauses | 200 ms | everything found |
+| closest two cuts | 2.5 s | 1.5 s | 0.7 s |
+| most cuts a minute | 4 | 8 | no limit |
+| picture would jump | left in | left in | cut anyway |
+| slight picture change | cut with a short dissolve | same | same |
+
+Word times: whisper.cpp, faster-whisper and OpenAI whisper time every
+word; the FFmpeg filter times phrases only (word times are then
+estimated: fine for captions, reading and shorts; `remove_fillers` refuses
+to cut unless `allow_estimated_times`). The FFmpeg filter also usually
+leaves "um" out of the text.

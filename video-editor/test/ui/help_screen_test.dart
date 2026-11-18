@@ -67,7 +67,7 @@ void main() {
 
       // The owner's typos.
       for (final (typo, title) in [
-        ('trascirpe', 'Automatic subtitles'),
+        ('trascirpe', 'Transcribe speech (computer only)'),
         ('musci', 'Adding music, volume and fades'),
         ('vocie', 'Voice focus'),
       ]) {

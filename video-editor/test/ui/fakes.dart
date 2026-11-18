@@ -21,6 +21,7 @@ import 'package:clipforge/core/music/openverse.dart';
 import 'package:clipforge/ui/gallery_search.dart';
 import 'package:clipforge/ui/music_search.dart';
 import 'package:clipforge/ui/services.dart';
+import 'package:clipforge/ui/speech/speech_service.dart';
 import 'package:clipforge/ui/theme.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -410,6 +411,10 @@ class Fakes {
   /// "Find file…" > "Search the gallery" (off unless a test turns it on).
   final FakeGallerySearch gallery = FakeGallerySearch();
 
+  /// Speech-to-text. Null (the default) is what a phone has; tests of the
+  /// 1.11 speech features put a [FakeSpeech] here.
+  SpeechService? speech;
+
   /// When set, the editor's "open in the app" lock is written in
   /// `<lockRoot>/<project id>` (real files); otherwise there is none.
   String? lockRoot;
@@ -485,6 +490,8 @@ class Fakes {
           }),
           damagedProjectsProvider
               .overrideWithValue((store, readable) async => damaged),
+          // Null = a phone: nothing about speech-to-text exists.
+          speechServiceProvider.overrideWithValue(speech),
           appPrefsProvider.overrideWithValue(prefs),
           tourSampleProvider.overrideWithValue(makeTourSample),
           buildInfoProvider.overrideWithValue(buildInfo),
@@ -867,4 +874,217 @@ class FakeGallerySearch extends GallerySearch {
   @override
   Future<String> fetch(GalleryItem item) async =>
       fetched[item.uri] ?? '/gallery/${item.name}';
+}
+
+/// Speech-to-text without any program or file: what is "installed" and
+/// what a transcription "hears" are set by the test.
+class FakeSpeech implements SpeechService {
+  FakeSpeech({this.backend = ffmpegFilter, Set<String>? packs})
+      : installedIds = {...?packs};
+
+  static const ffmpegFilter = BackendInfo(
+      id: 'ffmpeg-whisper',
+      label: 'FFmpeg on this computer (its "whisper" filter)',
+      program: '/usr/bin/ffmpeg',
+      measuresWords: false,
+      usesPacks: true);
+  static const whisperCpp = BackendInfo(
+      id: 'whisper-cpp',
+      label: 'whisper.cpp on this computer (whisper-cli)',
+      program: '/usr/local/bin/whisper-cli',
+      measuresWords: true,
+      usesPacks: true);
+
+  /// The speech program found; null = none on this computer.
+  BackendInfo? backend;
+  final Set<String> installedIds;
+
+  /// What transcribing a file gives, by path (others fail).
+  final Map<String, Transcript> hears = {};
+
+  /// Transcripts already in the project folder, by SpeechSource.key.
+  final Map<String, Transcript> stored = {};
+  final List<String> downloadsStarted = [];
+  final List<String> transcribed = [];
+  final List<String> removed = [];
+  StreamController<SpeechProgress>? _downloadProgress;
+  Completer<void>? _download;
+  String? _downloadId;
+
+  /// When false, transcriptions wait for [finishTranscribe].
+  bool instant = true;
+  final List<void Function()> _pending = [];
+
+  @override
+  String? modelFile;
+
+  InstalledModel? _installed(String id) => installedIds.contains(id)
+      ? InstalledModel(
+          kSpeechModels.firstWhere((m) => m.id == id), '/models/$id', 148 * 1024 * 1024)
+      : null;
+
+  @override
+  Future<SpeechPlan> plan(
+      {String language = 'auto',
+      SpeechQuality quality = SpeechQuality.auto}) async {
+    final b = backend;
+    if (b == null) {
+      return SpeechPlan(problem: noBackendExplanation('windows'), language: language);
+    }
+    final ids = modelIdsFor(language == 'auto' ? '' : language, quality);
+    for (final id in ids) {
+      final m = _installed(id);
+      if (m != null) {
+        return SpeechPlan(backend: b, model: m, modelName: id, language: language);
+      }
+    }
+    if (quality == SpeechQuality.auto) {
+      return SpeechPlan(backend: b, needsChoice: true, language: language);
+    }
+    return SpeechPlan(
+        backend: b,
+        download: kSpeechModels.firstWhere((m) => m.id == ids.first),
+        language: language);
+  }
+
+  @override
+  List<PackRow> packs(String language) {
+    final lang = language == 'auto' ? '' : language;
+    return [
+      for (final size in const [
+        SpeechQuality.small,
+        SpeechQuality.medium,
+        SpeechQuality.large
+      ])
+        () {
+          InstalledModel? found;
+          for (final id in modelIdsFor(lang, size)) {
+            found ??= _installed(id);
+          }
+          return (
+            size: size,
+            model: found?.model ??
+                kSpeechModels
+                    .firstWhere((m) => m.id == modelIdsFor(lang, size).first),
+            installed: found,
+          );
+        }(),
+    ];
+  }
+
+  @override
+  int get packsBytes => installedIds.length * 148 * 1024 * 1024;
+
+  @override
+  SpeechTask<void> downloadPack(SpeechModel model) {
+    downloadsStarted.add(model.id);
+    final progress = _downloadProgress = StreamController<SpeechProgress>.broadcast();
+    final done = _download = Completer<void>();
+    done.future.ignore();
+    _downloadId = model.id;
+    return SpeechTask(progress.stream, done.future, () async {
+      if (!done.isCompleted) {
+        done.completeError(SpeechException('Stopped.', cancelled: true));
+      }
+    });
+  }
+
+  /// The running download gets to [fraction].
+  void downloadProgress(double fraction) => _downloadProgress!.add(SpeechProgress(
+      SpeechPhase.downloading, fraction, '${(fraction * 142).round()} MB of 142 MB'));
+
+  /// The running download is complete (or fails with [error]).
+  void finishDownload({String? error}) {
+    if (error != null) {
+      _download!.completeError(SpeechException(error, kind: 'failed'));
+    } else {
+      installedIds.add(_downloadId!);
+      _download!.complete();
+    }
+  }
+
+  @override
+  Future<void> removePack(SpeechModel model) async {
+    removed.add(model.id);
+    installedIds.remove(model.id);
+  }
+
+  @override
+  Future<void> useModelFile(String? path) async => modelFile = path;
+
+  @override
+  SpeechTask<Transcript> transcribe(String projectId, SpeechSource source,
+      {String language = 'auto', SpeechQuality quality = SpeechQuality.auto}) {
+    transcribed.add('${source.path}|$language|${quality.name}');
+    final progress = StreamController<SpeechProgress>.broadcast();
+    final done = Completer<Transcript>();
+    done.future.ignore();
+    void finish() {
+      if (done.isCompleted) return;
+      final t = hears[source.path];
+      if (t == null) {
+        done.completeError(SpeechException(
+            'The speech program stopped with an error.',
+            kind: 'failed'));
+      } else {
+        stored[source.key] = t;
+        done.complete(t);
+      }
+    }
+
+    if (instant) {
+      scheduleMicrotask(finish);
+    } else {
+      scheduleMicrotask(() => progress.add(const SpeechProgress(
+          SpeechPhase.transcribing, 0.4, 'Listening to the speech… 40%')));
+      _pending.add(finish);
+    }
+    return SpeechTask(progress.stream, done.future, () async {
+      if (!done.isCompleted) {
+        done.completeError(SpeechException('Stopped.', cancelled: true));
+      }
+    });
+  }
+
+  void finishTranscribe() {
+    for (final f in _pending) {
+      f();
+    }
+    _pending.clear();
+  }
+
+  @override
+  Future<Map<String, Transcript>> transcriptsOf(
+          String projectId, List<SpeechSource> sources) async =>
+      {
+        for (final s in sources)
+          if (stored[s.key] != null) s.key: stored[s.key]!,
+      };
+}
+
+/// A transcript of [path]: [text] spoken from [startMs], 300 ms a word
+/// with 100 ms between words.
+Transcript spokenTranscript(String path, String text,
+    {int startMs = 0,
+    String language = 'en',
+    String backend = 'whisper-cpp',
+    WordTiming timing = WordTiming.measured}) {
+  final words = <TranscriptWord>[];
+  var t = startMs;
+  for (final w in text.split(' ')) {
+    words.add(TranscriptWord(w, t, t + 300));
+    t += 400;
+  }
+  return Transcript(
+    sourcePath: path,
+    audioTrack: 0,
+    language: language,
+    requestedLanguage: language,
+    model: 'base',
+    backend: backend,
+    wordTiming: timing,
+    durationMs: t,
+    createdAt: DateTime.utc(2026),
+    segments: segmentsFromWords(words),
+  );
 }

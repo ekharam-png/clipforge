@@ -11,7 +11,9 @@ import '../help/help_screen.dart';
 import '../theme.dart';
 import 'clip_actions.dart';
 import 'picture_tools.dart';
+import '../speech/speech_service.dart';
 import 'session.dart';
+import 'speech_actions.dart';
 import 'sound_tracks_ui.dart';
 import 'sound_status.dart';
 import 'sound_sample.dart';
@@ -717,6 +719,8 @@ class SoundPanel extends StatelessWidget {
             const HelpHint('remove-silences', label: 'Remove silences'),
           ],
         ),
+        // Speech-to-text exists on computers only.
+        if (session.speech != null) SpeechRow(session: session, clip: clip),
         ApplyToAllButton(session: session, clip: clip, tool: ClipTool.sound),
       ],
     );
@@ -1033,6 +1037,84 @@ class ProjectFadesPanel extends StatelessWidget {
           style: _dim,
         ),
       ],
+    );
+  }
+}
+
+/// "Transcribe speech…" and what follows from it, in a Sound panel
+/// (computers only; the caller leaves it out when there is no speech
+/// service).
+class SpeechRow extends StatelessWidget {
+  const SpeechRow({super.key, required this.session, this.clip});
+  final EditorSession session;
+
+  /// The clip whose sound it is about; null: the whole project.
+  final Clip? clip;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<Map<String, Transcript>>(
+      valueListenable: session.transcripts,
+      builder: (context, _, _) {
+        final cover = coverageOf(session, clipId: clip?.id);
+        if (cover.sources.isEmpty) return const SizedBox.shrink();
+        final has = !cover.none;
+        return Padding(
+          key: const ValueKey('speech-row'),
+          padding: const EdgeInsets.only(top: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('transcribe-button'),
+                    onPressed: () =>
+                        showTranscribeDialog(context, session, clip: clip),
+                    icon: const Icon(Icons.record_voice_over_outlined, size: 18),
+                    label: const Text('Transcribe speech…'),
+                  ),
+                  const SizedBox(width: 4),
+                  const HelpHint('transcribe-speech', label: 'Transcribe speech'),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  has
+                      ? 'Transcribed. Use it for captions or to remove '
+                          'filler words.'
+                      : 'Turns what is said into text, for captions and '
+                          'more.',
+                  style: _dim,
+                ),
+              ),
+              if (has)
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton(
+                      key: const ValueKey('speech-captions-button'),
+                      onPressed: () => captionsFromSpeech(context, session),
+                      child: const Text('Captions from speech…'),
+                    ),
+                    TextButton(
+                      key: const ValueKey('fillers-button'),
+                      onPressed: () => removeFillerWords(context, session),
+                      child: const Text('Remove filler words…'),
+                    ),
+                    if (session.project.autoCuts.isNotEmpty)
+                      TextButton(
+                        key: const ValueKey('auto-cuts-button'),
+                        onPressed: () => showAutoCuts(context, session),
+                        child: const Text('Automatic cuts…'),
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

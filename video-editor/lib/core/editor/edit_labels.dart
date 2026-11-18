@@ -412,6 +412,13 @@ String? _describeTitles(List<TitleOverlay> before, List<TitleOverlay> after) {
     if (identical(a, b)) continue;
     final name = '${kind(b)} ${quoteText(b.text)}';
     if (a.text != b.text) return 'Edited $name';
+    // Alignment moves the text too, and outline / shadow are often set
+    // together with a place: name the step after what was asked for
+    // (1.9 called all of these "Moved title").
+    if (a.align != b.align) return 'Lined up $name';
+    if (a.outline != b.outline && a.colorArgb == b.colorArgb) {
+      return b.outline ? 'Outline on $name' : 'No outline on $name';
+    }
     if (a.x != b.x || a.y != b.y) return 'Moved $name';
     if (a.startMs != b.startMs || a.endMs != b.endMs) return 'Timing of $name';
     if (a.fontSize != b.fontSize) return 'Size of $name';

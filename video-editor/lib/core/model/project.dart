@@ -1316,6 +1316,76 @@ class TitleOverlay {
       );
 }
 
+/// One automatic cut, as the project remembers it (1.11): a stretch of a
+/// media file that "Remove filler words" or "Remove silences" took out.
+/// Clips keep their source ranges, so the stretch can be put back.
+class AutoCut {
+  const AutoCut({
+    required this.id,
+    required this.kind,
+    required this.path,
+    required this.startMs,
+    required this.endMs,
+    required this.at,
+    this.word = '',
+    this.by = 'app',
+    this.jump,
+    this.smoothed = false,
+  });
+  final String id;
+
+  /// "filler" or "silence".
+  final String kind;
+
+  /// The media file, and the part of it that was removed (source time).
+  final String path;
+  final int startMs;
+  final int endMs;
+
+  /// The filler ("um"); '' for a silence.
+  final String word;
+  final DateTime at;
+
+  /// "app" or "claude".
+  final String by;
+
+  /// How much the picture changes across the cut, 0..1 (null: not
+  /// measured).
+  final double? jump;
+
+  /// A short dissolve was put on the cut.
+  final bool smoothed;
+
+  int get lengthMs => endMs - startMs;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind,
+        'path': path,
+        'startMs': startMs,
+        'endMs': endMs,
+        'word': word,
+        'at': at.toUtc().toIso8601String(),
+        'by': by,
+        'jump': ?jump,
+        'smoothed': smoothed,
+      };
+
+  factory AutoCut.fromJson(Map<String, dynamic> j) => AutoCut(
+        id: '${j['id']}',
+        kind: '${j['kind'] ?? 'silence'}',
+        path: '${j['path'] ?? ''}',
+        startMs: (j['startMs'] as num?)?.toInt() ?? 0,
+        endMs: (j['endMs'] as num?)?.toInt() ?? 0,
+        word: '${j['word'] ?? ''}',
+        at: DateTime.tryParse('${j['at']}') ??
+            DateTime.fromMillisecondsSinceEpoch(0),
+        by: '${j['by'] ?? 'app'}',
+        jump: (j['jump'] as num?)?.toDouble(),
+        smoothed: j['smoothed'] == true,
+      );
+}
+
 /// How an overlay item sits on the picture of the main track.
 enum OverlayLayout {
   /// A small picture in a corner ([OverlayClip.corner], [OverlayClip.size]).
@@ -1527,6 +1597,7 @@ class Project {
     this.videoSound = SoundTrack.video,
     this.videoSize = VideoSize.matchFirstClip,
     this.overlays = const [],
+    this.autoCuts = const [],
     this.fadeInMs = 0,
     this.fadeOutMs = 0,
   });
@@ -1569,6 +1640,11 @@ class Project {
   /// The overlay track (the second video row): items in timeline order,
   /// never overlapping. Empty in projects from before 1.6.
   final List<OverlayClip> overlays;
+
+  /// What "Remove filler words" and "Remove silences" cut out (1.11), so
+  /// that each cut can be listed and put back; see [AutoCut]. Empty in
+  /// older projects.
+  final List<AutoCut> autoCuts;
 
   /// The whole video fades in from black over its first [fadeInMs] and out
   /// to black over its last [fadeOutMs]; all sound fades with it. Titles
@@ -1867,6 +1943,7 @@ class Project {
     SoundTrack? videoSound,
     VideoSize? videoSize,
     List<OverlayClip>? overlays,
+    List<AutoCut>? autoCuts,
     int? fadeInMs,
     int? fadeOutMs,
   }) =>
@@ -1888,6 +1965,7 @@ class Project {
         videoSound: videoSound ?? this.videoSound,
         videoSize: videoSize ?? this.videoSize,
         overlays: overlays ?? this.overlays,
+        autoCuts: autoCuts ?? this.autoCuts,
         fadeInMs: fadeInMs ?? this.fadeInMs,
         fadeOutMs: fadeOutMs ?? this.fadeOutMs,
       );
@@ -1913,6 +1991,8 @@ class Project {
         'audio': [for (final a in audio) a.toJson()],
         'titles': [for (final t in titles) t.toJson()],
         'overlays': [for (final o in overlays) o.toJson()],
+        if (autoCuts.isNotEmpty)
+          'autoCuts': [for (final c in autoCuts) c.toJson()],
       };
 
   /// Reads a project. A project saved before sound tracks existed (no
@@ -1959,6 +2039,10 @@ class Project {
       originalHeight: j['originalWidth'] is num
           ? (j['originalHeight'] as num?)?.toInt()
           : null,
+      autoCuts: [
+        for (final c in (j['autoCuts'] as List? ?? const []))
+          if (c is Map) AutoCut.fromJson(Map<String, dynamic>.from(c)),
+      ],
       tracks: tracks,
       videoSound: video is Map
           ? SoundTrack.fromJson(Map<String, dynamic>.from(video))

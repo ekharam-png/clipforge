@@ -64,9 +64,12 @@ String? smallExportNote(Project project, ExportQuality quality, ExportFormat for
       ? 'the frame size stays ${full.width}x${full.height} (its short side is already 720 or less)'
       : 'the frame is scaled down from ${full.width}x${full.height} to '
           '${small.width}x${small.height} (short side 720)';
+  // What really applies depends on the encoder that runs (the result
+  // names it): the cap always, the CRF only with the processor's x264.
   return 'quality "small": $frame; the video bitrate is capped at '
-      '$kSmallMaxRateKbps kbit/s with a lower quality setting (x264 CRF '
-      '$kCrfSmall instead of $kCrfFull) and the sound is 128 kbit/s instead of 192.';
+      '$kSmallMaxRateKbps kbit/s (when the processor encodes, x264 also uses '
+      'quality CRF $kCrfSmall instead of $kCrfFull; a graphics card encoder '
+      'just keeps to the cap) and the sound is 128 kbit/s instead of 192.';
 }
 
 // ---- warnings ---------------------------------------------------------------
@@ -155,7 +158,18 @@ Map<String, dynamic> projectChanges(Project before, Project after) {
       for (final id in b.keys)
         if (a.containsKey(id) && a[id] != b[id]) id,
     ];
-    return {'added': added, 'removed': removed, 'changed': changed};
+    // Ids are listed up to [kChangeIds] of each; the counts say the rest
+    // (an import of 463 subtitles answered with 463 ids, 18 KB).
+    List<String> some(List<String> l) =>
+        l.length > kChangeIds ? l.sublist(0, kChangeIds) : l;
+    return {
+      'added': some(added),
+      'removed': some(removed),
+      'changed': some(changed),
+      'addedCount': added.length,
+      'removedCount': removed.length,
+      'changedCount': changed.length,
+    };
   }
 
   Map<String, String> keyed<T>(List<T> items, String Function(T) id,
@@ -163,9 +177,9 @@ Map<String, dynamic> projectChanges(Project before, Project after) {
       {for (final x in items) id(x): jsonEncode(json(x))};
 
   final settingsBefore = before.toJson()
-    ..removeWhere((k, _) => const ['clips', 'audio', 'titles', 'overlays', 'updatedAt'].contains(k));
+    ..removeWhere((k, _) => const ['clips', 'audio', 'titles', 'overlays', 'updatedAt', 'autoCuts'].contains(k));
   final settingsAfter = after.toJson()
-    ..removeWhere((k, _) => const ['clips', 'audio', 'titles', 'overlays', 'updatedAt'].contains(k));
+    ..removeWhere((k, _) => const ['clips', 'audio', 'titles', 'overlays', 'updatedAt', 'autoCuts'].contains(k));
   return {
     'clips': diff(keyed(before.clips, (c) => c.id, (c) => c.toJson()),
         keyed(after.clips, (c) => c.id, (c) => c.toJson())),
@@ -184,11 +198,14 @@ Map<String, dynamic> projectChanges(Project before, Project after) {
   };
 }
 
+/// Ids listed per kind of change in an answer.
+const int kChangeIds = 12;
+
 /// [projectChanges] in a few words.
 String changesText(Map<String, dynamic> changes) {
   final parts = <String>[];
-  String ids(List list) =>
-      '${list.take(12).join(', ')}${list.length > 12 ? ', … (${list.length} in all)' : ''}';
+  String ids(List list, int count) =>
+      '${list.take(5).join(', ')}${count > 5 ? ', … ($count in all; get_project lists them)' : ''}';
   for (final (key, noun) in const [
     ('clips', 'clip'),
     ('titles', 'title/caption'),
@@ -197,9 +214,12 @@ String changesText(Map<String, dynamic> changes) {
   ]) {
     final d = changes[key] as Map;
     final a = d['added'] as List, r = d['removed'] as List, c = d['changed'] as List;
-    if (a.isNotEmpty) parts.add('${a.length} $noun(s) added: ${ids(a)}');
-    if (r.isNotEmpty) parts.add('${r.length} $noun(s) removed: ${ids(r)}');
-    if (c.isNotEmpty) parts.add('${c.length} $noun(s) changed: ${ids(c)}');
+    final na = d['addedCount'] as int? ?? a.length;
+    final nr = d['removedCount'] as int? ?? r.length;
+    final nc = d['changedCount'] as int? ?? c.length;
+    if (a.isNotEmpty) parts.add('$na $noun(s) added: ${ids(a, na)}');
+    if (r.isNotEmpty) parts.add('$nr $noun(s) removed: ${ids(r, nr)}');
+    if (c.isNotEmpty) parts.add('$nc $noun(s) changed: ${ids(c, nc)}');
   }
   final settings = changes['settings'] as List;
   if (settings.isNotEmpty) parts.add('project settings: ${settings.join(', ')}');

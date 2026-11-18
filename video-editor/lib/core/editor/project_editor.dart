@@ -1691,6 +1691,10 @@ class ProjectEditor {
     );
   }
 
+  /// Replaces the list of automatic cuts ([Project.autoCuts]).
+  void setAutoCuts(List<AutoCut> cuts) =>
+      _edit((p) => p.copyWith(autoCuts: List.unmodifiable(cuts)));
+
   // Titles -----------------------------------------------------------------
   /// Adds [title] (clamped). An id that is already in use is replaced by a
   /// fresh one.

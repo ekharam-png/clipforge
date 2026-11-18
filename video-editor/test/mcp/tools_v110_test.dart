@@ -288,4 +288,89 @@ void main() {
     expect(saved.audio.length, saved.clips.length);
     expect(saved.clips.every((x) => x.type == ClipType.video), isTrue);
   }, skip: skipWithoutFfmpeg);
+
+  test('two speakers on their own files: remove_silences cuts the picture '
+      'and both voices together (the owner\'s Zoom report)', () async {
+    // One video + one sound file per speaker, camera muted. Both
+    // microphones are quiet at 9..11 s of the talk.
+    final id = await project('Two speakers');
+    final v1 = await c.ok('add_voice',
+        {'project_id': id, 'path': mic, 'track_name': 'Sam'});
+    final v2 = await c.ok('add_voice',
+        {'project_id': id, 'path': mic2, 'track_name': 'Anna'});
+    expect(v1.data['lined_up'], isTrue);
+    expect(v2.data['lined_up'], isTrue);
+    final offsets = {
+      mic: v1.data['offset_ms'] as int,
+      mic2: v2.data['offset_ms'] as int,
+    };
+    var saved = await b.store.load(id);
+    expect(saved.clips.single.muted, isTrue);
+    expect(saved.audio.length, 2);
+    expect(saved.audio.map((a) => saved.trackById(a.trackId)!.speech), [true, true]);
+
+    // Dry run: the pause is found on the SPEECH tracks (the muted camera
+    // only has noise), nothing is saved.
+    final dry = await c.ok('remove_silences', {'project_id': id, 'dry_run': true});
+    expect(dry.text, startsWith('DRY RUN'));
+    expect(dry.text, contains('voice recorded separately'));
+    final cuts = (dry.data['cuts'] as List).cast<Map>();
+    expect(
+        cuts.where((x) =>
+            (x['sourceStartMs'] as int) < 8500 && (x['sourceEndMs'] as int) > 8900),
+        hasLength(1),
+        reason: '$cuts');
+    expect((await b.store.load(id)).clips.length, 1);
+    expect(dry.data['warnings'] ?? const [], isEmpty);
+
+    // For real: every piece of picture has its part of BOTH voices, at the
+    // same offsets as before the cut.
+    final real = await c.ok('remove_silences', {'project_id': id});
+    expect(real.data['gapsRemoved'], greaterThanOrEqualTo(1));
+    saved = await b.store.load(id);
+    expect(saved.clips.length, greaterThanOrEqualTo(2));
+    for (var i = 0; i < saved.clips.length; i++) {
+      final clip = saved.clips[i];
+      expect(clip.muted, isTrue);
+      final voices = saved.audio.where((x) => x.sourceClipId == clip.id).toList();
+      expect(voices.map((x) => x.path).toSet(), {mic, mic2});
+      for (final a in voices) {
+        expect(a.linked, isTrue);
+        expect(a.inMs, clip.inMs + offsets[a.path]!);
+        expect(a.outMs, clip.outMs + offsets[a.path]!);
+        expect(a.startMs, saved.clipStartMs(i));
+      }
+    }
+    expect(saved.audio.length, 2 * saved.clips.length);
+    expect(real.data['warnings'] ?? const [], isEmpty);
+  }, skip: skipWithoutFfmpeg);
+
+  test('unlinked sound on a speech track: a cut warns that it is now out of '
+      'sync and says what to use', () async {
+    final id = await project('Loose voice');
+    // Added and linked, then unlinked: it stays on its speech track.
+    final v = await c.ok('add_voice', {'project_id': id, 'path': mic});
+    final voice = (v.data['audioIds'] as List).single;
+    await c.ok('align_audio', {'project_id': id, 'audio_id': voice, 'link': false});
+    final clipId = (await b.store.load(id)).clips.single.id;
+    final dry = await c.ok('remove_silences', {'project_id': id, 'dry_run': true});
+    final warning = (dry.data['warnings'] as List).join(' ');
+    expect(warning, contains('NOT linked to a clip'));
+    expect(warning, contains('OUT OF SYNC'));
+    expect(warning, contains('add_voice'));
+    expect(warning, contains('align_audio'));
+    expect(dry.text, contains('OUT OF SYNC'));
+    final trim = await c.ok('trim_clip',
+        {'project_id': id, 'clip_id': clipId, 'in_ms': 3000});
+    expect((trim.data['warnings'] as List).join(' '), contains('OUT OF SYNC'));
+    // An edit that does not move the picture says nothing.
+    final quiet = await c.ok('set_clip_properties',
+        {'project_id': id, 'clip_id': clipId, 'volume': 0.5});
+    expect('${quiet.data['warnings'] ?? ''}', isNot(contains('OUT OF SYNC')));
+    // Linked again: no warning.
+    await c.ok('align_audio', {'project_id': id, 'audio_id': voice, 'clip_id': clipId});
+    final ok = await c.ok('trim_clip',
+        {'project_id': id, 'clip_id': clipId, 'in_ms': 4000});
+    expect('${ok.data['warnings'] ?? ''}', isNot(contains('OUT OF SYNC')));
+  }, skip: skipWithoutFfmpeg);
 }

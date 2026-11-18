@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../model/project.dart';
+import '../transcript/transcript_store.dart';
 import 'project_store.dart';
 
 /// [ProjectStore] backed by plain files. Pure Dart (no Flutter, no
@@ -71,13 +72,28 @@ class FileProjectStore implements ProjectStore {
     return infos;
   }
 
+  /// [name] when no project is called that yet, else the first of
+  /// "name (2)", "name (3)", ... that is free (1.11: two projects with one
+  /// name could not be told apart, in the app or by Claude). Upper and
+  /// lower case count as the same name.
+  Future<String> freeName(String name) async {
+    final taken = {
+      for (final i in await list()) i.name.trim().toLowerCase(),
+    };
+    if (!taken.contains(name.trim().toLowerCase())) return name;
+    for (var n = 2;; n++) {
+      final candidate = '$name ($n)';
+      if (!taken.contains(candidate.toLowerCase())) return candidate;
+    }
+  }
+
   @override
   Future<Project> create(String name) async {
     final now = DateTime.now();
     final trimmed = name.trim();
     final project = Project(
       id: const Uuid().v4(),
-      name: trimmed.isEmpty ? 'Untitled' : trimmed,
+      name: await freeName(trimmed.isEmpty ? 'Untitled' : trimmed),
       createdAt: now,
       updatedAt: now,
     );
@@ -92,10 +108,16 @@ class FileProjectStore implements ProjectStore {
     final trimmed = name?.trim() ?? '';
     final copy = Project.fromJson(source.toJson()
       ..['id'] = const Uuid().v4()
-      ..['name'] = trimmed.isEmpty ? '${source.name} copy' : trimmed
+      ..['name'] =
+          await freeName(trimmed.isEmpty ? '${source.name} copy' : trimmed)
       ..['createdAt'] = now.toUtc().toIso8601String()
       ..['updatedAt'] = now.toUtc().toIso8601String());
     await save(copy);
+    // The copy uses the same media files, so their transcripts apply.
+    try {
+      await TranscriptStore.ofProject(p.join(rootPath, id))
+          .copyTo(TranscriptStore.ofProject(p.join(rootPath, copy.id)));
+    } catch (_) {}
     return copy;
   }
 

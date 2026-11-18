@@ -102,10 +102,13 @@ def pubspec_version():
 
 
 def tool_names_from_source():
-    """The tool names registered in lib/mcp/tools.dart (fallback when the
-    program cannot be run on this computer)."""
-    with open(os.path.join(ROOT, "lib", "mcp", "tools.dart"), encoding="utf-8") as f:
-        names = re.findall(r"^      name: '([a-z_]+)',$", f.read(), re.M)
+    """The tool names registered in lib/mcp/tools.dart and its part
+    tools_speech.dart (fallback when the program cannot be run on this
+    computer)."""
+    names = []
+    for name in ("tools.dart", "tools_speech.dart"):
+        with open(os.path.join(ROOT, "lib", "mcp", name), encoding="utf-8") as f:
+            names += re.findall(r"^\s{6,10}name: '([a-z_]+)',$", f.read(), re.M)
     return [{"name": n} for n in names]
 
 

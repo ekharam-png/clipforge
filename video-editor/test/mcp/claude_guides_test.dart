@@ -60,6 +60,7 @@ void main() {
       'get', 'list', 'create', 'duplicate', 'rename', 'set', 'add', 'trim',
       'split', 'remove', 'move', 'import', 'export', 'update', 'separate',
       'reattach', 'copy', 'apply', 'freeze', 'fit', 'relink', 'cancel', 'align',
+      'find', 'captions', 'make', 'restore',
     };
     final verbFirst = {
       for (final t in toolNames)
@@ -69,7 +70,9 @@ void main() {
         reason: 'a tool starts with a new verb: add it to this test '
             '(${verbFirst.difference(verbs)})');
     // Arguments that also start with one of those verbs.
-    const arguments = {'fit_music', 'export_job', 'match_first_clip'};
+    const arguments = {
+      'fit_music', 'export_job', 'match_first_clip', 'remove_fillers_strength', //
+    };
     for (final file in [
       p.join('claude', 'CLAUDE.md'),
       for (final f in ['SKILL.md', 'tools.md', 'recipes.md', 'troubleshooting.md'])
@@ -110,7 +113,10 @@ void main() {
       'dry_run',
       'get_export_status',
       'duplicate_project',
-      'cannot see or hear',
+      'cannot see the picture',
+      'download_pack',
+      'strength: "light"',
+      'restore_cut',
       'home screen',
       'Go ahead?',
     ]) {

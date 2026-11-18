@@ -34,6 +34,7 @@ import 'package:clipforge/ui/playback/media_kit_backend.dart';
 import 'package:clipforge/ui/playback/playback_controller.dart';
 import 'package:clipforge/ui/playback/timeline_player.dart';
 import 'package:clipforge/ui/services.dart';
+import 'package:clipforge/ui/speech/speech_service.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -234,6 +235,12 @@ void main() {
         // Processed clip sound goes to the run's folder, not the user's.
         processedSoundCacheProvider.overrideWithValue(FileProcessedSoundCache(
             () async => p.join(out.path, 'media'))),
+        // Speech-to-text (1.11): the real service, with its packs and
+        // settings in the run's folder (step 7j puts a pretend speech
+        // program there).
+        speechServiceProvider.overrideWithValue(DesktopSpeechService(
+            rootDir: p.join(out.path, 'ClipForge'),
+            projectsDir: storeDir.path)),
       ],
       child: RepaintBoundary(key: shotKey, child: const ClipForgeApp()),
     ));
@@ -1689,6 +1696,110 @@ void main() {
       if (c.path == cam) s.editor.removeClip(c.id);
     }
     expect(s.project.audio.any((a) => a.isVoice), isFalse);
+    await wait(300);
+    pb.seek(500);
+    await wait(500);
+
+    // 7j. Speech-to-text (1.11) in the real app: the REAL service and the
+    // real ffmpeg (which turns the clip's sound into a WAV file), with a
+    // pretend speech program - a shell script named whisper-cli that
+    // answers --help like whisper.cpp and writes a recorded-style result -
+    // and a pretend language pack. Transcribe from the Sound panel, read
+    // the Transcript column, jump to a phrase, make captions.
+    final speechRoot = p.join(out.path, 'ClipForge');
+    final fakeWhisper = p.join(out.path, 'bin', 'whisper-cli');
+    final fixtureJson = p.join(Directory.current.path, 'test', 'media',
+        'fixtures', 'speech', 'whispercpp_words_ru.json');
+    await tester.runAsync(() async {
+      await Directory(p.dirname(fakeWhisper)).create(recursive: true);
+      await File(fakeWhisper).writeAsString('''
+#!/bin/sh
+case "\$1" in --help) echo "usage: whisper-cli -oj --output-json -ojf -sow --split-on-word"; exit 0;; esac
+out=""
+while [ \$# -gt 0 ]; do
+  if [ "\$1" = "-of" ]; then out="\$2"; fi
+  if [ "\$1" = "-f" ] && [ ! -s "\$2" ]; then echo "no sound file" >&2; exit 3; fi
+  shift
+done
+echo "whisper_print_progress_callback: progress =  50%" >&2
+cp "$fixtureJson" "\$out.json"
+''');
+      await Process.run('chmod', ['+x', fakeWhisper]);
+      final models = Directory(p.join(speechRoot, 'models'));
+      await models.create(recursive: true);
+      await File(p.join(models.path, 'ggml-base.bin')).writeAsBytes(List.filled(64, 1));
+      await File(p.join(models.path, 'speech-settings.json'))
+          .writeAsString(jsonEncode({'programPath': fakeWhisper}));
+    });
+    s.editor.addClip(Clip(
+      id: 'speech-clip',
+      type: ClipType.video,
+      path: cam,
+      sourceDurationMs: camInfo.durationMs,
+      inMs: 0,
+      outMs: camInfo.durationMs,
+      width: camInfo.width,
+      height: camInfo.height,
+    ));
+    final speechIndex = s.project.clips.indexWhere((c) => c.id == 'speech-clip');
+    final speechStart = s.project.clipStartMs(speechIndex);
+    s.selectClipAndShow('speech-clip');
+    s.openTool.value = ClipTool.sound;
+    await waitFor(
+        () => find.byKey(const ValueKey('transcribe-button')).evaluate().isNotEmpty,
+        'Transcribe speech… in the Sound panel');
+    await tester.ensureVisible(find.byKey(const ValueKey('transcribe-button')));
+    await wait(200);
+    await tester.tap(find.byKey(const ValueKey('transcribe-button')));
+    await waitFor(
+        () => find.textContaining('whisper.cpp on this computer').evaluate().isNotEmpty,
+        'the speech program was found');
+    expect(find.text('Small · about 140 MB'), findsOneWidget);
+    expect(find.byKey(const ValueKey('pack-remove-small')), findsOneWidget);
+    await shot('09-transcribe');
+    await tester.tap(find.byKey(const ValueKey('transcribe-go')));
+    await waitFor(
+        () => find.byKey(const ValueKey('transcribe-dialog')).evaluate().isEmpty,
+        'the speech was transcribed', timeoutMs: 60000);
+    final transcript = s.transcriptOf(cam, 0);
+    expect(transcript, isNotNull);
+    expect(transcript!.backend, 'whisper-cpp');
+    expect(transcript.wordTiming, WordTiming.measured);
+    expect(transcript.wordCount, 20);
+    // Its own file in the project folder, not in project.json.
+    final stored = await tester.runAsync(() async =>
+        Directory(p.join(storeDir.path, s.project.id, 'transcripts')).list().length);
+    expect(stored, 1);
+    log('SPEECH: ${transcript.wordCount} words via ${transcript.backend} '
+        '(${transcript.model}), language ${transcript.language}');
+    s.showTranscript.value = true;
+    await waitFor(() => find.text('Привет, друзья!').evaluate().isNotEmpty,
+        'the Transcript column');
+    await tester.tap(find.text('Потом вы ждёте.'));
+    await wait(400);
+    expect(pb.positionMs, closeTo(speechStart + 10000, 60));
+    await shot('09-transcript');
+    await tester.ensureVisible(find.byKey(const ValueKey('speech-captions-button')));
+    await wait(200);
+    await tester.tap(find.byKey(const ValueKey('speech-captions-button')));
+    await waitFor(
+        () => find.byKey(const ValueKey('speech-captions-add')).evaluate().isNotEmpty,
+        'Captions from speech');
+    await tester.tap(find.byKey(const ValueKey('speech-captions-add')));
+    await wait(500);
+    final speechCaptions =
+        s.project.titles.where((t) => t.kind == TitleKind.caption).toList();
+    expect(speechCaptions.length, greaterThanOrEqualTo(4));
+    expect(speechCaptions.any((t) => t.text.contains('Привет')), isTrue);
+    pb.seek(speechStart + 600);
+    await wait(600);
+    await shot('09-speech-captions');
+    log('SPEECH: ${speechCaptions.length} captions from speech; first '
+        '"${speechCaptions.first.text.replaceAll('\n', ' / ')}"');
+    s.showTranscript.value = false;
+    s.editor.removeClip('speech-clip');
+    expect(s.project.titles.where((t) => t.kind == TitleKind.caption &&
+        speechCaptions.any((c) => c.id == t.id)), isEmpty);
     await wait(300);
     pb.seek(500);
     await wait(500);

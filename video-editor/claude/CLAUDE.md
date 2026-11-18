@@ -68,7 +68,9 @@ loaded they say the same; a test keeps them in step.)
   every cut and the total time removed) and saves nothing. Tell them the
   result ("This removes 4:12 in 137 cuts — go ahead?"), then run it for
   real.
-- **You cannot see or hear the video.** You only know lengths, times, silence
+- **You cannot see the picture.** What is SAID you can know, once the
+  speech is transcribed (see "Speech" below); before that you cannot see or
+  hear the video at all. Otherwise you only know lengths, times, silence
   positions and text. For anything about how it looks or sounds, say so and
   ask them to watch it in ClipForge. Never claim something "looks great".
 
@@ -276,19 +278,54 @@ voices (else it echoes) → for a split view use `layout: "side_by_side"`;
 for switching angles use `layout: "full"` items placed one after another →
 export. They must line the second camera up by eye: ask for the times.
 
-**Shorts from a long video** — say first that you cannot watch or listen,
-so you cannot choose the best moments yourself. Then: ask for their times
-("12:30–13:10"); or run `remove_silences` with `dry_run: true` and offer
-the stretches between long pauses (by time only) for them to check; or, if
-they have an .srt of the recording, read it and suggest moments by what is
-said. For each moment: `duplicate_project` → keep only that part
-(`trim_clip`, or `split_at` + `remove_clip`) → shape 9:16 → `fit: "blur"`
-or fill + `position_x` → title / captions → export small. This improves
-when automatic transcription arrives.
+**Shorts from a long video** — see "Find the best shorts in a long video"
+under Speech below: with a transcript you propose the moments yourself and
+`make_short` does the cutting. Without one (no speech program): ask for
+their times, or offer the stretches between the long pauses that
+`remove_silences` `dry_run: true` lists, and say you are choosing blind.
+
+## Speech: what is said (1.11)
+
+You cannot see the picture, but you can know what is said:
+
+- `transcribe` (give `language`: "en", "ru", "he") turns the speech into
+  text with word times. It is a background job: poll
+  `get_transcribe_status`; `cancel_transcribe` stops it. One transcript per
+  media file, valid through every cut. **It never downloads anything by
+  itself**: when a language pack is missing it names the sizes (Small about
+  140 MB, Medium about 470 MB, Large about 1.6 GB) and stops; ask the
+  owner, then pass `quality` and `download_pack: true`. `get_status` says
+  which speech programs and packs are on the computer and what to install
+  when there is none.
+- `get_transcript` reads it (compact text by default, paged with `offset`),
+  `find_in_transcript` finds a phrase.
+- `captions_from_transcript` makes captions (dry run first; ask them to
+  read them through).
+- `remove_fillers` cuts "um" / "uh" GENTLY. Always the dry run first
+  (default) with `strength: "light"` (default); tell the owner the numbers
+  in plain words ("I would remove 23 of 61 fillers, about 3 cuts a minute,
+  saving 19 seconds; 9 were left because the picture would jump"); never
+  "strong" unless they ask or the result is sound only; afterwards give
+  them the 3–5 riskiest times to watch. If it feels jumpy:
+  `list_auto_cuts`, then `restore_cut` (an id, or "all"). Keep silences
+  plus fillers at about 6 cuts a minute or less for a talking head.
+- `make_short` makes a new upright project from one part of the timeline,
+  with captions; the original is not changed.
+
+**Find the best shorts in a long video:** `transcribe` → read it all with
+`get_transcript` → propose 3–5 moments of 20–60 s with times (m:ss) and a
+one-line reason each, cut at sentence starts and ends → wait for their
+choice → `make_short` for each → `export_video` each, one at a time. Say
+once that you chose by what is said, not by what is seen.
+
+A transcript is what a program heard: names and numbers go wrong, more
+with small packs and in Hebrew. If you can run commands yourself, you may
+also run a whisper program on a file and bring the result in with
+`import_srt` (ask first).
 
 ## Not available yet (say so if asked)
 
-AI music removal (separating voice from music), automatic subtitles from
-speech, removing filler words ("um", "uh"), a built-in assistant, and lining
-up two cameras by their sound are planned but not built. Today only
+AI music removal (separating voice from music), a text editor for the
+transcript in the app, a built-in assistant, speech-to-text on the phone,
+and lining up two cameras by their sound are not built. Today only
 Voice focus and the sound track/side choice reduce music.

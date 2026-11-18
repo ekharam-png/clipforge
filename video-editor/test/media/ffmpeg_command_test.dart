@@ -325,7 +325,11 @@ void main() {
     test('awkward text only ever goes to text files', () {
       const text = "It's 100% \"fine\": a\\b, [x]; {y} %{pts}\nПривет, мир!\r\nשלום";
       final c = build(proj([video('a')], titles: [const TitleOverlay(id: 't', text: text, startMs: 0, endMs: 1000)]));
-      expect(c.textFiles.values.toList(), ["It's 100% \"fine\": a\\b, [x]; {y} %{pts}", 'Привет, мир!', 'שלום']);
+      expect(c.textFiles.values.toList(), ["It's 100% \"fine\": a\\b, [x]; {y} %{pts}", 'Привет, мир!',
+        // 1.11: a right-to-left line is written between RIGHT-TO-LEFT
+        // MARKS, so that drawtext lays the whole line out right to left.
+        '\u200Fשלום\u200F',
+      ]);
       expect(c.filterGraph, contains('expansion=none'));
       for (final a in c.args) {
         expect(a, isNot(contains('Привет')));

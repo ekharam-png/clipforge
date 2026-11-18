@@ -45,6 +45,10 @@ void main() {
         'duplicate_clip', 'copy_clip_settings', 'apply_to_all', 'freeze_frame',
         'move_sound_track', 'fit_music_to_video', 'undo', 'redo', 'relink_media', 'export_video', //
         'get_export_status', 'cancel_export',
+        // 1.11: speech.
+        'transcribe', 'get_transcribe_status', 'cancel_transcribe',
+        'get_transcript', 'find_in_transcript', 'captions_from_transcript',
+        'remove_fillers', 'list_auto_cuts', 'restore_cut', 'make_short',
       ]);
       for (final t in tools) {
         final name = t['name'] as String;
@@ -65,7 +69,10 @@ void main() {
         for (final req in (schema['required'] as List? ?? const [])) {
           expect(props.containsKey(req), isTrue, reason: '$name requires unknown $req');
         }
-        if (!const {'get_status', 'list_projects', 'create_project', 'get_export_status', 'cancel_export'}
+        if (!const {
+          'get_status', 'list_projects', 'create_project', 'get_export_status', //
+          'cancel_export', 'get_transcribe_status', 'cancel_transcribe',
+        }
             .contains(name)) {
           expect(props.containsKey('project_id'), isTrue, reason: name);
           expect(schema['required'], contains('project_id'), reason: name);

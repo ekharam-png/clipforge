@@ -889,6 +889,96 @@ The date is shown in your own time zone; the copied text uses UTC (world time), 
 
 To see what changed in each version, open **What's new** in Help.
 
+=== transcribe-speech
+title: Transcribe speech (computer only)
+section: Computer
+keywords: transcribe, transcription, transcript, speech to text, speech, whisper, automatic subtitles, auto captions, language pack, pack, download, model, english, russian, hebrew, ffmpeg, what is said, dictation, voice to text
+related: captions-from-speech, remove-filler-words, transcript, voice-recorded-separately, claude-control
+
+ClipForge can turn what is said in a video into text, with the time of every word. That text is used for captions, for removing "um" and "uh", for the transcript you can read and search, and it lets Claude find good moments for you. It happens on your computer; nothing is sent anywhere. It is not on phones.
+
+1. Select a video clip, open **Sound** and click **Transcribe speech…** (also in the Edit menu, under Speech).
+2. Choose the language. Choosing it is more reliable than Automatic.
+3. Click **Transcribe**. A long recording takes a while; you can press **Stop** at any time.
+
+## What it needs
+
+ClipForge uses a speech program that is already on the computer and finds it by itself: FFmpeg (version 8 or newer, with its "whisper" filter), whisper.cpp, faster-whisper or OpenAI whisper. If none is there, the window says in plain words what to install. On Windows the simplest is FFmpeg: open PowerShell, run "winget install ffmpeg", then start ClipForge again.
+
+## Language packs
+
+A speech program needs a language pack. Nothing is downloaded until you press **Download**, and the size is shown first:
+
+- Small, about 140 MB: quick, makes more mistakes.
+- Medium, about 470 MB: good.
+- Large, about 1.6 GB: best, a large download. It covers every language.
+
+English has its own Small and Medium packs. Russian, Hebrew and other languages share theirs, so one download serves them all. The Small pack makes many mistakes in Hebrew; Medium or Large is worth it there. When you have several, the largest is used unless you pick another. **Remove** frees the space again, and the window shows how much the packs use. Already have a model file? **Use a model file I have…**
+
+## Good to know
+
+- With a voice recorded separately, the voice files are transcribed (one per speaker), not the muted camera sound.
+- The text stays right when you cut, speed up or remove silences: you transcribe once.
+- Speech recognition makes mistakes, mostly with names and numbers. Read the result.
+
+=== captions-from-speech
+title: Captions from speech (computer only)
+section: Computer
+keywords: captions from speech, automatic captions, auto subtitles, subtitles from speech, generate captions, hebrew captions, russian captions, right to left, line length
+related: transcribe-speech, captions, text-styles, transcript
+
+After **Transcribe speech…**, ClipForge can write the captions for you.
+
+1. Click **Captions from speech…** (in the clip's **Sound** panel, or Edit > Speech).
+2. Choose one or two lines and the longest line.
+3. Click **Add captions**.
+
+The captions get the look your captions already have, are split at sentences and pauses, and each follows its picture when you cut. "Um" and "uh" are left out. Hebrew is drawn right to left. One **Undo** takes them all away.
+
+Read them through before you export: names and numbers are where mistakes hide. Change a caption like any other by selecting it.
+
+=== remove-filler-words
+title: Remove filler words (computer only)
+section: Computer
+keywords: filler words, fillers, um, uh, er, remove um, hesitation, like, you know, jumpy, jump cut, put back, automatic cuts, light, normal, strong
+related: transcribe-speech, remove-silences, history, transcript
+
+After **Transcribe speech…**, **Remove filler words…** finds "um", "uh" and the like and cuts them out. It is gentle on purpose: too many cuts make a video jumpy.
+
+1. Click **Remove filler words…** (in the clip's **Sound** panel, or Edit > Speech).
+2. Look at the list: each filler with its time, its length and how the picture changes across the cut (smooth, slight or jumpy). The play button lets you hear the spot.
+3. Tick or untick what you like, then click **Remove**.
+
+## How much to remove
+
+- **Light** (the start): only clear fillers that stand alone between pauses, kept well apart, at most about 4 a minute.
+- **Normal**: shorter ones too.
+- **Strong**: every one that was found. Fine for sound only; with the speaker in the picture it can look jumpy.
+
+Where the person moved, the cut would jump: such fillers are left in on Light and Normal. A slight change gets a short dissolve. Words that are also real words ("like", "ну", "כאילו") are listed but never ticked for you.
+
+## Putting cuts back
+
+Every automatic cut is remembered, also those of **Remove silences**. **Automatic cuts…** (in the **Sound** panel or Edit > Speech) lists them; **Put back** returns one piece to the video, **Put back all** returns everything. **Undo** works too.
+
+## Good to know
+
+- Speech programs often leave "um" out of the text, so fewer are found than are said. FFmpeg's speech filter nearly always does; whisper.cpp or faster-whisper keep more and time every word.
+- The video has to be transcribed first.
+
+=== transcript
+title: The transcript (computer only)
+section: Computer
+keywords: transcript, read, search, find a word, what is said, jump to, text of the video, speaker
+related: transcribe-speech, captions-from-speech, remove-filler-words
+
+After **Transcribe speech…**, click the **Transcript** button at the top (or Edit > Speech > Transcript) to read what is said, phrase by phrase, with the time and, for voices recorded separately, the speaker.
+
+- Click a phrase to go to that moment.
+- Type in the search box to find where a word is said.
+
+The transcript follows your cuts: it always shows the video as it is now. The words cannot be edited here; to change what is shown on screen, edit the captions.
+
 === voice-separation
 title: Separating voice and music
 section: Coming later
@@ -901,15 +991,15 @@ Coming later: ClipForge will be able to split a clip's sound into the voice and 
 Until then, use **Voice focus** to make speech clearer.
 
 === auto-subtitles
-title: Automatic subtitles
+title: Automatic subtitles on a phone
 section: Coming later
 status: coming-later
-keywords: automatic subtitles, auto captions, transcribe, transcription, transcript, speech to text, dictation, whisper, generate subtitles
-related: captions, other-languages
+keywords: automatic subtitles phone, auto captions android, speech to text phone, dictation
+related: transcribe-speech, captions-from-speech, captions
 
-Coming later: ClipForge will write captions for you from what is said in the video, on your own device, without the internet.
+Coming later on phones: captions written for you from what is said. On a computer ClipForge can already do it: see "Transcribe speech (computer only)".
 
-Until then, type captions with **Captions**, or import a subtitle file (.srt) made elsewhere.
+Until then, on a phone, type captions with **Captions**, import a subtitle file (.srt), or make the captions on the computer and bring the project over with **Share project file**.
 
 === assistant
 title: Local assistant

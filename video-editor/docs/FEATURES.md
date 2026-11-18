@@ -8,7 +8,7 @@ every release: a test fails when CHANGELOG.md has a version this file does
 not mention.
 
 Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
-1.8.0, 1.9.0, 1.10.0.
+1.8.0, 1.9.0, 1.10.0, 1.11.0.
 
 ## Projects
 
@@ -31,6 +31,24 @@ Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
 | Find file: Search the gallery (Android) | 1.8.0 | Looks for a missing file by its name on the phone and copies it in. |
 | Clean-up never deletes what is in use | 1.8.0 | Files the open project or its undo history still needs are always kept. |
 | "Open in the app" mark | 1.9.0 | An open project is marked, so Claude does not change it at the same time; leftovers of a crash are ignored and cleaned up. |
+
+## Speech (1.11.0)
+
+"Where" says where each one exists: Computer = Windows, Mac and Linux only;
+Both = phones too.
+
+| Feature | Since | Where | What it does |
+|---|---|---|---|
+| Transcribe speech | 1.11.0 | Computer | Turns what is said into text with word times, using a speech program already on the computer (FFmpeg 8 whisper filter, whisper.cpp, faster-whisper, OpenAI whisper). One transcript per media file, kept in the project folder; survives every cut. |
+| Language packs on demand | 1.11.0 | Computer | Small / Medium / Large per language, size shown first, downloaded only on a click, shared between languages, removable; "Use a model file I have". |
+| Voices recorded separately are transcribed per speaker | 1.11.0 | Computer | The voice files are read instead of the muted camera sound; the transcript shows who speaks. |
+| Captions from speech | 1.11.0 | Computer (the captions then show and export everywhere) | Caption items from the transcript: 1–2 lines, split at sentences and pauses, current caption look, one undo step. |
+| Right-to-left lines (Hebrew, Arabic) | 1.11.0 | Both | Titles and captions are laid out right to left in preview and export (punctuation and numbers on the correct side). |
+| Remove filler words | 1.11.0 | Computer | Finds "um", "uh", "э-э", "אה"…; Light / Normal / Strong; review list with jump rating; cuts kept apart; short dissolve on slight picture changes. |
+| Automatic cuts, Put back | 1.11.0 | Computer (cuts made on a phone by Remove silences are recorded too) | Every automatic cut (fillers, silences) is remembered and can be put back one by one or all together. |
+| Transcript column | 1.11.0 | Computer | Read-only text by phrase with time and speaker; click to jump; search. |
+| Claude: transcribe, read, find, captions, fillers, shorts | 1.11.0 | Computer | Tools for Claude to transcribe in the background, read and search the transcript, make captions, remove fillers gently, list and restore automatic cuts, and make a short from a part of the timeline. |
+| Project names are unique | 1.11.0 | Both | A new project or copy whose name is taken gets "(2)", "(3)"… |
 
 ## Timeline & cutting
 
@@ -174,7 +192,7 @@ Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
 From the roadmap in `docs/HANDOVER.md`; not built yet.
 
 - AI voice separation (voice and background as two levels), on the device.
-- Automatic subtitles from speech (needs an owner decision: on-device or paid service).
+- Speech to text on phones, and a speech engine built into the app (1.11 uses a speech program installed on the computer).
 - Removing filler words ("um", "uh") and captions from speech (with the planned on-device transcription).
 - Transcript-based editing, then a local AI assistant (computers, experimental).
 - Voiceover recording.

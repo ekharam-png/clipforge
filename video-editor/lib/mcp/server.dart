@@ -10,6 +10,7 @@ import 'environment.dart';
 import 'export_jobs.dart';
 import 'mcp_protocol.dart';
 import 'tools.dart';
+import 'transcribe_jobs.dart';
 
 /// Builds the server for [options]. [log] receives diagnostics (they must
 /// never go to standard output, which carries only protocol messages).
@@ -53,6 +54,8 @@ Future<McpServer> createClipForgeServer(
     fontsChecked: fontLookup.checked,
     // Exports run in their own process and outlive the server.
     exportLauncher: separateProcessLauncher(),
+    // So does speech-to-text.
+    transcribeLauncher: separateTranscribeLauncher(),
   );
   log('export jobs: ${tools.jobs.dir}');
   return McpServer(
@@ -86,6 +89,10 @@ Future<int> runClipForgeMcp(List<String> args) async {
   if (options.exportJob != null) {
     // The render process of one export (started by export_video).
     return runExportWorker(options.exportJob!);
+  }
+  if (options.transcribeJob != null) {
+    // The process of one speech-to-text job (started by transcribe).
+    return runTranscribeWorker(options.transcribeJob!);
   }
   if (options.version) {
     // The app's own version line (Help > About ClipForge), so the two can

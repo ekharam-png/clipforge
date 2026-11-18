@@ -20,7 +20,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # matching section at the top of CHANGELOG.md (a test checks they agree).
 # The build number after "+" is only used for builds made on a computer;
 # CI replaces it with the GitHub Actions run number.
-version: 1.10.0+1
+version: 1.11.0+1
 
 environment:
   sdk: ^3.14.0
@@ -49,6 +49,8 @@ dependencies:
   uuid: ^4.6.0
   path: ^1.9.1
   archive: ^4.7.1
+  # SHA-256 check of downloaded speech packs (pure Dart).
+  crypto: ^3.0.8
   gal: 2.3.3
   share_plus: 13.3.1
   desktop_drop: 0.8.4

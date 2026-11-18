@@ -41,6 +41,8 @@ Options (each can also be given as an environment variable):
                           this program.
   --export-job <file>     Internal: render one export job (started by the
                           server itself; see export_video).
+  --transcribe-job <file> Internal: run one speech-to-text job (see
+                          transcribe).
   --version               Print the version and exit.
   --help                  Print this text and exit.
 ''';
@@ -53,6 +55,7 @@ class ServerOptions {
     this.ffprobe,
     this.fontsDir,
     this.exportJob,
+    this.transcribeJob,
     this.help = false,
     this.version = false,
   });
@@ -64,6 +67,9 @@ class ServerOptions {
 
   /// `--export-job <file>`: run as the render process of that job.
   final String? exportJob;
+
+  /// `--transcribe-job <file>`: run that speech-to-text job and exit.
+  final String? transcribeJob;
   final bool help;
   final bool version;
 
@@ -74,7 +80,10 @@ class ServerOptions {
     final values = <String, String>{};
     var help = false;
     var version = false;
-    const names = ['projects-dir', 'ffmpeg', 'ffprobe', 'fonts-dir', 'export-job'];
+    const names = [
+      'projects-dir', 'ffmpeg', 'ffprobe', 'fonts-dir', 'export-job', //
+      'transcribe-job',
+    ];
     for (var i = 0; i < args.length; i++) {
       final arg = args[i];
       if (arg == '--help' || arg == '-h') {
@@ -118,6 +127,7 @@ class ServerOptions {
       ffprobe: pick('ffprobe', kEnvFfprobe),
       fontsDir: pick('fonts-dir', kEnvFontsDir),
       exportJob: values['export-job'],
+      transcribeJob: values['transcribe-job'],
       help: help,
       version: version,
     );

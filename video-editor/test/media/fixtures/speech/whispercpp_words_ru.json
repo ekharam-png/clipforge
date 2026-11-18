@@ -1,0 +1,274 @@
+{
+ "systeminfo": "AVX = 1 | AVX2 = 1 | AVX512 = 0 | FMA = 1 | NEON = 0 | ARM_FMA = 0 | F16C = 1 | FP16_VA = 0 | WASM_SIMD = 0 | BLAS = 0 | SSE3 = 1 | SSSE3 = 1 | VSX = 0 | COREML = 0 | OPENVINO = 0 | ",
+ "model": {
+  "type": "base",
+  "multilingual": true,
+  "vocab": 51865,
+  "audio": {
+   "ctx": 1500,
+   "state": 512,
+   "head": 8,
+   "layer": 6
+  },
+  "text": {
+   "ctx": 448,
+   "state": 512,
+   "head": 8,
+   "layer": 6
+  },
+  "mels": 80,
+  "ftype": 1
+ },
+ "params": {
+  "model": "C:/Users/owner/Documents/ClipForge/models/ggml-base.bin",
+  "language": "ru",
+  "translate": false
+ },
+ "result": {
+  "language": "ru"
+ },
+ "transcription": [
+  {
+   "timestamps": {
+    "from": "00:00:00,320",
+    "to": "00:00:00,780"
+   },
+   "offsets": {
+    "from": 320,
+    "to": 780
+   },
+   "text": " Привет,"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:00,800",
+    "to": "00:00:01,010"
+   },
+   "offsets": {
+    "from": 800,
+    "to": 1010
+   },
+   "text": " дру"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:01,010",
+    "to": "00:00:01,300"
+   },
+   "offsets": {
+    "from": 1010,
+    "to": 1300
+   },
+   "text": "зья!"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:01,620",
+    "to": "00:00:02,100"
+   },
+   "offsets": {
+    "from": 1620,
+    "to": 2100
+   },
+   "text": " Сегодня"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:02,100",
+    "to": "00:00:02,260"
+   },
+   "offsets": {
+    "from": 2100,
+    "to": 2260
+   },
+   "text": " мы"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:02,260",
+    "to": "00:00:02,800"
+   },
+   "offsets": {
+    "from": 2260,
+    "to": 2800
+   },
+   "text": " говорим"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:02,800",
+    "to": "00:00:02,900"
+   },
+   "offsets": {
+    "from": 2800,
+    "to": 2900
+   },
+   "text": " о"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:02,900",
+    "to": "00:00:03,480"
+   },
+   "offsets": {
+    "from": 2900,
+    "to": 3480
+   },
+   "text": " хлебе."
+  },
+  {
+   "timestamps": {
+    "from": "00:00:04,200",
+    "to": "00:00:04,650"
+   },
+   "offsets": {
+    "from": 4200,
+    "to": 4650
+   },
+   "text": " Э-э,"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:04,700",
+    "to": "00:00:04,900"
+   },
+   "offsets": {
+    "from": 4700,
+    "to": 4900
+   },
+   "text": " ну,"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:04,950",
+    "to": "00:00:05,500"
+   },
+   "offsets": {
+    "from": 4950,
+    "to": 5500
+   },
+   "text": " сначала"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:05,500",
+    "to": "00:00:05,900"
+   },
+   "offsets": {
+    "from": 5500,
+    "to": 5900
+   },
+   "text": " нужна"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:05,900",
+    "to": "00:00:06,350"
+   },
+   "offsets": {
+    "from": 5900,
+    "to": 6350
+   },
+   "text": " мука,"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:06,400",
+    "to": "00:00:06,800"
+   },
+   "offsets": {
+    "from": 6400,
+    "to": 6800
+   },
+   "text": " вода"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:06,800",
+    "to": "00:00:06,900"
+   },
+   "offsets": {
+    "from": 6800,
+    "to": 6900
+   },
+   "text": " и"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:06,950",
+    "to": "00:00:07,150"
+   },
+   "offsets": {
+    "from": 6950,
+    "to": 7150
+   },
+   "text": " как"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:07,150",
+    "to": "00:00:07,300"
+   },
+   "offsets": {
+    "from": 7150,
+    "to": 7300
+   },
+   "text": " бы"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:07,350",
+    "to": "00:00:07,900"
+   },
+   "offsets": {
+    "from": 7350,
+    "to": 7900
+   },
+   "text": " соль."
+  },
+  {
+   "timestamps": {
+    "from": "00:00:07,900",
+    "to": "00:00:09,900"
+   },
+   "offsets": {
+    "from": 7900,
+    "to": 9900
+   },
+   "text": " [BLANK_AUDIO]"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:10,000",
+    "to": "00:00:10,400"
+   },
+   "offsets": {
+    "from": 10000,
+    "to": 10400
+   },
+   "text": " Потом"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:10,400",
+    "to": "00:00:10,550"
+   },
+   "offsets": {
+    "from": 10400,
+    "to": 10550
+   },
+   "text": " вы"
+  },
+  {
+   "timestamps": {
+    "from": "00:00:10,550",
+    "to": "00:00:11,200"
+   },
+   "offsets": {
+    "from": 10550,
+    "to": 11200
+   },
+   "text": " ждёте."
+  }
+ ]
+}

@@ -20,7 +20,7 @@
 // plus a lib/ directory) instead of a single file. The server itself needs
 // none of those plugins, so this script copies the pure-Dart sources
 // (lib/core, lib/media, lib/mcp and the entry point) into a throw-away
-// package that depends only on `path`, `uuid` and `archive` - pinned to the
+// package that depends only on `path`, `uuid`, `archive` and `crypto` - pinned to the
 // versions in pubspec.lock - and runs `dart compile exe` there. It also
 // proves on every build that the server's imports stay free of Flutter.
 //
@@ -29,7 +29,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-const _packages = ['path', 'uuid', 'archive'];
+const _packages = ['path', 'uuid', 'archive', 'crypto'];
 const _sources = ['lib/core', 'lib/media', 'lib/mcp'];
 const _entry = 'bin/clipforge_mcp.dart';
 

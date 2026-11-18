@@ -129,7 +129,12 @@ class EditorMenuExtra {
     this.toggleSnapping,
     this.snapping = true,
     this.showShortcuts,
+    this.speech,
   });
+
+  /// Edit > Speech (1.11, computers only): null where speech-to-text does
+  /// not exist (phones), and then the menu is not there at all.
+  final SpeechMenu? speech;
 
   final VoidCallback? addMedia;
   final VoidCallback? addMusic;
@@ -201,7 +206,34 @@ class EditorMenuExtra {
         currentShape,
         currentVideoSize,
         snapping,
+        speech != null,
+        speech?.transcribe != null,
+        speech?.captions != null,
+        speech?.fillers != null,
+        speech?.transcriptShown,
+        speech?.autoCuts != null,
       ];
+}
+
+/// The Edit > Speech items. A null action is greyed out.
+@immutable
+class SpeechMenu {
+  const SpeechMenu({
+    this.transcribe,
+    this.captions,
+    this.fillers,
+    this.showTranscript,
+    this.transcriptShown = false,
+    this.autoCuts,
+  });
+
+  /// "Automatic cuts…": what was cut automatically, with Put back.
+  final VoidCallback? autoCuts;
+  final VoidCallback? transcribe;
+  final VoidCallback? captions;
+  final VoidCallback? fillers;
+  final VoidCallback? showTranscript;
+  final bool transcriptShown;
 }
 
 /// "Original (as the first clip)", "9:16 upright", ...
@@ -517,6 +549,22 @@ List<PlatformMenuItem> buildAppMenus(EditorMenuActions? editor,
                   : 'Lower music under speech',
               onSelected: x?.lowerMusic),
         ]),
+        if (x?.speech != null)
+          PlatformMenu(label: 'Speech', menus: [
+            PlatformMenuItem(
+                label: 'Transcribe speech…', onSelected: x!.speech!.transcribe),
+            PlatformMenuItem(
+                label: 'Captions from speech…', onSelected: x.speech!.captions),
+            PlatformMenuItem(
+                label: 'Remove filler words…', onSelected: x.speech!.fillers),
+            PlatformMenuItem(
+                label: x.speech!.transcriptShown
+                    ? 'Transcript ✓'
+                    : 'Transcript',
+                onSelected: x.speech!.showTranscript),
+            PlatformMenuItem(
+                label: 'Automatic cuts…', onSelected: x.speech!.autoCuts),
+          ]),
         PlatformMenu(label: 'Shape', menus: [
           for (final a in CanvasAspect.values)
             PlatformMenuItem(
@@ -986,6 +1034,24 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
                           value: x?.lowerMusicOn ?? false,
                           onPressed: x?.lowerMusic),
                     ]),
+                    if (x?.speech != null)
+                      submenu('Speech', [
+                        item('Transcribe speech…',
+                            key: const ValueKey('menu-transcribe'),
+                            onPressed: x!.speech!.transcribe),
+                        item('Captions from speech…',
+                            key: const ValueKey('menu-speech-captions'),
+                            onPressed: x.speech!.captions),
+                        item('Remove filler words…',
+                            key: const ValueKey('menu-fillers'),
+                            onPressed: x.speech!.fillers),
+                        check('Transcript',
+                            value: x.speech!.transcriptShown,
+                            onPressed: x.speech!.showTranscript),
+                        item('Automatic cuts…',
+                            key: const ValueKey('menu-auto-cuts'),
+                            onPressed: x.speech!.autoCuts),
+                      ]),
                     submenu('Shape', [
                       for (final a in CanvasAspect.values)
                         check(menuShapeLabel(a),
