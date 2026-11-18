@@ -99,7 +99,6 @@ void main() {
     testWidgets('$name without a speech service: nothing about speech',
         (tester) async {
       await open(tester, size);
-      expect(key('transcript-button'), findsNothing);
       await selectClip(tester);
       await openClipTool(tester, size, 'Sound');
       expect(find.text('Clean up sound'), findsOneWidget);
@@ -136,7 +135,8 @@ void main() {
       expect(find.text('Transcribe speech…'), findsOneWidget);
       expect(find.text('Captions from speech…'), findsOneWidget);
       expect(find.text('Remove filler words…'), findsOneWidget);
-      expect(find.text('Transcript'), findsOneWidget);
+      // The Transcript is a source of the Text window now (one place).
+      expect(find.text('Transcript'), findsNothing);
       MenuItemButton item(String k) => tester.widget<MenuItemButton>(key(k));
       expect(item('menu-transcribe').onPressed, isNotNull);
       // Nothing transcribed: it asks to transcribe first.
@@ -241,30 +241,32 @@ void main() {
     expect(key('speech-captions-button'), findsOneWidget);
     expect(key('fillers-button'), findsOneWidget);
 
-    // The Transcript column.
-    await tester.tap(key('transcript-button'));
+    // The Text window, showing the transcript (there are no captions).
+    await tester.tap(key('text-button'));
     await tester.pumpAndSettle();
-    expect(key('transcript-panel'), findsOneWidget);
-    expect(find.text('Welcome back to the show.'), findsOneWidget);
-    expect(find.text('Then you wait.'), findsOneWidget);
+    expect(key('text-panel'), findsOneWidget);
+    expect(textWindowBody('Welcome back to the show.'), findsOneWidget);
+    expect(textWindowBody('Then you wait.'), findsOneWidget);
     await fakes.screenshot(tester, 'editor_desktop_transcript');
     // Click a phrase: the playhead goes there.
-    await tester.tap(find.text('Then you wait.'));
+    await tapInTextWindow(tester, 'Then you wait.');
     await tester.pumpAndSettle();
     // "Then" is the 26th word: 25 x 400 ms.
     expect(find.textContaining('0:10.0'), findsWidgets);
-    // Search.
-    await tester.enterText(key('transcript-search'), 'BREAD');
+    // Search: every place is counted and marked; the text stays.
+    await tester.enterText(key('text-search'), 'BREAD');
     await tester.pumpAndSettle();
-    expect(key('transcript-matches'), findsOneWidget);
-    expect(find.text('Said in 1 place'), findsOneWidget);
-    expect(find.text('Welcome back to the show.'), findsNothing);
-    await tester.enterText(key('transcript-search'), 'pizza');
+    expect(tester.widget<Text>(key('text-match-count')).data, '1 of 1');
+    expect(textWindowBody('Welcome back to the show.'), findsOneWidget);
+    await tester.enterText(key('text-search'), 'pizza');
     await tester.pumpAndSettle();
-    expect(key('transcript-no-match'), findsOneWidget);
-    // No text field to edit the words: only the search box.
+    expect(tester.widget<Text>(key('text-match-count')).data, 'Not found');
+    // A transcript cannot be edited here: no Edit, no Delete, and the
+    // only text field is the search box.
+    expect(key('text-edit'), findsNothing);
+    expect(key('text-delete'), findsNothing);
     expect(
-        find.descendant(of: key('transcript-panel'), matching: find.byType(TextField)),
+        find.descendant(of: key('text-panel'), matching: find.byType(TextField)),
         findsOneWidget);
 
     // Remove the pack again.
@@ -284,9 +286,9 @@ void main() {
     final speech = FakeSpeech(backend: FakeSpeech.whisperCpp)
       ..stored['$talkPath|0'] = spokenTranscript(talkPath, english);
     await open(tester, desktop, speech: speech);
-    await tester.tap(key('transcript-button'));
+    await tester.tap(key('text-button'));
     await tester.pumpAndSettle();
-    expect(find.text('Welcome back to the show.'), findsOneWidget);
+    expect(textWindowBody('Welcome back to the show.'), findsOneWidget);
     await selectClip(tester);
     await openClipTool(tester, desktop, 'Sound');
     await tester.ensureVisible(key('transcribe-button'));
@@ -520,9 +522,9 @@ void main() {
     final speech = FakeSpeech(backend: FakeSpeech.whisperCpp, packs: {'base'})
       ..stored['$talkPath|0'] = spokenTranscript(talkPath, hebrew, language: 'he');
     final fakes = await open(tester, desktop, speech: speech);
-    await tester.tap(key('transcript-button'));
+    await tester.tap(key('text-button'));
     await tester.pumpAndSettle();
-    final phrase = tester.widget<Text>(find.text('היום נדבר על לחם.'));
+    final phrase = tester.widget<RichText>(textWindowBody('היום נדבר על לחם.'));
     expect(phrase.textDirection, TextDirection.rtl);
     await fakes.screenshot(tester, 'editor_desktop_transcript_hebrew');
     await selectClip(tester);
@@ -538,7 +540,7 @@ void main() {
     await fakes.screenshot(tester, 'editor_desktop_hebrew_captions');
   });
 
-  testWidgets('a narrow window on a computer still has speech (in a dialog)',
+  testWidgets('a narrow window on a computer has the Text window as a sheet',
       (tester) async {
     await onWindows(() async {
     final speech = FakeSpeech(backend: FakeSpeech.whisperCpp, packs: {'base'})
@@ -546,12 +548,10 @@ void main() {
     await open(tester, const Size(700, 800), speech: speech, menuBar: true);
     await tester.tap(find.widgetWithText(SubmenuButton, 'Edit'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(SubmenuButton, 'Speech').first);
+    await tester.tap(key('menu-text'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Transcript'));
-    await tester.pumpAndSettle();
-    expect(key('transcript-panel'), findsOneWidget);
-    expect(find.text('Welcome back to the show.'), findsOneWidget);
+    expect(key('text-panel'), findsOneWidget);
+    expect(textWindowBody('Welcome back to the show.'), findsOneWidget);
     });
   });
 }

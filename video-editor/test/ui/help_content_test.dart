@@ -48,6 +48,8 @@ const kNotAppLabels = {
   'J', 'K', 'L', 'I', 'O', '-', 'Ctrl+D', 'Ctrl+Shift+C', 'Ctrl+Shift+V',
   'Ctrl+Shift+H', 'Ctrl+E', 'Alt', 'F1', 'Cmd+?', 'Ctrl+N', 'Ctrl+O',
   'Alt+F4', 'Ctrl+Q', 'Cmd+Q',
+  // Keys (1.13).
+  'Ctrl+Shift+T', 'Ctrl+F', 'Ctrl+Left', 'Ctrl+Right', 'Enter', 'Shift+Enter',
 };
 
 void main() {

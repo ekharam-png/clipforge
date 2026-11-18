@@ -404,9 +404,19 @@ String? _describeTitles(List<TitleOverlay> before, List<TitleOverlay> after) {
     if (removed.length == 1) {
       return 'Deleted ${kind(removed.single)} ${quoteText(removed.single.text)}';
     }
-    return 'Deleted ${removed.length} titles';
+    final captions = removed.every((t) => t.kind == TitleKind.caption);
+    return 'Deleted ${removed.length} ${captions ? 'captions' : 'titles'}';
   }
   if (added.isNotEmpty) return 'Changed titles';
+  // The text of several at once (find and replace).
+  final reworded = [
+    for (final b in after)
+      if (before.firstWhere((x) => x.id == b.id).text != b.text) b,
+  ];
+  if (reworded.length > 1) {
+    final captions = reworded.every((t) => t.kind == TitleKind.caption);
+    return 'Edited ${reworded.length} ${captions ? 'captions' : 'titles'}';
+  }
   for (final b in after) {
     final a = before.firstWhere((x) => x.id == b.id);
     if (identical(a, b)) continue;

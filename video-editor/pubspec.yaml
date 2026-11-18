@@ -20,7 +20,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # matching section at the top of CHANGELOG.md (a test checks they agree).
 # The build number after "+" is only used for builds made on a computer;
 # CI replaces it with the GitHub Actions run number.
-version: 1.12.0+1
+version: 1.13.0+1
 
 environment:
   sdk: ^3.14.0

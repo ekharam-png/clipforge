@@ -11,9 +11,12 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/editor/editor_controller.dart';
 import '../../core/editor/snapping.dart';
 import '../../core/model/project.dart';
+import '../../core/text/text_document.dart';
+import '../../media/speech_map.dart' show speechEdges;
 import '../../media/media_jobs.dart' show ThumbnailStrip;
 import '../format.dart';
 import '../services.dart' show ThumbnailCache;
+import '../speaker_colors.dart';
 import '../theme.dart';
 import '../widgets.dart';
 import 'clip_panels.dart';
@@ -21,6 +24,7 @@ import 'long_project_note.dart';
 import 'session.dart';
 import 'sound_status.dart';
 import 'sound_tracks_ui.dart';
+import 'sound_wave.dart';
 
 /// Horizontally scrolling timeline: a time ruler, the overlay row (when the
 /// project has overlay items), the main track, one row per sound track and
@@ -155,6 +159,31 @@ class _TimelineViewState extends State<TimelineView> {
 
   late final LongProjectNote _longNote;
 
+  /// A caption block narrower than this cannot be read.
+  static const double _readableCaption = 110;
+
+  /// Title and caption blocks narrower than this are drawn as slim marks.
+  static const double _slimBelow = 12;
+  static const double _stripHeight = 20;
+
+  Project? _captionsFor;
+  TextDocument _captions = TextDocument.empty;
+
+  /// The captions in time order (worked out again when the project
+  /// changes).
+  TextDocument _captionDoc(Project project) {
+    if (!identical(project, _captionsFor)) {
+      _captionsFor = project;
+      _captions = identical(project.titles, _captionsTitles)
+          ? _captions
+          : buildTextDocument(TextSource.captions, captionLines(project));
+      _captionsTitles = project.titles;
+    }
+    return _captions;
+  }
+
+  List<TitleOverlay>? _captionsTitles;
+
   @override
   void dispose() {
     _longNote.dispose();
@@ -260,8 +289,16 @@ class _TimelineViewState extends State<TimelineView> {
       OverlayClip o => o.id,
       _ => null,
     };
+    // Also where speech starts and ends (not the dragged sound's own
+    // track: its talk moves with it).
+    final ownTrack = base is AudioClip ? base.trackId : null;
     _snapTargets = snapTargets(_s.project,
-        playheadMs: _s.playback.positionMs, ignoreId: id);
+        playheadMs: _s.playback.positionMs,
+        ignoreId: id,
+        extra: speechEdges([
+          for (final t in _s.pictures.speakers)
+            if (t.id != ownTrack) t,
+        ]));
     final i = base is Clip ? _s.project.clips.indexWhere((c) => c.id == id) : -1;
     _clipOrigin = i < 0
         ? null
@@ -623,7 +660,7 @@ class _TimelineViewState extends State<TimelineView> {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: Listenable.merge(
-          [_s.editor, _s.selection, _s.zoom, _s.playback]),
+          [_s.editor, _s.selection, _s.zoom, _s.playback, _s.pictures]),
       builder: (context, _) => LayoutBuilder(builder: _buildTimeline),
     );
   }
@@ -653,7 +690,17 @@ class _TimelineViewState extends State<TimelineView> {
     _trackIds = [for (final t in tracks) t.id];
     double rowTop(String trackId) =>
         audioTop + (trackRow[trackId] ?? 0) * (_laneHeight + _laneGap);
-    final titleTop = audioTop + audioRows * (_laneHeight + _laneGap) + 2;
+    // Many captions, zoomed out: the blocks are too narrow to read, so
+    // the caption under the playhead is shown as one line above them.
+    final captions = _captionDoc(project);
+    var captionMs = 0;
+    for (final l in captions.lines) {
+      captionMs += l.endMs - l.startMs;
+    }
+    final stripShown = captions.lines.length >= 3 &&
+        captionMs / captions.lines.length * _pxPerMs < _readableCaption;
+    final stripTop = audioTop + audioRows * (_laneHeight + _laneGap) + 2;
+    final titleTop = stripTop + (stripShown ? _stripHeight + _laneGap : 0);
     final height = titleTop + titleRows * (_laneHeight + _laneGap) + 10;
 
     var endMs = project.durationMs;
@@ -837,6 +884,16 @@ class _TimelineViewState extends State<TimelineView> {
       if (!selected && !near(_x(a.startMs), w)) continue;
       final missing = _s.playback.isMissing(a.path);
       final heard = project.trackGainOf(a.trackId) > 0;
+      final left = _x(a.startMs);
+      final peaks = missing
+          ? null
+          : _s.pictures.peaksOf(a.path, a.soundClip.audioTrackInUse);
+      final speaker = _s.pictures.isSpeech(a)
+          ? speechTrackColor(project, a.trackId)
+          : null;
+      final talk = speaker == null ? null : _s.pictures.speechOf(a);
+      final from = (winStart - left).clamp(0.0, w).toDouble();
+      final to = (winEnd - left).clamp(0.0, w).toDouble();
       children.add(Positioned(
         key: ValueKey('audio-${a.id}'),
         left: _x(a.startMs),
@@ -846,7 +903,40 @@ class _TimelineViewState extends State<TimelineView> {
         child: Opacity(
           opacity: heard ? 1 : 0.45,
           child: _LaneBlock(
-            color: missing ? AppColors.missing : AppColors.audio,
+            // A speech track has its speaker's colour: dim where nobody
+            // talks, full where that speaker does.
+            color: missing
+                ? AppColors.missing
+                : speaker == null
+                    ? AppColors.audio
+                    : Color.lerp(speaker, AppColors.panel, talk == null ? 0.45 : 0.68)!,
+            background: peaks == null || to <= from
+                ? null
+                : Positioned(
+                    left: from,
+                    width: to - from,
+                    top: 0,
+                    bottom: 0,
+                    child: CustomPaint(
+                      key: ValueKey('wave-${a.id}'),
+                      painter: WavePainter(
+                        peaks: peaks,
+                        inMs: a.inMs,
+                        outMs: a.outMs,
+                        speed: a.speed,
+                        pxPerMs: _pxPerMs,
+                        fromX: from,
+                        toX: to,
+                        passMs: a.looped ? a.passMs - a.loopCrossfadeMs : 0,
+                        stretches: talk,
+                        band: speaker?.withValues(alpha: 0.75),
+                        color: const Color(0xD9FFFFFF),
+                        quietColor: speaker == null
+                            ? const Color(0x8CFFFFFF)
+                            : const Color(0x59FFFFFF),
+                      ),
+                    ),
+                  ),
             icon: missing
                 ? Icons.error_outline
                 : a.looped
@@ -930,6 +1020,8 @@ class _TimelineViewState extends State<TimelineView> {
         width: w,
         height: _laneHeight,
         child: _LaneBlock(
+          slim: w < _slimBelow,
+          tooltip: w < 44 ? t.text.replaceAll('\n', ' ') : null,
           color: t.kind == TitleKind.caption
               ? AppColors.caption
               : AppColors.title,
@@ -1120,6 +1212,29 @@ class _TimelineViewState extends State<TimelineView> {
             ),
           ),
         ),
+        if (stripShown)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: stripTop,
+            height: _stripHeight,
+            child: _CaptionStrip(session: _s, captions: captions),
+          ),
+        Positioned(
+          right: 8,
+          top: 3,
+          child: ListenableBuilder(
+            listenable: _s.pictures,
+            builder: (context, _) => _s.pictures.busy
+                ? const IgnorePointer(
+                    child: Text('Drawing sound…',
+                        key: ValueKey('drawing-sound'),
+                        style: TextStyle(
+                            fontSize: 11, color: AppColors.textDim)),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ),
         Positioned.fill(
           child: IgnorePointer(
             child: RepaintBoundary(
@@ -1242,6 +1357,10 @@ class _ClipBlock extends StatelessWidget {
         : (isPhoto ? AppColors.photo : AppColors.clip);
     final roomy = width >= 44;
     final name = fileName(clip.path);
+    // The clip's own sound, when it is heard, along the bottom.
+    final wave = isPhoto || missing || !clip.hasAudio || clip.muted
+        ? null
+        : session.pictures.peaksOf(clip.path, clip.audioTrackInUse);
     return Semantics(
       label: '${missing ? 'Missing file' : (isPhoto ? 'Photo' : 'Video')} $name',
       selected: selected,
@@ -1312,6 +1431,31 @@ class _ClipBlock extends StatelessWidget {
                             repeat: ImageRepeat.repeatX,
                           ),
                         ),
+                ),
+              if (wave != null && visibleTo > visibleFrom)
+                Positioned(
+                  left: visibleFrom,
+                  width: visibleTo - visibleFrom,
+                  bottom: 0,
+                  height: 15,
+                  child: ColoredBox(
+                    color: const Color(0x8C000000),
+                    child: CustomPaint(
+                      key: ValueKey('wave-${clip.id}'),
+                      painter: WavePainter(
+                        peaks: wave,
+                        inMs: clip.inMs,
+                        outMs: clip.outMs,
+                        speed: clip.speed,
+                        pxPerMs: pxPerMs,
+                        fromX: visibleFrom,
+                        toX: visibleTo,
+                        color: const Color(0xE6FFFFFF),
+                        quietColor: const Color(0x8CFFFFFF),
+                        fromBottom: true,
+                      ),
+                    ),
+                  ),
                 ),
               if (roomy)
                 const DecoratedBox(
@@ -1409,7 +1553,7 @@ class _ClipBlock extends StatelessWidget {
                 Positioned(
                   left: 6,
                   right: 4,
-                  bottom: 4,
+                  bottom: wave == null ? 4 : 16,
                   child: Text(
                     missing ? 'Missing · $name' : name,
                     maxLines: 1,
@@ -1534,8 +1678,20 @@ class _LaneBlock extends StatelessWidget {
     required this.onDragEnd,
     this.dimFrom,
     this.marks = const [],
+    this.background,
+    this.slim = false,
+    this.tooltip,
   });
   final Color color;
+
+  /// Drawn behind the label (the waveform).
+  final Widget? background;
+
+  /// Too narrow for anything: a slim mark instead of a box.
+  final bool slim;
+
+  /// Shown when the pointer rests on the block (narrow captions).
+  final String? tooltip;
 
   /// Thin lines at these x (a looped sound's repeats).
   final List<double> marks;
@@ -1556,11 +1712,23 @@ class _LaneBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final roomy = width >= 44;
+    final block = _block(roomy);
     return Semantics(
       label: label,
       selected: selected,
       button: true,
-      child: GestureDetector(
+      child: tooltip == null
+          ? block
+          : Tooltip(
+              message: tooltip!,
+              waitDuration: const Duration(milliseconds: 350),
+              child: block,
+            ),
+    );
+  }
+
+  Widget _block(bool roomy) {
+    return GestureDetector(
         onTap: onTap,
         dragStartBehavior: DragStartBehavior.down,
         onHorizontalDragStart: selected ? (_) => onDragStart() : null,
@@ -1569,7 +1737,15 @@ class _LaneBlock extends StatelessWidget {
             : null,
         onHorizontalDragEnd: selected ? (_) => onDragEnd() : null,
         onHorizontalDragCancel: selected ? onDragEnd : null,
-        child: Container(
+        child: slim
+            ? Container(
+                margin: const EdgeInsets.symmetric(vertical: 5),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.accent : color,
+                  borderRadius: BorderRadius.circular(1.5),
+                ),
+              )
+            : Container(
           clipBehavior: ui.Clip.antiAlias,
           decoration: BoxDecoration(
             color: color,
@@ -1582,11 +1758,12 @@ class _LaneBlock extends StatelessWidget {
               width: selected ? 2 : 1,
             ),
           ),
-          child: !roomy && dimFrom == null && marks.isEmpty
+          child: !roomy && dimFrom == null && marks.isEmpty && background == null
               ? null
               : Stack(
                   fit: StackFit.expand,
                   children: [
+                    ?background,
                     for (final x in marks)
                       Positioned(
                         left: x,
@@ -1604,14 +1781,50 @@ class _LaneBlock extends StatelessWidget {
                         bottom: 0,
                         child: const ColoredBox(color: Color(0xB3101114)),
                       ),
-                    if (roomy)
+                    // Over a waveform the name sits on a dark tag, so that
+                    // both can be read.
+                    if (roomy && background != null)
+                      Positioned(
+                        left: 3,
+                        top: 5,
+                        bottom: 5,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                              maxWidth: math.min(width - 6, 200)),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xB3101114),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(icon, size: 13, color: Colors.white),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    label,
+                                    maxLines: 1,
+                                    softWrap: false,
+                                    overflow: TextOverflow.fade,
+                                    style: const TextStyle(
+                                        fontSize: 11.5, color: Colors.white),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (roomy && background == null)
                     Positioned(
                       left: 6,
                       top: 0,
                       bottom: 0,
                       child: Icon(icon, size: 14, color: Colors.white),
                     ),
-                    if (roomy)
+                    if (roomy && background == null)
                     Positioned(
                       left: 24,
                       right: 4,
@@ -1632,7 +1845,56 @@ class _LaneBlock extends StatelessWidget {
                   ],
                 ),
         ),
-      ),
+    );
+  }
+}
+
+/// The caption under the playhead as one readable line (shown when the
+/// caption blocks are too narrow for their text). A click selects it.
+class _CaptionStrip extends StatelessWidget {
+  const _CaptionStrip({required this.session, required this.captions});
+  final EditorSession session;
+  final TextDocument captions;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: session.playback.position,
+      builder: (context, ms, _) {
+        final i = captions.activeLineAt(ms);
+        final line = i < 0 ? null : captions.lines[i];
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: line == null
+              ? null
+              : () => session.select(ItemKind.title, line.id),
+          child: Container(
+            key: const ValueKey('caption-strip'),
+            color: AppColors.panelHigh,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            alignment: Alignment.centerLeft,
+            child: Row(
+              children: [
+                const Icon(Icons.closed_caption_outlined,
+                    size: 14, color: AppColors.textDim),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    line == null ? '' : line.raw.replaceAll('\n', ' '),
+                    key: const ValueKey('caption-strip-text'),
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    textDirection: textDirectionOf(line?.raw ?? ''),
+                    textAlign: TextAlign.left,
+                    style: const TextStyle(fontSize: 12, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -2,8 +2,9 @@
 
 Read this first in a new session. It records what was built, why, how it fits
 together, how to build and test it, and what is still open. Last updated
-18 November 2026 (1.12.0: the app updates itself, the Claude helper follows
-the app, get_guide and self_test; before that 1.11.0: speech to text).
+18 November 2026 (1.13.0: the Text window, sound waves and who is speaking;
+before that 1.12.0: the app updates itself, the Claude helper follows the
+app, get_guide and self_test; 1.11.0: speech to text).
 
 ## What ClipForge is
 
@@ -66,7 +67,13 @@ shared with a few friends later.
   skill zip), `docs/claude-setup.html` (owner's setup guide).
 - `lib/core/update`, `lib/ui/update`, `lib/core/claude`, `lib/ui/claude`,
   `assets/update`, `tool/ci` — 1.12 self-update and the Claude helper folder.
-- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1611 tests (1.12.0; 1516 at 1.11.0).
+- `lib/core/text/text_document.dart`, `lib/ui/editor/text_panel.dart` — the
+  1.13 Text window. `lib/media/sound_peaks*.dart`, `speech_map.dart`,
+  `lib/ui/editor/sound_pictures.dart`, `sound_wave.dart`,
+  `lib/ui/speaker_colors.dart` — 1.13 sound waves and who is speaking.
+  `lib/mcp/tools_text.dart` — get_captions, replace_in_captions,
+  get_speech_map.
+- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1690 tests (1.13.0; 1611 at 1.12.0, 1516 at 1.11.0).
   `integration_test/real_app_test.dart` — drives the real app on Linux.
 
 ## What was built, and why
@@ -1606,6 +1613,176 @@ finished); the sh swap script in every branch (pretend folders, a failing
 - The release app could not be started under xvfb here (the debug build in
   the e2e can); filler preview and "Use it anyway" by eye / ear.
 
+## Text window, sound waves, who is speaking (1.13.0, 18 Nov 2026)
+
+Two pieces of owner feedback on real podcast projects (22 and 23 minutes):
+(1) hundreds of captions imported from a subtitle file ("Sam: it's okay to
+have…") were only tiny blocks on the timeline, and the 1.11 Transcript
+column was empty because it listed transcripts only: "a window to see the
+entire text, like in Descript"; (2) with two linked voice files the sound
+rows were plain green bars: "show when I speak and when the other person
+speaks, if we want to cut manually".
+
+### The Text window (`text_panel.dart`, `core/text/text_document.dart`)
+- ONE place: it replaces the Transcript column (file `transcript_panel.dart`
+  is gone; `EditorSession.showTranscript` is `showText`; Edit > Speech no
+  longer has "Transcript"). It is NOT tied to speech-to-text any more, so
+  phones have it (More > Text, a full-screen sheet; also what a computer
+  window narrower than 900 px gets).
+- Sources (`TextSource`): captions (every `TitleKind.caption`, whatever
+  made it), transcript (computers, when one is stored), titles. Default:
+  the first that exists in that order; a SegmentedButton when more than one.
+- Speakers (`splitSpeaker`): "Name: text" at the start of a caption = that
+  speaker (at most 4 words / 40 characters, starts with a letter, no
+  sentence punctuation; "10:30" and "Note this. One thing: x" are not
+  names; a full-width colon works). **A caption without a name belongs to
+  whoever spoke last** (subtitle files often name the speaker only on a
+  change). Not stored anywhere: read from the text every time.
+- Paragraphs (`buildTextDocument`): a new one on a speaker change, a pause
+  of 2 s, or when it is 600 characters long (400 at a sentence end). The
+  name is shown when it differs from the paragraph before; a coloured bar
+  runs down the side. Colours: `speakerColors` (ui/speaker_colors.dart) -
+  a name equal to a speech track's name gets that track's colour, so text
+  and timeline agree.
+- **Virtualised with exact heights.** Every paragraph is measured once per
+  width with a TextPainter using the same text and style it is drawn with;
+  the ListView gets `itemExtentBuilder`. That is what makes "jump to line
+  1490 of 1500" one step and the scroll bar true. Kept exact by: one text
+  style for the whole paragraph (highlights only change the background),
+  the measured text = the lines joined with single spaces, a fixed-height
+  editor box. The column width moves in 16 px steps (so dragging the edge
+  re-measures now and then) and is capped at 880 px. A paragraph that lays
+  out a hair taller would be clipped, never an overflow error. Note: the
+  list only ESTIMATES its total length until it has been to the end
+  (`maxScrollExtent` is corrected with ScrollUpdateNotifications), so the
+  own measured length is used for clamping and those corrections must not
+  count as "the user scrolled".
+- Follow: `followOffset` (pure) says where to scroll so that the line being
+  spoken sits in the upper part. Follow turns off on a drag, a fling, the
+  mouse wheel or the scroll bar's thumb (pointer down), never by the
+  window's own scrolling. "Now" / the round button turn it on again.
+- Selection: a click selects one line, moves the playhead and selects the
+  caption on the timeline; Shift-click selects the range (computers). The
+  timeline's selection is followed the other way round. The Delete key with
+  several selected goes through `EditorSession.textDeleteHook`.
+- Editing (captions only, owner decision: no edit-by-text editor): double
+  click or Edit opens the caption's STORED text (with name and line break)
+  in a box inside its paragraph; Enter saves (`updateTitle`: History
+  "Edited caption '…'"), Esc cancels, an empty text is refused. Delete:
+  `removeTitle`, or a transaction labelled "Deleted N captions".
+  `describeEdit` now says "Deleted N captions" / "Edited N captions".
+- **Cut this part out of the video…** (computers; captions and transcript):
+  `planTimelineCut` / `applyTimelineCut` in `speech_edits.dart`. The
+  selection's first start to last end is mapped per clip to source ranges
+  (`removeSourceRanges`; a clip wholly inside is removed; a photo partly
+  inside is left alone and the dialog says so), one undo step, and every
+  removed piece of a video file is added to `Project.autoCuts` with the new
+  kind **"text"** (word = the first 40 characters), so the existing
+  Automatic cuts list and `restore_cut` put it back. Limits, said in the
+  dialog: captions on the removed part come back only with Undo, not with
+  Put back; a whole clip that was the only piece of its file cannot be
+  put back from the log (Undo can).
+- Layout: `EditorSession.textDock` right (default, a column after the
+  inspector, 460 wide, never under 420) or below (under the preview and
+  transport, 280 high); a 7 px drag handle; place and size in the app
+  settings (`textDock`, `textWidth`, `textHeight`). **Not built: a detached
+  OS window** (Flutter desktop has no second window here); "under the
+  preview" is the wide alternative.
+- Ctrl/Cmd+F: the editor's key handler (and a CallbackShortcuts around the
+  panel for when the cursor is in one of its text boxes) opens the window
+  and focuses the search. Ctrl+Shift+T toggles it (windowMenuShortcuts /
+  the Mac menu).
+
+### Many captions on the timeline (`timeline_view.dart`)
+The smallest change that helps, no redesign: blocks narrower than 12 px are
+slim marks; blocks narrower than 44 px have a tooltip with their text; and
+when the AVERAGE caption is narrower than 110 px a 20 px strip above the
+title rows shows the caption under the playhead as one line (a click
+selects it). The strip depends on zoom and captions only, so the timeline
+does not change height while playing.
+
+### Sound waves (`media/sound_peaks.dart`, `sound_peaks_job.dart`)
+- One low-rate decode per SOURCE FILE and audio stream - the same ffmpeg
+  command as "Line up by sound" (`buildAlignDecodeCommand`, 8 kHz mono) -
+  gives per 20 ms the peak (drawn) and the RMS level (who speaks): two
+  bytes per hop, 240 KB for 40 minutes. Measured here: 40 minutes of
+  samples are reduced in well under a second of Dart; the decode itself is
+  ffmpeg's (not measured on the owner's machines).
+- Cache: `<app support>/peaks/pk_<mediaFingerprint>_a<track>.cfpk`, NEXT TO
+  the app's media folder, not in it (the clean-up of unused media deletes
+  what no project references). Least recently used files go when the
+  folder passes 48 MB (`evictSoundPeaks`, on the first use per editor).
+  The MCP helper keeps its own in `<ClipForge>/sound-pictures/`.
+- Engine seam: `SoundPeaksEngine.soundPeaks(path, audioTrack, cacheDir)`,
+  implemented by both engines with their own ffmpeg runner.
+- App: `SoundPictures` (one per `EditorSession`): asks for the files the
+  project uses, one at a time, never blocking; "Drawing sound…" at the top
+  right of the timeline while it runs; missing files are skipped; a file
+  that cannot be read stays plain. Off entirely with "Show sound waves"
+  (`kSoundWavesOffFlag`; Playback menu, More on phones).
+- Drawing (`sound_wave.dart`): one bar every 2 px for the part of the block
+  near the view only (`waveColumns`, pure; the timeline's existing window),
+  the loudest moment of the stretch a bar stands for, through trim, speed
+  and loops; `drawRawPoints`. Sound blocks: around the middle; video clips
+  whose sound is on: a 15 px strip along the bottom. Over a waveform the
+  block's name sits on a dark tag.
+
+### Who is speaking (`sound_peaks.dart`, `speech_map.dart`)
+- Per file: the rule of Remove silences (floor = 10th percentile,
+  threshold = floor + 35 % of the span, 4..12 dB), with two changes:
+  digital silence is left out of the percentiles and "loud" is the 95th
+  percentile. Gaps under 300 ms are bridged, talk under 160 ms dropped.
+- Bleed (`groupSpeechStretches`): voices LINKED to clips of the same video
+  file were recorded together and are compared hop by hop in the video's
+  time (each one's `syncOffsetMs`). Where two are active, one is taken as
+  bleed when the other is 8 dB louder RELATIVE TO ITS OWN SPEECH LEVEL and
+  this one is more than 6 dB under its own, or when the other is 15 dB
+  louder in plain numbers (someone who hardly talks has no speech level of
+  their own). Both loud = overlap, both shown.
+- Speakers = speech tracks (`SoundTrack.speech`); without any, the video's
+  own sound ("Video"). Stretches are kept in FILE time and mapped per
+  sound through in / out / speed / start (`stretchesOnTimeline`), so cuts
+  need no bookkeeping. `speakerTurns` merges them into turns (same speaker,
+  pause under 3 s); `speechStarts` / `neighbourStart` drive Ctrl+Left /
+  Right (the selected sound's track, else any turn start); `speechEdges`
+  are extra snap targets (not the dragged sound's own track).
+- Colours: the n-th speech track gets `kSpeakerColors[n]`; the block is
+  that colour dimmed, talk is a band of the full colour, the row header's
+  microphone has it.
+- Not built (optional in the request): the thin "who speaks" summary strip
+  above the tracks.
+
+### MCP (62 tools)
+`get_captions` (text / paragraphs, ids optional, paged; get_project still
+lists captions with their look, 30 at a time), `replace_in_captions` (dry
+run default TRUE; literal find, optional whole word / case; one undo
+step), `get_speech_map` (turns or stretches, per speaker totals and share;
+listens once, cached). `list_auto_cuts` / `restore_cut` know kind "text".
+Guide: tools.md (both sections), start.md, two new recipes, one
+troubleshooting entry.
+
+### Verified here / not verified
+Verified: `flutter analyze` clean; `flutter test` 1690 passed (79 new:
+`test/core/text_document_test.dart`, `test/media/sound_peaks_test.dart`,
+`test/ui/text_window_test.dart`, `test/ui/sound_waves_test.dart`,
+`test/mcp/tools_v113_test.dart`, which uses the real ffmpeg for
+get_speech_map); the Linux e2e with new steps (the Text window shows a
+real transcript, then the captions; a caption is edited in place; the
+sound picture of a real file is read by the real engine and drawn);
+`flutter build linux --release`; `dart run bin/build_mcp.dart` and the
+built helper answering tools/list (62) and get_guide; `dart run
+tool/gen_guide.dart --check`. Screenshots looked at: `docs/screenshots/
+text_window_*.png`, `timeline_waves_*.png`, `timeline_many_captions.png`.
+Performance bounds in tests: 1500 captions / 40 minutes open the Text
+window building under 40 paragraphs; 40 minutes of samples become peaks in
+under 4 s (in practice far less); 150 waveform windows of a 40-minute
+block in under 1.5 s. **Not verified:** real Windows / macOS / Android
+devices; how long the first decode of a 40-minute file takes there (on a
+phone it runs through FFmpegKit); scrolling smoothness of the Text window
+and of the waveforms by eye on a real screen; the speaker colours and the
+bleed rule on a real Zoom recording (tuned on synthetic two-microphone
+fixtures only); Cmd+F / Cmd+Shift+T through the real macOS menu bar.
+
 ## One-click Claude install, the skill, test documents (17 Nov 2026, no app change)
 
 (1.12 changed this: the extension is installed once and hands over to the
@@ -1967,6 +2144,9 @@ Not verified:
 
 ## Not built yet
 
+- A detached (second OS window) Text window; an edit-by-text editor (owner
+  decision); the "who speaks" summary strip; telling speech from music
+  (the speech map is loudness only); two speakers on one microphone.
 - Speech to text on phones, a speech engine built into the app (1.11 uses a
   program installed on the computer). (Transcripts inside project bundles
   and previewing a filler cut: built in 1.12.)
@@ -2008,7 +2188,7 @@ building** until they report results. Read the checklist marks first.
 export PATH=/opt/sdk/flutter/bin:$PATH ANDROID_HOME=/opt/sdk/android
 cd video-editor
 flutter analyze
-flutter test                                   # all tests (1611)
+flutter test                                   # all tests (1690)
 flutter build apk --release --split-per-abi --target-platform android-arm64
 dart run bin/build_mcp.dart -o build/clipforge-mcp
 # real app on Linux:

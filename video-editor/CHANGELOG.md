@@ -4,6 +4,28 @@ Newest first. The version you have is in Help > About ClipForge (and at the
 bottom of the project list). This file is also the "What's new" page in the
 app's Help.
 
+## 1.13.0 – 18 November 2026
+
+- The **Text** window: everything said or written in the video as one readable page, instead of small blocks on the timeline. Computer: the **Text** button at the top, or Edit > **Text window** (Ctrl+Shift+T). Phone: **More** > **Text**. It takes the place of the Transcript column.
+  - It shows the **Captions** on the timeline, whatever made them (a subtitle file you imported, captions from speech, typed ones), the **Transcript** when the speech was transcribed, and the **Titles**; a switch at the top chooses.
+  - The lines of one speaker are joined into paragraphs with the time at the side. A caption that starts with a name and a colon ("Sam: …") is that speaker's: the name is shown once, in the speaker's colour. Hebrew and Arabic read right to left.
+  - While the video plays, the line being spoken is marked and kept in view; scrolling by hand stops that and **Now** goes back. Click a sentence to go there; click a caption on the timeline and the window shows it.
+  - **Find in the text…** (Ctrl+F) marks and counts every place, with next and previous.
+  - Fix a wrong word: double-click a caption (or **Edit**), change it, **Enter**. **Delete caption** removes one, or several selected with Shift-click (computer). Each is one Undo step, named in the History.
+  - **Cut this part out of the video…** (computer): select the lines of a part you do not want; ClipForge shows from when to when and how long, asks, and cuts. It is listed under **Automatic cuts…** so it can be put back.
+  - **Copy all text**, **Copy with times and names**, **Save as text file…**, **Save as subtitle file (.srt)…**.
+  - On a computer it sits at the right or under the preview (the three dots), and its edge can be dragged; ClipForge remembers.
+- Sound waves on the timeline: every sound shows where it is loud and where it is quiet, and a video clip whose own sound is on has a slim wave along its bottom. ClipForge listens to each file once in the background ("Drawing sound…"); after that it is instant. **Show sound waves** (Playback menu; phones: **More**) turns it off on a slow device.
+- See who is speaking: on speech tracks (one voice file per person, for example from a Zoom recording) the stretches where that person really talks are bright in the speaker's colour and the pauses are dim. The other person's voice heard faintly in a microphone is not shown as talk.
+  - Dragging on the timeline also snaps to where talk starts and ends.
+  - **Next speech start** / **Previous speech start**: the double arrows next to Play, Ctrl+Right / Ctrl+Left, or the Playback menu (phones: **More**). With a voice selected they follow that speaker, otherwise they stop wherever the speaker changes.
+- Many captions on the timeline: when it is zoomed out so far that the blocks are too narrow for their words, they are drawn as slim marks, a thin line above them shows the caption under the playhead, and pointing at a mark shows its text.
+- Claude control:
+  - "Read me the captions" works for long captioned projects: Claude gets them as compact text with speakers and times.
+  - "Change Sem to Sam in all captions": find and replace over every caption at once; Claude first says how many places it would change.
+  - "Who talks when?" Claude can see the speaker turns from the sound alone, without a transcript, and cut by them.
+- New help pages: "Read and search the text", "See who is speaking".
+
 ## 1.12.0 – 18 November 2026
 
 - ClipForge updates itself. When a newer version is out, the project list shows a quiet line: "Version X is available", with **What's new**, **Update** and **Later** (the three dots have **Skip this version**).

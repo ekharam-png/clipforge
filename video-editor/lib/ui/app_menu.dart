@@ -130,7 +130,25 @@ class EditorMenuExtra {
     this.snapping = true,
     this.showShortcuts,
     this.speech,
+    this.showText,
+    this.textShown = false,
+    this.findInText,
+    this.toggleWaves,
+    this.wavesOn = true,
+    this.previousSpeech,
+    this.nextSpeech,
   });
+
+  /// Edit > "Text window" (1.13) and "Find in the text…".
+  final VoidCallback? showText;
+  final bool textShown;
+  final VoidCallback? findInText;
+
+  /// Playback > "Show sound waves" and "Previous / Next speech start".
+  final VoidCallback? toggleWaves;
+  final bool wavesOn;
+  final VoidCallback? previousSpeech;
+  final VoidCallback? nextSpeech;
 
   /// Edit > Speech (1.11, computers only): null where speech-to-text does
   /// not exist (phones), and then the menu is not there at all.
@@ -200,17 +218,19 @@ class EditorMenuExtra {
           goToStart, goToEnd, playBackwards, pause, playForwards,
           previousFrame, nextFrame, zoomIn, zoomOut, toggleSnapping,
           showShortcuts, shape, videoSize,
+          showText, findInText, toggleWaves, previousSpeech, nextSpeech,
         ])
           a != null,
         lowerMusicOn,
         currentShape,
         currentVideoSize,
         snapping,
+        textShown,
+        wavesOn,
         speech != null,
         speech?.transcribe != null,
         speech?.captions != null,
         speech?.fillers != null,
-        speech?.transcriptShown,
         speech?.autoCuts != null,
       ];
 }
@@ -222,8 +242,6 @@ class SpeechMenu {
     this.transcribe,
     this.captions,
     this.fillers,
-    this.showTranscript,
-    this.transcriptShown = false,
     this.autoCuts,
   });
 
@@ -232,8 +250,6 @@ class SpeechMenu {
   final VoidCallback? transcribe;
   final VoidCallback? captions;
   final VoidCallback? fillers;
-  final VoidCallback? showTranscript;
-  final bool transcriptShown;
 }
 
 /// "Original (as the first clip)", "9:16 upright", ...
@@ -488,6 +504,19 @@ List<PlatformMenuItem> buildAppMenus(EditorMenuActions? editor,
         ]),
         PlatformMenuItemGroup(members: [
           PlatformMenuItem(
+            label: x != null && x.textShown ? 'Text window ✓' : 'Text window',
+            shortcut: const SingleActivator(LogicalKeyboardKey.keyT,
+                meta: true, shift: true),
+            onSelected: x?.showText,
+          ),
+          PlatformMenuItem(
+            label: 'Find in the text…',
+            shortcut: const SingleActivator(LogicalKeyboardKey.keyF, meta: true),
+            onSelected: x?.findInText,
+          ),
+        ]),
+        PlatformMenuItemGroup(members: [
+          PlatformMenuItem(
             label: 'Duplicate',
             shortcut: const SingleActivator(LogicalKeyboardKey.keyD, meta: true),
             onSelected: x?.duplicate,
@@ -573,11 +602,6 @@ List<PlatformMenuItem> buildAppMenus(EditorMenuActions? editor,
             PlatformMenuItem(
                 label: 'Remove filler words…', onSelected: x.speech!.fillers),
             PlatformMenuItem(
-                label: x.speech!.transcriptShown
-                    ? 'Transcript ✓'
-                    : 'Transcript',
-                onSelected: x.speech!.showTranscript),
-            PlatformMenuItem(
                 label: 'Automatic cuts…', onSelected: x.speech!.autoCuts),
           ]),
         PlatformMenu(label: 'Shape', menus: [
@@ -660,6 +684,24 @@ List<PlatformMenuItem> buildAppMenus(EditorMenuActions? editor,
                 ? 'Snap to playhead and edges ✓'
                 : 'Snap to playhead and edges',
             onSelected: x?.toggleSnapping,
+          ),
+        ]),
+        PlatformMenuItemGroup(members: [
+          // Cmd+Left / Right (the editor's own key handling does them, so
+          // that they keep their meaning in a text box).
+          PlatformMenuItem(
+            label: 'Previous speech start',
+            onSelected: x?.previousSpeech,
+          ),
+          PlatformMenuItem(
+            label: 'Next speech start',
+            onSelected: x?.nextSpeech,
+          ),
+          PlatformMenuItem(
+            label: x == null || x.wavesOn
+                ? 'Show sound waves ✓'
+                : 'Show sound waves',
+            onSelected: x?.toggleWaves,
           ),
         ]),
       ],
@@ -778,6 +820,9 @@ Map<ShortcutActivator, VoidCallback> windowMenuShortcuts(
     if (e != null && e.showHistory != null)
       const SingleActivator(LogicalKeyboardKey.keyH,
           control: true, shift: true): e.showHistory!,
+    if (e != null && e.extra.showText != null)
+      const SingleActivator(LogicalKeyboardKey.keyT,
+          control: true, shift: true): e.extra.showText!,
     if (help != null) const SingleActivator(LogicalKeyboardKey.f1): help.openHelp,
     if (defaultTargetPlatform == TargetPlatform.linux)
       const SingleActivator(LogicalKeyboardKey.keyQ, control: true): () {
@@ -897,10 +942,14 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
           child: Text(label),
         );
     Widget check(String label,
-            {required bool value, VoidCallback? onPressed, Key? key}) =>
+            {required bool value,
+            VoidCallback? onPressed,
+            MenuSerializableShortcut? shortcut,
+            Key? key}) =>
         MenuItemButton(
           key: key,
           style: itemStyle,
+          shortcut: shortcut,
           onPressed: onPressed,
           leadingIcon: SizedBox(
             width: 18,
@@ -994,6 +1043,18 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
                             control: true, shift: true),
                         onPressed: e?.showHistory),
                     divider,
+                    check('Text window',
+                        key: const ValueKey('menu-text'),
+                        shortcut: const SingleActivator(LogicalKeyboardKey.keyT,
+                            control: true, shift: true),
+                        value: x?.textShown ?? false,
+                        onPressed: x?.showText),
+                    item('Find in the text…',
+                        key: const ValueKey('menu-find-text'),
+                        shortcut: const SingleActivator(LogicalKeyboardKey.keyF,
+                            control: true),
+                        onPressed: x?.findInText),
+                    divider,
                     item('Duplicate',
                         key: const ValueKey('menu-duplicate'),
                         shortcut: const SingleActivator(LogicalKeyboardKey.keyD,
@@ -1073,9 +1134,6 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
                         item('Remove filler words…',
                             key: const ValueKey('menu-fillers'),
                             onPressed: x.speech!.fillers),
-                        check('Transcript',
-                            value: x.speech!.transcriptShown,
-                            onPressed: x.speech!.showTranscript),
                         item('Automatic cuts…',
                             key: const ValueKey('menu-auto-cuts'),
                             onPressed: x.speech!.autoCuts),
@@ -1137,6 +1195,23 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
                         key: const ValueKey('menu-snapping'),
                         value: x?.snapping ?? true,
                         onPressed: x?.toggleSnapping),
+                    divider,
+                    item('Previous speech start',
+                        key: const ValueKey('menu-previous-speech'),
+                        shortcut: const SingleActivator(
+                            LogicalKeyboardKey.arrowLeft,
+                            control: true),
+                        onPressed: x?.previousSpeech),
+                    item('Next speech start',
+                        key: const ValueKey('menu-next-speech'),
+                        shortcut: const SingleActivator(
+                            LogicalKeyboardKey.arrowRight,
+                            control: true),
+                        onPressed: x?.nextSpeech),
+                    check('Show sound waves',
+                        key: const ValueKey('menu-waves'),
+                        value: x?.wavesOn ?? true,
+                        onPressed: x?.toggleWaves),
                   ]),
                   menu('Help', [
                     item('ClipForge Help',

@@ -69,7 +69,7 @@ void main() {
       'get', 'list', 'create', 'duplicate', 'rename', 'set', 'add', 'trim',
       'split', 'remove', 'move', 'import', 'export', 'update', 'separate',
       'reattach', 'copy', 'apply', 'freeze', 'fit', 'relink', 'cancel', 'align',
-      'find', 'captions', 'make', 'restore', 'self',
+      'find', 'captions', 'make', 'restore', 'self', 'replace',
     };
     final verbFirst = {
       for (final t in toolNames)
@@ -81,6 +81,7 @@ void main() {
     // Arguments that also start with one of those verbs.
     const arguments = {
       'fit_music', 'export_job', 'match_first_clip', 'remove_fillers_strength', //
+      'replace_existing', 'replace_existing_captions',
     };
     final texts = {
       for (final e in kGuideSections.entries) 'guide section ${e.key}': e.value,

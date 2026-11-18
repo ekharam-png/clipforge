@@ -251,3 +251,20 @@ class _SelectBuilderState<T> extends State<SelectBuilder<T>> {
     return _built = widget.builder(context, widget.child);
   }
 }
+
+/// The reading direction of [text]: right to left when its first strong
+/// letter is Hebrew or Arabic.
+TextDirection textDirectionOf(String text) {
+  for (final r in text.runes) {
+    if ((r >= 0x0590 && r <= 0x08FF) || (r >= 0xFB1D && r <= 0xFDFF) ||
+        (r >= 0xFE70 && r <= 0xFEFF)) {
+      return TextDirection.rtl;
+    }
+    if ((r >= 0x41 && r <= 0x5A) ||
+        (r >= 0x61 && r <= 0x7A) ||
+        (r >= 0xC0 && r <= 0x52F)) {
+      return TextDirection.ltr;
+    }
+  }
+  return TextDirection.ltr;
+}

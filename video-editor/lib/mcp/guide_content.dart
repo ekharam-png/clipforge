@@ -48,7 +48,10 @@ it always matches the version of ClipForge that is installed. This is the
 
 **You cannot see the picture.** Since ClipForge 1.11 you CAN know what is
 said: `transcribe` turns the speech into text with times, and
-`get_transcript` / `find_in_transcript` let you read and search it. Apart
+`get_transcript` / `find_in_transcript` let you read and search it.
+Captions that are already on the timeline (from a subtitle file, say) are
+read with `get_captions`, and `get_speech_map` tells you WHO talks WHEN
+from the sound alone. Apart
 from that you know only what the tools report: file names, lengths, sizes,
 where the silences are, caption text, and what is on the timeline. So:
 
@@ -174,6 +177,19 @@ or `"mp3"`. Details in `get_guide` section "tools".
   adding the two numbers up. `list_auto_cuts` shows what was cut so far.
 - `make_short` copies the project and keeps one part; the long project is
   never cut.
+- **Captions that are already there** (imported subtitles, often with
+  "Name:" in front): read them with `get_captions`, not page by page with
+  `get_project`. A wrong word in one caption: `update_title`. The same
+  wrong word in many: `replace_in_captions` (dry run first; tell the
+  owner the count before doing it).
+- **Who speaks when**: `get_speech_map` gives speaker turns with times
+  from the sound itself, also when nothing was transcribed. Use it to cut
+  by turns ("remove my long question at the start", "keep only the
+  guest's answers") and to say how the talking is shared. It cannot tell
+  what is said.
+- In the app the owner reads all of this in the **Text window** (Edit >
+  Text window): captions, transcript and titles as a document, with
+  search; they can fix a caption there themselves.
 
 ## Rules that are easy to get wrong
 
@@ -380,6 +396,34 @@ if MP3 is refused because this FFmpeg cannot make it, offer M4A).
    second camera should start. Lining up by sound is not available.
 6. Export; ask them to watch the first seconds of the overlay for sync.
 
+## Cut by who is speaking (no transcript needed)
+
+For a talk with one voice file per person (see above), or any video
+where people take turns.
+
+1. `get_speech_map`: read the totals (who talks how much) and the turns.
+2. Say what you found in plain words ("Dana talks for 14 minutes, Sam for
+   8; the first 40 seconds are Sam's introduction") and ask what should
+   go or stay. You cannot know what is said without `transcribe`.
+3. To take a turn out: `split_at` its start and its end (keep about
+   150 ms of air on each side), then `remove_clip` the piece between.
+   Work from the END of the video backwards, so that earlier times stay
+   valid; or call `get_speech_map` again after each cut.
+4. Tell them which times to watch. Linked voices follow the cuts.
+
+## Fix captions that are already there
+
+Subtitles they imported, or captions made from speech, with mistakes.
+
+1. `get_captions` to read them (page with `offset` when it says so).
+2. A name or word that is wrong everywhere: `replace_in_captions` with
+   `whole_word: true`; the dry run says how many places. Tell them the
+   number, then `dry_run: false`.
+3. Single mistakes: `get_captions` with `ids: true` and `from_ms` /
+   `to_ms` around the place, then `update_title` with the new `text`.
+4. They can also do this themselves in the app's Text window (double
+   click a caption).
+
 ## Captions from speech
 
 1. `transcribe` with the `language` they speak ("en", "ru", "he"). If it
@@ -460,7 +504,7 @@ lists, and say that you are choosing blind.
   'tools': r'''
 # ClipForge tools
 
-All 59 tools of the `clipforge` MCP server (ClipForge 1.12). A test in the
+All 62 tools of the `clipforge` MCP server (ClipForge 1.13). A test in the
 ClipForge repository fails when a tool is missing from this file.
 
 General rules:
@@ -558,6 +602,8 @@ General rules:
 | `remove_title` | Removes one, or all captions with `all_captions: true` (titles stay). | |
 | `import_srt` | Every cue of an .srt file becomes a caption. | `path` or `srt_text`, `time_base` ("timeline" / "source"), `offset_ms`, `replace_existing_captions` |
 | `export_srt` | The captions as .srt text, written to `path` when given. | `time_base`, `path`, `overwrite` |
+| `get_captions` | The captions on the timeline as compact text, whatever made them (a subtitle file, the speech, typed): one line each, "start-end [m:ss] Speaker: text". The way to READ a captioned project (500 captions are about 35 KB; `get_project` shows 30 at a time with their whole look). | `from_ms` / `to_ms`, `offset` / `limit` (400, max 2000), `format` ("text", "paragraphs"), `ids` (adds each `title_id`), `kind` ("captions", "titles", "all") |
+| `replace_in_captions` | Find and replace over ALL captions at once (a misspelt name). **Dry run by default**: says how many places in how many captions and shows examples; `dry_run: false` does it as one undo step. | `find`, `replace`, `whole_word`, `case_sensitive`, `from_ms` / `to_ms`, `include_titles`, `dry_run` |
 
 - `style`: "classic", "outline", "boxed", "yellow", "elegant",
   "handwritten" (sets several things at once; choose it first).
@@ -567,6 +613,12 @@ General rules:
   "center", "right" (also moves the text to that side).
 - `animation_in` / `animation_out`: "fade", "slide_up", "pop", "none".
 - Titles and captions follow their clip through cuts, moves and speed.
+- Speakers in captions: a caption that starts with "Name:" is that
+  speaker's; captions without a name belong to whoever spoke last. The
+  app's Text window and `get_captions` read them the same way. To fix one
+  caption use `update_title` with `text` (get the `title_id` from
+  `get_captions` with `ids: true`); to fix the same word everywhere use
+  `replace_in_captions` (`whole_word: true` for names).
 - .srt time bases: "timeline" files fit only the cut they were made from.
   `export_srt` with `time_base: "source"` writes times of the ORIGINAL
   recording, and `import_srt` with `time_base: "source"` puts them back in
@@ -665,7 +717,7 @@ unless `download_pack` is true** — ask the owner first.
 | `find_in_transcript` | Where a word or phrase is said: times, clip, speaker, the words around it. | `phrase`, `prefix`, `limit` |
 | `captions_from_transcript` | Captions from the speech: 1–2 lines of about 32–42 characters, split at sentences and pauses, never overlapping; the project's caption look; Hebrew drawn right to left. | `dry_run`, `from_ms` / `to_ms`, `max_line_chars`, `max_lines`, `min_duration_ms`, `max_duration_ms`, `replace_existing`, `keep_filler_sounds`, title style arguments |
 | `remove_fillers` | Cuts "um", "uh", "э-э", "אה"… out, gently. **Dry run by default.** Reports found / cut / left because too close / left because the picture would jump, time saved, cuts per minute, the 5 riskiest cuts. | `strength` ("light" default, "normal", "strong"), `dry_run`, `include_word_fillers`, `fillers`, `language`, `allow_estimated_times`, `jump_check`; advanced: `min_cut_ms`, `min_distance_ms`, `max_cuts_per_minute`, `min_piece_ms`, `pad_ms` |
-| `list_auto_cuts` | The automatic cuts the project remembers (fillers and silences): id, word, file and part removed, by whom, jump score, dissolve; totals. | `kind`, `sort` ("time", "risk"), `offset` / `limit` |
+| `list_auto_cuts` | The automatic cuts the project remembers (fillers, silences, and parts the owner cut out from the app's Text window, kind "text"): id, word, file and part removed, by whom, jump score, dissolve; totals. | `kind`, `sort` ("time", "risk"), `offset` / `limit` |
 | `restore_cut` | Puts a cut back (the two pieces become one clip again), or all of them. | `cut_id` (an id or "all"), `kind`, `dry_run` |
 | `make_short` | A NEW project with only one part of this one's timeline: upright 9:16 by default, 1080p, captions from the speech. The original is untouched. | `from_ms`, `to_ms`, `name`, `shape`, `captions` |
 
@@ -678,6 +730,26 @@ unless `download_pack` is true** — ask the owner first.
 | most cuts a minute | 4 | 8 | no limit |
 | picture would jump | left in | left in | cut anyway |
 | slight picture change | cut with a short dissolve | same | same |
+
+## Who speaks when (1.13, no transcript needed)
+
+| Tool | What it does | Arguments worth knowing |
+|---|---|---|
+| `get_speech_map` | Who talks when, from the SOUND: per speaker (a speech track: a voice added with `add_voice`, or a voice-over; without speech tracks the video's own sound is the one speaker) the stretches of talk on the timeline as it is cut now, the total and the share of the talking. Default `view: "turns"`: speaker turns in time order, "start-end [m:ss] Name 12.4 s". | `view` ("turns", "stretches"), `from_ms` / `to_ms`, `speaker`, `min_ms`, `offset` / `limit` (300, max 2000) |
+
+- It is worked out from loudness with the same adaptive rule as
+  `remove_silences`. Microphones recorded together are compared: one
+  speaker heard faintly in the other's microphone does not count, both
+  loud at once is an overlap (the turns then overlap).
+- A turn's start and end are safe cut points (`split_at`, then
+  `remove_clip`). Leave about 150 ms of air; check a doubtful spot with
+  `view: "stretches"` and `from_ms` / `to_ms`.
+- It tells loud from quiet, not speech from music or laughter, and not
+  WHAT is said: for that, `transcribe` and `get_transcript`.
+- The first call listens to each file once (a few seconds for 40
+  minutes) and keeps the result; later calls are instant.
+- The app draws the same thing on the timeline: sound waves on every
+  sound, each speaker's talk in that speaker's colour.
 
 Word times: whisper.cpp, faster-whisper and OpenAI whisper time every
 word; the FFmpeg filter times phrases only (word times are then
@@ -839,7 +911,17 @@ share files, and Large covers every language. After their answer:
 
 Speech recognition makes mistakes. Say so; offer a larger pack
 (`quality: "medium"`, `force: true`), giving the `language` instead of
-"auto", or fixing single captions with `update_title`.
+"auto", or fixing single captions with `update_title`. The same wrong
+word in many captions: `replace_in_captions` (dry run first). In the app
+they can fix a caption in the Text window by double-clicking it.
+
+## "Who speaks" looks wrong (`get_speech_map`, the colours on the timeline)
+
+It is worked out from loudness. Loud music, laughter or a noisy room
+count as talk; a very quiet speaker may be missed. Two people on ONE
+microphone cannot be told apart: that needs one voice file per person
+(`add_voice`). When one speaker shows up on the other's row, the two
+files are probably not lined up (`align_audio`).
 
 ## Removing fillers found nothing, or made the video jumpy
 

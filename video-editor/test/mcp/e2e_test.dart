@@ -296,7 +296,7 @@ void main() {
 
     expect((await s.request('ping'))['result'], isEmpty);
     final tools = (((await s.request('tools/list'))['result'] as Map)['tools'] as List).cast<Map>();
-    expect(tools.length, 59);
+    expect(tools.length, 62);
     expect(tools.map((t) => t['name']), containsAll(['get_status', 'add_media', 'remove_silences', 'export_video']));
 
     final status = await s.ok('get_status');

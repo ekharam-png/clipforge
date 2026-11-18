@@ -49,6 +49,14 @@ media_kit (mpv) and exports use FFmpeg.
 - **Music** with volume, fade in and fade out, and "lower music under speech"
   for the whole project. Music that runs past the end of the video fades out
   at the video's end; that part is greyed out on the timeline.
+- **Text window** (1.13): everything said or written in the video as one
+  readable page - the captions (whatever made them), the transcript, the
+  titles - grouped by speaker, with search; click a sentence to go there,
+  double-click a caption to fix a word. On phones under More > Text.
+- **Sound waves and who is speaking** (1.13): every sound on the timeline
+  shows its waveform; on the Voice rows each speaker's talk is bright in
+  that speaker's colour and the pauses are dim, and Ctrl+Left / Right jump
+  to where speech starts.
 - **Voice recorded separately** (1.10): add the sound file of a separate
   microphone or a Zoom recording (one file per person) and choose "Voice for
   the video". ClipForge lines it up with the picture by comparing it with
@@ -449,6 +457,7 @@ either the extension or this entry, not both.
 | Clips | add videos and photos, trim, split, remove, reorder; speed, volume, mute, fit, audio clean-up, voice focus, sound track / left or right side, brightness / contrast / saturation, zoom, transitions; cut out silences; relink a moved file |
 | Text | titles, captions, import and export of `.srt` subtitles (also subtitles made for the uncut recording) |
 | Speech (1.11) | transcribe in the background, read and search what is said, captions from speech, remove filler words gently, list and put back automatic cuts, make a short from one part |
+| Text and speakers (1.13) | read all captions as compact text, find and replace over all captions (dry run first), who talks when from the sound (speaker turns), without a transcript |
 | Music | add, move, trim, volume, fades, remove |
 | Voice | add a separately recorded voice lined up with the video; line up, nudge or unlink a sound that is already there |
 | Output | export an MP4 in full or small (720p) quality, with progress; the export keeps running when Claude is closed (1.12: also on Windows) |

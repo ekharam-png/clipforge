@@ -519,7 +519,7 @@ Titles stay with their clip when you trim, move or speed up clips.
 title: Captions and subtitle files (.srt)
 section: Text
 keywords: captions, subtitles, subtitle, srt, srt file, import srt, export srt, words at the bottom, closed captions
-related: titles, auto-subtitles, other-languages
+related: titles, text-window, auto-subtitles, other-languages
 
 Captions are lines of subtitles at the bottom of the picture.
 
@@ -529,6 +529,8 @@ In the same box:
 
 - **Import subtitles (.srt)** adds all the lines of a subtitle file at once.
 - **Export subtitles (.srt)** saves your captions as a subtitle file, for example for YouTube.
+
+With many captions, the **Text** window shows them all as one readable page: read, search, fix a word (see Read and search the text). When the timeline is zoomed out so far that caption blocks are too narrow for their words, a thin line above them shows the caption under the playhead, and pointing at a block shows its text.
 
 Captions move along with their clip when you edit. Captions from speech, made automatically, are coming later.
 
@@ -669,6 +671,7 @@ On a Mac use **Cmd** where this says Ctrl. Every shortcut is also in the menu ba
 - **J**: play backwards, **K**: stop, **L**: play forwards. Playing backwards jumps back in small steps, because video players cannot play smoothly in reverse.
 - **Left** and **Right**: one frame back or forward (a frame of the clip under the playhead, so 25 or 60 a second if that is how it was filmed). With **Shift**: one second.
 - **Home** and **End**: go to the start or the end.
+- **Ctrl+Left** and **Ctrl+Right**: where speech last started, where it next starts (see See who is speaking).
 - **+** and **-**: zoom the timeline in and out.
 
 ## Editing
@@ -679,6 +682,7 @@ On a Mac use **Cmd** where this says Ctrl. Every shortcut is also in the menu ba
 - **Ctrl+Shift+C** and **Ctrl+Shift+V**: copy and paste the settings of a clip.
 - **Ctrl+Z**: undo. **Ctrl+Shift+Z** or **Ctrl+Y**: redo.
 - **Ctrl+Shift+H**: show or hide the History.
+- **Ctrl+Shift+T**: show or hide the Text window. **Ctrl+F**: find in the text.
 - **Ctrl+E**: export.
 - Hold **Alt** (Option on a Mac) while dragging on the timeline: no snapping for that drag.
 
@@ -754,6 +758,7 @@ related: timeline, keyboard-shortcuts, menus
 
 When you drag the end of a clip, a title, a sound or an overlay on the timeline, it jumps onto the playhead or the edge of something else when it comes close, so things line up exactly. A yellow line shows where it snapped.
 
+- On speech tracks it also catches where talk starts and ends (see See who is speaking).
 - Hold **Alt** (Option on a Mac) while dragging to place it freely.
 - To switch it off for good, untick **Snap to playhead and edges** in the **Playback** menu (computer).
 
@@ -782,8 +787,8 @@ related: keyboard-shortcuts, snapping, duplicate-copy
 On a computer the menu bar has every command of the editor. On a Mac it is at the top of the screen; on Windows and Linux at the top of the window. A grey item cannot be used right now (for example **Paste settings** before anything was copied).
 
 - **File**: new project, open a project file, add media and music, import and export subtitles, rename the project, export, quit.
-- **Edit**: undo, redo, history; duplicate, copy and paste settings, delete; split, start or end a clip at the playhead, freeze frame, remove silences, move a clip earlier or later; crop and position, rotate; add a title, caption or overlay; the **Sound**, **Shape** and **Video size** menus.
-- **Playback**: play, play backwards, stop, play forwards, go to the start or end, step a frame, zoom the timeline, and **Snap to playhead and edges**.
+- **Edit**: undo, redo, history; the **Text window** and **Find in the text…**; duplicate, copy and paste settings, delete; split, start or end a clip at the playhead, freeze frame, remove silences, move a clip earlier or later; crop and position, rotate; add a title, caption or overlay; the **Sound**, **Shape** and **Video size** menus.
+- **Playback**: play, play backwards, stop, play forwards, go to the start or end, step a frame, zoom the timeline, **Snap to playhead and edges**, the previous and next speech start, and **Show sound waves**.
 - **Help**: this help, **Keyboard shortcuts**, the tour, the version and About ClipForge.
 
 The shortcut of each item is shown next to it.
@@ -971,7 +976,7 @@ It takes under a minute and ends with a list: PASS or FAIL for each check, with 
 title: Transcribe speech (computer only)
 section: Computer
 keywords: transcribe, transcription, transcript, speech to text, speech, whisper, automatic subtitles, auto captions, language pack, pack, download, model, english, russian, hebrew, ffmpeg, what is said, dictation, voice to text
-related: captions-from-speech, remove-filler-words, transcript, voice-recorded-separately, claude-control
+related: captions-from-speech, remove-filler-words, text-window, voice-recorded-separately, claude-control
 
 ClipForge can turn what is said in a video into text, with the time of every word. That text is used for captions, for removing "um" and "uh", for the transcript you can read and search, and it lets Claude find good moments for you. It happens on your computer; nothing is sent anywhere. It is not on phones.
 
@@ -1003,7 +1008,7 @@ English has its own Small and Medium packs. Russian, Hebrew and other languages 
 title: Captions from speech (computer only)
 section: Computer
 keywords: captions from speech, automatic captions, auto subtitles, subtitles from speech, generate captions, hebrew captions, russian captions, right to left, line length
-related: transcribe-speech, captions, text-styles, transcript
+related: transcribe-speech, captions, text-styles, text-window
 
 After **Transcribe speech…**, ClipForge can write the captions for you.
 
@@ -1019,7 +1024,7 @@ Read them through before you export: names and numbers are where mistakes hide. 
 title: Remove filler words (computer only)
 section: Computer
 keywords: filler words, fillers, um, uh, er, remove um, hesitation, like, you know, jumpy, jump cut, put back, automatic cuts, light, normal, strong
-related: transcribe-speech, remove-silences, history, transcript
+related: transcribe-speech, remove-silences, history, text-window
 
 After **Transcribe speech…**, **Remove filler words…** finds "um", "uh" and the like and cuts them out. It is gentle on purpose: too many cuts make a video jumpy.
 
@@ -1044,18 +1049,66 @@ Every automatic cut is remembered, also those of **Remove silences**. **Automati
 - Speech programs often leave "um" out of the text, so fewer are found than are said. FFmpeg's speech filter nearly always does; whisper.cpp or faster-whisper keep more and time every word.
 - The video has to be transcribed first.
 
-=== transcript
-title: The transcript (computer only)
-section: Computer
-keywords: transcript, read, search, find a word, what is said, jump to, text of the video, speaker
-related: transcribe-speech, captions-from-speech, remove-filler-words
+=== text-window
+title: Read and search the text
+section: Text
+keywords: text, text window, transcript, read, search, find a word, find, what is said, jump to, text of the video, speaker, names, captions, subtitles, whole text, document, descript, script, copy text, save text, txt, fix a word, typo, edit caption, delete caption, cut out, follow, ctrl f
+related: captions, transcribe-speech, captions-from-speech, who-is-speaking, keyboard-shortcuts
 
-After **Transcribe speech…**, click the **Transcript** button at the top (or Edit > Speech > Transcript) to read what is said, phrase by phrase, with the time and, for voices recorded separately, the speaker.
+The **Text** window shows everything said or written in the video as one readable page, instead of small blocks on the timeline.
 
-- Click a phrase to go to that moment.
-- Type in the search box to find where a word is said.
+- Computer: the **Text** button at the top, or Edit > **Text window** (Ctrl+Shift+T).
+- Phone: **More** at the bottom, then **Text**.
 
-The transcript follows your cuts: it always shows the video as it is now. The words cannot be edited here; to change what is shown on screen, edit the captions.
+## What it shows
+- **Captions**: every caption on the timeline, whatever made it: a subtitle file you imported, captions from speech, or ones you typed.
+- **Transcript**: what was heard by **Transcribe speech…** (computer only).
+- **Titles**: the titles.
+
+When the video has more than one of these, a switch at the top chooses. No text yet? The window says how to get some: **Transcribe speech…**, **Import subtitles…** or **Add caption…**.
+
+## Reading
+The lines of one speaker are joined into paragraphs, with the time at the side. A caption that starts with a name and a colon ("Sam: …") is that speaker's; the name is shown once, in the speaker's colour, and the captions after it belong to the same speaker until another name comes. Hebrew and Arabic read from right to left.
+
+- Click a sentence: the playhead goes there and, for a caption, it is selected on the timeline. Click a caption on the timeline: the window shows it.
+- While the video plays, the line being spoken is marked and kept in view. Scrolling by hand stops that; **Now** (or the round button at the top) goes back to it.
+
+## Searching
+Type in **Find in the text…** (Ctrl+F puts the cursor there). Every place is marked and counted ("3 of 17"); the arrows, or **Enter** and **Shift+Enter**, go to the next and the previous one.
+
+## Fixing a caption
+Double-click a caption (or click it, then **Edit**), change the text and press **Enter** (**Save**). The caption's name, if it has one, is part of the text you edit. **Delete caption** removes it; on a computer, click one caption and Shift-click another to select everything between them and delete them together. Each of these is one step for **Undo**. Transcripts and titles cannot be changed here.
+
+## Cutting a part out of the video
+On a computer, select the captions or phrases of the part you do not want and click **Cut this part out of the video…**. ClipForge shows from when to when and how long, and asks first. The picture and its sound are removed, with the captions on that part. **Undo** brings everything back; later, Edit > Speech > **Automatic cuts…** > **Put back** returns the picture and the sound (not the captions).
+
+## Copying and saving
+The three dots have **Copy all text**, **Copy with times and names**, **Save as text file…** and **Save as subtitle file (.srt)…**.
+
+## Where the window sits (computer)
+At the right, or under the preview: the three dots, **Show at the right** or **Show under the preview**. Drag its edge to make it wider or taller; ClipForge remembers.
+
+=== who-is-speaking
+title: See who is speaking
+section: Sound
+keywords: who is speaking, speaker, speakers, waveform, waves, sound waves, wave, loud, quiet, pause, talk, podcast, interview, two people, zoom, turns, cut manually, speech start, next speech, colour, color, microphone, bleed, show sound waves
+related: voice-recorded-separately, sound-tracks, snapping, remove-silences, text-window, keyboard-shortcuts
+
+Every sound on the timeline shows its sound waves: tall where it is loud, flat where it is quiet. A video clip whose own sound is on has a slim wave along its bottom edge. The first time a file is used ClipForge listens to it once in the background ("Drawing sound…" at the top of the timeline); you can keep working, and after that it is instant.
+
+## Talk and pauses
+On a speech track (the Voice rows, for example one voice file per person from a Zoom recording, see **Voice recorded separately**), the stretches where that person really talks are bright in the speaker's colour, and the pauses are dim. So a row reads at a glance: talk, pause, talk. Each speaker has a colour; the microphone at the left of the row has it too, and the Text window uses the same colour for a speaker of the same name.
+
+When two people were recorded at the same time, each microphone also hears the other person a little. ClipForge compares the two and does not show that as talk; where both really talk at once, both rows are bright.
+
+## Cutting by hand
+- Dragging on the timeline snaps to where talk starts and ends (see Snapping on the timeline).
+- **Next speech start** and **Previous speech start**: the double arrows next to Play, Ctrl+Right and Ctrl+Left (Cmd on a Mac), or the Playback menu. With a voice selected they follow that speaker; with nothing selected they stop wherever the speaker changes. On a phone they are under **More**.
+- Then **Split** there, as usual.
+
+## Good to know
+- It tells loud from quiet, not speech from music or laughter, and it cannot tell two people on one microphone apart.
+- On a slow phone, turn the waves off: **More** > **Show sound waves** (computer: Playback > **Show sound waves**). Nothing else changes.
 
 === voice-separation
 title: Separating voice and music

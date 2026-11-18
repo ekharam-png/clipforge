@@ -352,3 +352,117 @@ int restoreAllAutoCuts(ProjectEditor e,
     perMinute: minutes <= 0 ? 0 : p.autoCuts.length / minutes,
   );
 }
+
+/// What "Cut this part out of the video" (the Text window, 1.13) would
+/// remove for a stretch of the timeline.
+class TimelineCutPlan {
+  const TimelineCutPlan(this.fromMs, this.toMs, this.parts, this.photosLeft);
+  final int fromMs;
+  final int toMs;
+
+  /// Per clip: the part of its SOURCE file that goes; [whole]: the clip
+  /// goes completely.
+  final List<({String clipId, String path, int startMs, int endMs, bool whole, int timelineMs})>
+      parts;
+
+  /// Photos that are only partly inside the stretch stay as they are.
+  final int photosLeft;
+
+  /// Length that leaves the video (timeline time).
+  int get removedMs => parts.fold(0, (n, x) => n + x.timelineMs);
+  bool get isEmpty => parts.isEmpty;
+}
+
+/// Works out [TimelineCutPlan] for [fromMs]..[toMs] of [p]'s timeline.
+/// Nothing is changed.
+TimelineCutPlan planTimelineCut(Project p, int fromMs, int toMs) {
+  if (fromMs < 0) fromMs = 0;
+  if (toMs > p.durationMs) toMs = p.durationMs;
+  final parts =
+      <({String clipId, String path, int startMs, int endMs, bool whole, int timelineMs})>[];
+  var photos = 0;
+  if (toMs - fromMs < 1) return TimelineCutPlan(fromMs, toMs, parts, 0);
+  for (var i = 0; i < p.clips.length; i++) {
+    final c = p.clips[i];
+    final start = p.clipStartMs(i), end = p.clipEndMs(i);
+    final a = fromMs > start ? fromMs : start;
+    final b = toMs < end ? toMs : end;
+    if (b <= a) continue;
+    final min = ProjectEditor.minDurationMs;
+    final whole = a - start < min && end - b < min;
+    if (c.type == ClipType.photo) {
+      if (whole) {
+        parts.add((
+          clipId: c.id, path: c.path, startMs: c.inMs, endMs: c.outMs, //
+          whole: true, timelineMs: end - start,
+        ));
+      } else {
+        photos++;
+      }
+      continue;
+    }
+    if (whole) {
+      parts.add((
+        clipId: c.id, path: c.path, startMs: c.inMs, endMs: c.outMs, //
+        whole: true, timelineMs: end - start,
+      ));
+      continue;
+    }
+    // Pieces shorter than the minimum would be dropped with the cut:
+    // stretch the cut over them so the log says what really went.
+    final srcA = a - start < min ? c.inMs : c.sourceMsAt(a - start);
+    final srcB = end - b < min ? c.outMs : c.sourceMsAt(b - start);
+    if (srcB - srcA < 1) continue;
+    parts.add((
+      clipId: c.id, path: c.path, startMs: srcA, endMs: srcB, //
+      whole: false, timelineMs: b - a,
+    ));
+  }
+  return TimelineCutPlan(fromMs, toMs, parts, photos);
+}
+
+/// Cuts [plan] out of the video: one undo step, every removed piece of a
+/// video file recorded in the automatic-cut log (kind "text", [word] =
+/// what was said there) so that it can be put back. Titles and captions
+/// on the removed footage go with it, linked sound follows (the editor's
+/// own rules). Returns how many pieces were removed.
+int applyTimelineCut(ProjectEditor e, TimelineCutPlan plan,
+    {String word = '',
+    String by = 'app',
+    required String Function() newId,
+    DateTime? now}) {
+  if (plan.isEmpty) return 0;
+  final at = now ?? DateTime.now();
+  var done = 0;
+  e.transaction(() {
+    final log = <AutoCut>[];
+    // Back to front, so that earlier clips keep their place meanwhile.
+    for (final part in plan.parts.reversed) {
+      final clip = e.project.clips.where((c) => c.id == part.clipId).firstOrNull;
+      if (clip == null) continue;
+      final before = e.project;
+      if (part.whole) {
+        e.removeClip(part.clipId);
+      } else {
+        e.removeSourceRanges(
+            part.clipId, [(startMs: part.startMs, endMs: part.endMs)]);
+      }
+      if (identical(before, e.project)) continue;
+      done++;
+      if (clip.type == ClipType.video) {
+        log.add(AutoCut(
+          id: newId(),
+          kind: 'text',
+          path: part.path,
+          startMs: part.startMs,
+          endMs: part.endMs,
+          word: word,
+          at: at,
+          by: by,
+        ));
+      }
+    }
+    if (log.isNotEmpty) e.setAutoCuts([...e.project.autoCuts, ...log.reversed]);
+  }, label: 'Cut a part out of the video');
+  return done;
+}

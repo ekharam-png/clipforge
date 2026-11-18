@@ -1269,7 +1269,8 @@ class _AutoCutsDialog extends StatelessWidget {
                     key: const ValueKey('auto-cuts-summary'),
                     style: const TextStyle(fontWeight: FontWeight.w600)),
                 const Text(
-                    'What Remove filler words and Remove silences took out. '
+                    'What Remove filler words, Remove silences and "Cut this '
+                    'part out" (Text window) took out. '
                     'Put back returns a piece to the video.',
                     style: _dim),
                 if (cuts.isNotEmpty)
@@ -1295,7 +1296,7 @@ class _AutoCutsDialog extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                '${c.kind == 'filler' ? '“${c.word}”' : 'Silence'} · '
+                                '${c.kind == 'filler' ? '“${c.word}”' : c.kind == 'text' ? 'Cut from the text${c.word.isEmpty ? '' : ' “${c.word}”'}' : 'Silence'} · '
                                 '${p.basename(c.path)} at ${formatDuration(c.startMs)} · '
                                 '${formatLength(c.lengthMs)}'
                                 '${r.isEmpty ? '' : ' · $r'}'

@@ -9,11 +9,11 @@ import '../model/project.dart';
 /// video, the playhead [playheadMs], every clip edge on the main track
 /// (where its picture starts and ends), and the start and end of every
 /// title / caption, sound clip and overlay item. Edges of the item with id
-/// [ignoreId] (the one being dragged) are left out. Sorted, without
-/// duplicates.
+/// [ignoreId] (the one being dragged) are left out. [extra]: more times
+/// (1.13: where speech starts and ends). Sorted, without duplicates.
 List<int> snapTargets(Project project,
-    {required int playheadMs, String? ignoreId}) {
-  final out = <int>{0, project.durationMs, playheadMs};
+    {required int playheadMs, String? ignoreId, Iterable<int> extra = const []}) {
+  final out = <int>{0, project.durationMs, playheadMs, ...extra};
   for (var i = 0; i < project.clips.length; i++) {
     final c = project.clips[i];
     if (c.id == ignoreId) continue;

@@ -1762,7 +1762,7 @@ void main() {
     // pretend speech program - a shell script named whisper-cli that
     // answers --help like whisper.cpp and writes a recorded-style result -
     // and a pretend language pack. Transcribe from the Sound panel, read
-    // the Transcript column, jump to a phrase, make captions.
+    // the Text window (transcript), jump to a phrase, make captions.
     final speechRoot = p.join(out.path, 'ClipForge');
     final fakeWhisper = p.join(out.path, 'bin', 'whisper-cli');
     final fixtureJson = p.join(Directory.current.path, 'test', 'media',
@@ -1829,10 +1829,25 @@ cp "$fixtureJson" "\$out.json"
     expect(stored, 1);
     log('SPEECH: ${transcript.wordCount} words via ${transcript.backend} '
         '(${transcript.model}), language ${transcript.language}');
-    s.showTranscript.value = true;
-    await waitFor(() => find.text('Привет, друзья!').evaluate().isNotEmpty,
-        'the Transcript column');
-    await tester.tap(find.text('Потом вы ждёте.'));
+    // The Text window (1.13) shows the transcript while there are no
+    // captions.
+    Finder inText(String phrase) => find.byWidgetPredicate((w) =>
+        w is RichText &&
+        w.key is ValueKey<String> &&
+        (w.key! as ValueKey<String>).value.startsWith('text-body-') &&
+        w.text.toPlainText().contains(phrase));
+    Future<void> tapInText(String phrase) async {
+      final render = tester.renderObject<RenderParagraph>(inText(phrase).first);
+      final at = render.text.toPlainText().indexOf(phrase);
+      final boxes = render.getBoxesForSelection(
+          TextSelection(baseOffset: at, extentOffset: at + phrase.length));
+      await tester.tapAt(render.localToGlobal(boxes.first.toRect().center));
+    }
+
+    s.showText.value = true;
+    await waitFor(() => inText('Привет, друзья!').evaluate().isNotEmpty,
+        'the Text window with the transcript');
+    await tapInText('Потом вы ждёте.');
     await wait(400);
     expect(pb.positionMs, closeTo(speechStart + 10000, 60));
     await shot('09-transcript');
@@ -1853,7 +1868,36 @@ cp "$fixtureJson" "\$out.json"
     await shot('09-speech-captions');
     log('SPEECH: ${speechCaptions.length} captions from speech; first '
         '"${speechCaptions.first.text.replaceAll('\n', ' / ')}"');
-    s.showTranscript.value = false;
+    // With captions, the Text window shows those; one is fixed in place.
+    await waitFor(
+        () => find.byKey(const ValueKey('text-source-captions')).evaluate().isNotEmpty,
+        'the Text window switches to the captions');
+    final fix = speechCaptions.first;
+    await tester.tap(find.byKey(const ValueKey('text-search')));
+    await tapInText(fix.text.split('\n').first.split(' ').first);
+    await wait(300);
+    expect(s.selection.value?.id, fix.id);
+    await tester.tap(find.byKey(const ValueKey('text-edit')));
+    await wait(300);
+    await tester.enterText(
+        find.byKey(const ValueKey('text-edit-field')), 'Исправлено.');
+    await tester.tap(find.byKey(const ValueKey('text-edit-save')));
+    await wait(300);
+    expect(s.project.titles.firstWhere((t) => t.id == fix.id).text, 'Исправлено.');
+    expect(s.editor.history.last.label, startsWith('Edited caption'));
+    await shot('09-text-window');
+    log('TEXT WINDOW: transcript and captions shown, a caption edited in place');
+    s.editor.undo();
+    // The sound pictures of the real files: drawn in the background.
+    await waitFor(() => !s.pictures.busy, 'the sound pictures', timeoutMs: 60000);
+    final spoken = s.project.clips.firstWhere((c) => c.id == 'speech-clip');
+    final picture = s.pictures.peaksOf(spoken.path, spoken.audioTrackInUse);
+    expect(picture, isNotNull);
+    expect(picture!.durationMs, greaterThan(1000));
+    expect(find.byKey(const ValueKey('wave-speech-clip')), findsOneWidget);
+    log('SOUND WAVES: ${picture.durationMs} ms of "${p.basename(spoken.path)}" drawn, '
+        '${s.pictures.speakers.map((t) => '${t.name}: ${t.stretches.length} stretch(es)').join(', ')}');
+    s.showText.value = false;
     s.editor.removeClip('speech-clip');
     expect(s.project.titles.where((t) => t.kind == TitleKind.caption &&
         speechCaptions.any((c) => c.id == t.id)), isEmpty);

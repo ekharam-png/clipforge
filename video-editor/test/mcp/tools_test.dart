@@ -49,6 +49,8 @@ void main() {
         'transcribe', 'get_transcribe_status', 'cancel_transcribe',
         'get_transcript', 'find_in_transcript', 'captions_from_transcript',
         'remove_fillers', 'list_auto_cuts', 'restore_cut', 'make_short',
+        // 1.13: captions as text, find and replace, who speaks.
+        'get_captions', 'replace_in_captions', 'get_speech_map',
         'get_guide', 'self_test',
       ]);
       for (final t in tools) {

@@ -17,6 +17,7 @@ import 'music_actions.dart';
 import 'history_panel.dart';
 import 'picture_tools.dart';
 import 'session.dart';
+import 'text_panel.dart';
 import 'sound_tracks_ui.dart';
 import 'voice_actions.dart';
 
@@ -168,11 +169,87 @@ Future<void> showEditorMoreSheet(BuildContext context, EditorSession s) {
                     builder: (_, _) => ProjectFadesPanel(session: s)));
           },
         ),
+        ListTile(
+          key: const ValueKey('more-text'),
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.subject),
+          title: const Text('Text'),
+          subtitle: const Text('Read and search everything said or written'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.of(sheet).pop();
+            showTextSheet(context, s);
+          },
+        ),
         _historyTile(context, sheet, s),
+        ListenableBuilder(
+          listenable: s.pictures,
+          builder: (context, _) => s.pictures.speakers
+                  .any((t) => t.stretches.isNotEmpty)
+              ? ListTile(
+                  key: const ValueKey('more-speech-starts'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.record_voice_over_outlined),
+                  title: const LabelWithHint('Go to speech start',
+                      articleId: 'who-is-speaking'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        key: const ValueKey('more-previous-speech'),
+                        tooltip: 'Previous speech start',
+                        icon: const Icon(Icons.keyboard_double_arrow_left),
+                        onPressed: () => s.goToSpeechStart(forward: false),
+                      ),
+                      IconButton(
+                        key: const ValueKey('more-next-speech'),
+                        tooltip: 'Next speech start',
+                        icon: const Icon(Icons.keyboard_double_arrow_right),
+                        onPressed: () => s.goToSpeechStart(forward: true),
+                      ),
+                    ],
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+        SoundWavesSwitch(session: s),
         const SmoothPreviewSwitch(),
       ],
     ),
   );
+}
+
+/// Phones: "Show sound waves" (computers have it in the Playback menu).
+class SoundWavesSwitch extends ConsumerWidget {
+  const SoundWavesSwitch({super.key, required this.session});
+  final EditorSession session;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: session.showWaves,
+      builder: (context, on, _) => SwitchListTile(
+        key: const ValueKey('more-sound-waves'),
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.graphic_eq),
+        title: const LabelWithHint('Show sound waves',
+            articleId: 'who-is-speaking'),
+        subtitle: const Text(
+            'The sound drawn on the timeline, and who is speaking. Turn '
+            'off on a slow phone.'),
+        value: on,
+        onChanged: (v) {
+          session.showWaves.value = v;
+          session.pictures.enabled = v;
+          final prefs = ref.read(appPrefsProvider);
+          (v
+                  ? prefs.clearFlag(kSoundWavesOffFlag)
+                  : prefs.setFlag(kSoundWavesOffFlag))
+              .catchError((Object _) {});
+        },
+      ),
+    );
+  }
 }
 
 /// Phones: "Smooth preview" (see MediaKitBackend.smoothPreview). Takes

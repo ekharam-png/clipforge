@@ -1,18 +1,31 @@
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import '../../core/editor/editor_controller.dart';
 import '../../core/model/project.dart';
 import '../../media/media_api.dart';
 import '../../media/processed_sound_cache.dart';
+import '../../media/speech_map.dart';
 import '../playback/playback_controller.dart';
 import '../playback/timeline_player.dart';
 import '../gallery_search.dart';
 import '../music_search.dart';
 import '../services.dart';
 import '../speech/speech_service.dart';
+import 'sound_pictures.dart';
 import 'sound_renders.dart';
 
 enum ItemKind { clip, audio, title, overlay }
+
+/// Where the Text window sits in a wide window: a column at the right
+/// (default) or under the preview.
+enum TextDock { right, below }
+
+/// The Text window is never narrower than this; its default sizes.
+const double kTextMinWidth = 420;
+const double kTextDefaultWidth = 460;
+const double kTextMinHeight = 160;
+const double kTextDefaultHeight = 280;
 
 /// What the editor's save indicator says.
 enum SaveState {
@@ -130,6 +143,7 @@ class EditorSession {
     this.gallery = const NoGallerySearch(),
     this.music = const NoMusicSearch(),
     this.speech,
+    SoundPictures? pictures,
   }) : sounds = SoundRenders(
           engine: engine,
           cache: soundCache,
@@ -142,6 +156,16 @@ class EditorSession {
     sounds.addListener(_onSoundsChanged);
     playback.addListener(_onPlaybackChanged);
     sounds.update(editor.project);
+    this.pictures = pictures ??
+        SoundPictures(
+          engine: engine,
+          // Next to the app's media folder, not inside it: the clean-up
+          // of unused media must not take the pictures for media.
+          cacheDir: () async =>
+              p.join(p.dirname(await documents.mediaDir()), 'peaks'),
+          fileExists: (path) => !playback.isMissing(path),
+        );
+    this.pictures.update(editor.project);
   }
 
   static const double minZoom = 6;
@@ -169,8 +193,48 @@ class EditorSession {
   final ValueNotifier<Map<String, Transcript>> transcripts =
       ValueNotifier(const {});
 
-  /// The Transcript column is shown (computers only).
-  final ValueNotifier<bool> showTranscript = ValueNotifier(false);
+  /// The Text window is shown (wide windows; narrow ones and phones open
+  /// it as a full-screen sheet instead).
+  final ValueNotifier<bool> showText = ValueNotifier(false);
+
+  /// Where the Text window sits in a wide window.
+  final ValueNotifier<TextDock> textDock = ValueNotifier(TextDock.right);
+
+  /// Its width as a column at the right / its height under the preview
+  /// (remembered app settings).
+  final ValueNotifier<double> textWidth = ValueNotifier(kTextDefaultWidth);
+  final ValueNotifier<double> textHeight = ValueNotifier(kTextDefaultHeight);
+
+  /// Bumped to put the cursor in the Text window's search box (Ctrl+F).
+  final ValueNotifier<int> findInText = ValueNotifier(0);
+
+  /// Set by the Text window while it is open: the Delete key asks it
+  /// first (true: it deleted its selected captions).
+  bool Function()? textDeleteHook;
+
+  /// "Show sound waves" (an app setting, on by default).
+  final ValueNotifier<bool> showWaves = ValueNotifier(true);
+
+  /// Moves the playhead to where speech next starts ([forward]) or last
+  /// started: on the selected sound's track when that is a speaker's,
+  /// else wherever the speaker changes. False when there is no such place
+  /// (or no sound picture yet).
+  bool goToSpeechStart({required bool forward}) {
+    final tracks = pictures.speakers;
+    if (tracks.isEmpty) return false;
+    final selected = selectedAudio?.trackId;
+    final to = neighbourStart(
+        speechStarts(tracks,
+            trackId: tracks.any((t) => t.id == selected) ? selected : null),
+        playback.positionMs,
+        forward: forward);
+    if (to == null) return false;
+    playback.seek(to);
+    return true;
+  }
+
+  /// The waveforms on the timeline and who is speaking (1.13).
+  late final SoundPictures pictures;
 
   Transcript? transcriptOf(String path, int audioTrack) =>
       transcripts.value['$path|$audioTrack'];
@@ -355,6 +419,7 @@ class EditorSession {
   void _onEdited() {
     playback.updateProject(editor.project);
     sounds.update(editor.project);
+    pictures.update(editor.project);
     // Drop a selection whose item is gone (deleted or undone).
     final s = selection.value;
     if (s == null) return;
@@ -389,7 +454,13 @@ class EditorSession {
     cropTarget.dispose();
     cropRatio.dispose();
     showHistory.dispose();
-    showTranscript.dispose();
+    showText.dispose();
+    textDock.dispose();
+    textWidth.dispose();
+    textHeight.dispose();
+    findInText.dispose();
+    showWaves.dispose();
+    pictures.dispose();
     transcripts.dispose();
     copiedSettings.dispose();
     snapping.dispose();

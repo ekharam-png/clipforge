@@ -151,7 +151,17 @@ share files, and Large covers every language. After their answer:
 
 Speech recognition makes mistakes. Say so; offer a larger pack
 (`quality: "medium"`, `force: true`), giving the `language` instead of
-"auto", or fixing single captions with `update_title`.
+"auto", or fixing single captions with `update_title`. The same wrong
+word in many captions: `replace_in_captions` (dry run first). In the app
+they can fix a caption in the Text window by double-clicking it.
+
+## "Who speaks" looks wrong (`get_speech_map`, the colours on the timeline)
+
+It is worked out from loudness. Loud music, laughter or a noisy room
+count as talk; a very quiet speaker may be missed. Two people on ONE
+microphone cannot be told apart: that needs one voice file per person
+(`add_voice`). When one speaker shows up on the other's row, the two
+files are probably not lined up (`align_audio`).
 
 ## Removing fillers found nothing, or made the video jumpy
 

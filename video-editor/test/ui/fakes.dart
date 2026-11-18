@@ -1167,3 +1167,28 @@ Transcript spokenTranscript(String path, String text,
     segments: segmentsFromWords(words),
   );
 }
+
+/// The paragraph of the Text window that holds [phrase].
+Finder textWindowBody(String phrase) => find.byWidgetPredicate((w) {
+      final k = w.key;
+      return w is RichText &&
+          k is ValueKey<String> &&
+          k.value.startsWith('text-body-') &&
+          w.text.toPlainText().contains(phrase);
+    });
+
+/// Where [phrase] is drawn in the Text window (the middle of its first
+/// box), on the screen.
+Offset textWindowPlace(WidgetTester tester, String phrase) {
+  final render = tester.renderObject<RenderParagraph>(textWindowBody(phrase).first);
+  final at = render.text.toPlainText().indexOf(phrase);
+  final boxes = render.getBoxesForSelection(
+      TextSelection(baseOffset: at, extentOffset: at + phrase.length));
+  return render.localToGlobal(boxes.first.toRect().center);
+}
+
+/// Clicks [phrase] in the Text window.
+Future<void> tapInTextWindow(WidgetTester tester, String phrase) async {
+  await tester.tapAt(textWindowPlace(tester, phrase));
+  await tester.pump();
+}

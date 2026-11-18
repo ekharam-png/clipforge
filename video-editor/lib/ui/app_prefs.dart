@@ -156,4 +156,14 @@ class MemoryAppPrefs implements AppPrefs {
   }
 }
 
+/// [AppPrefs.flag] that turns the waveforms on the timeline off ("Show
+/// sound waves" is on by default).
+const String kSoundWavesOffFlag = 'soundWavesOff';
+
+/// [AppPrefs.text]: where the Text window sits ("right" / "below"), its
+/// width as a column and its height under the preview.
+const String kTextDockText = 'textDock';
+const String kTextWidthText = 'textWidth';
+const String kTextHeightText = 'textHeight';
+
 final appPrefsProvider = Provider<AppPrefs>((ref) => FileAppPrefs());

@@ -303,8 +303,9 @@ extension _SpeechTools on ClipForgeTools {
               'cuts per minute. Riskiest first with sort "risk". Paged.',
           properties: {
             'project_id': _projectId,
-            'kind': _str('Only "filler" or only "silence".',
-                values: const ['filler', 'silence']),
+            'kind': _str('Only "filler", "silence" or "text" (a part cut '
+                'out from the app\'s Text window).',
+                values: const ['filler', 'silence', 'text']),
             'sort': _str('"time" (default: in file order) or "risk" '
                 '(highest jump score first).', values: const ['time', 'risk']),
             'offset': _int('Skip this many.', min: 0),
@@ -330,7 +331,7 @@ extension _SpeechTools on ClipForgeTools {
             'project_id': _projectId,
             'cut_id': _str('The id of the cut, or "all".'),
             'kind': _str('With "all": only these.',
-                values: const ['filler', 'silence']),
+                values: const ['filler', 'silence', 'text']),
             'dry_run': _bool('true: report what would come back, save '
                 'nothing.'),
           },
@@ -1193,7 +1194,8 @@ extension _SpeechTools on ClipForgeTools {
           ? 'No automatic cuts are recorded in "${project.name}".'
           : '"${project.name}" has ${totals.count} automatic cut(s): '
               '${project.autoCuts.where((c) => c.kind == 'filler').length} filler(s), '
-              '${project.autoCuts.where((c) => c.kind == 'silence').length} silence(s); '
+              '${project.autoCuts.where((c) => c.kind == 'silence').length} silence(s), '
+              '${project.autoCuts.where((c) => c.kind == 'text').length} cut(s) from the text; '
               '${(totals.savedMs / 1000).toStringAsFixed(1)} s removed, '
               '${totals.perMinute.toStringAsFixed(1)} cut(s) a minute.');
     for (final c in page) {

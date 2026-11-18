@@ -9,6 +9,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/editor/editor_controller.dart';
 import '../../core/model/project.dart';
 import '../help/help_screen.dart';
+import '../speaker_colors.dart';
 import '../theme.dart';
 import 'clip_panels.dart';
 import 'session.dart';
@@ -239,7 +240,9 @@ class _Header extends StatelessWidget {
               Icon(
                 track.muted ? Icons.volume_off : icon,
                 size: 18,
-                color: heard ? Colors.white : AppColors.textDim,
+                color: !heard
+                    ? AppColors.textDim
+                    : speechTrackColor(p, track.id) ?? Colors.white,
               ),
               if (track.solo)
                 const Positioned(
@@ -268,8 +271,13 @@ class _Header extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 6),
                 child: Row(
                   children: [
+                    // A speech track's icon has its speaker's colour (the
+                    // same as its talk on the row and its name in the
+                    // Text window).
                     Icon(icon, size: 14,
-                        color: heard ? AppColors.textDim : const Color(0x669AA0AC)),
+                        color: !heard
+                            ? const Color(0x669AA0AC)
+                            : speechTrackColor(p, track.id) ?? AppColors.textDim),
                     const SizedBox(width: 4),
                     Flexible(
                       child: Text(

@@ -19,6 +19,7 @@ import '../core/model/title_layout.dart';
 import '../core/storage/project_lock.dart';
 import '../core/storage/project_store.dart';
 import '../core/subtitles/srt.dart';
+import '../core/text/text_document.dart';
 import '../core/transcript/captions.dart';
 import '../core/transcript/cut_plan.dart';
 import '../core/transcript/fillers.dart';
@@ -30,6 +31,8 @@ import '../media/clip_silences.dart';
 import '../media/jump_check.dart';
 import '../media/media_api.dart';
 import '../media/sound_align.dart';
+import '../media/sound_peaks_job.dart';
+import '../media/speech_map.dart';
 import '../media/transcribe/transcription_service.dart';
 import '../media/video_encoder.dart' show kSmallMaxRateKbps;
 import 'delegate.dart';
@@ -43,6 +46,7 @@ import 'transcribe_jobs.dart';
 
 part 'tools_selftest.dart';
 part 'tools_speech.dart';
+part 'tools_text.dart';
 
 const String kServerName = 'clipforge';
 const String kServerTitle = 'ClipForge video editor';
@@ -130,6 +134,10 @@ const String kServerInstructions =
     'finds a phrase, captions_from_transcript makes captions, '
     'remove_fillers cuts "um" / "uh" (dry_run is true by default) and '
     'make_short turns a part of the timeline into a new upright project. '
+    'get_captions reads the captions on the timeline (whatever made them) '
+    'as compact text; replace_in_captions fixes a word in all of them '
+    '(dry run by default). get_speech_map says who talks when from the '
+    'sound alone (speaker turns to cut by), without a transcript. '
     'transcribe never downloads anything by itself: when a language pack '
     'is missing it says which and how big; ask the user, then pass '
     'download_pack true. You can read what is SAID; you still cannot see '
@@ -876,6 +884,7 @@ class ClipForgeTools {
   /// Past tense at the start of a message -> what a dry run says.
   static const Map<String, String> _wouldForms = {
     'Separated': 'separate',
+    'Replaced': 'replace',
     'Removed': 'remove',
     'Updated': 'update',
     'Applied': 'apply',
@@ -1397,7 +1406,7 @@ class ClipForgeTools {
     'get_export_status', 'cancel_export', 'list_sound_tracks',
     'transcribe', 'get_transcribe_status', 'cancel_transcribe',
     'get_transcript', 'find_in_transcript', 'list_auto_cuts',
-    'get_guide', 'self_test',
+    'get_guide', 'self_test', 'get_captions', 'get_speech_map',
   };
 
   /// Tools that change many clips at once and so take `dry_run`.
@@ -2671,6 +2680,7 @@ class ClipForgeTools {
       handler: _cancelExport,
     ),
     ..._speechToolDefs,
+    ..._textToolDefs,
     ..._selfToolDefs,
   ];
 

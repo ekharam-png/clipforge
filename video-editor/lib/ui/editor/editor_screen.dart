@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:io' show Platform;
 import 'dart:ui' show AppExitResponse;
 
@@ -30,7 +31,7 @@ import 'clip_actions.dart';
 import 'export_dialog.dart';
 import 'history_panel.dart';
 import 'speech_actions.dart';
-import 'transcript_panel.dart';
+import 'text_panel.dart';
 import '../speech/speech_service.dart';
 import 'import_actions.dart';
 import 'leave_flow.dart';
@@ -238,7 +239,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       s.selection.addListener(_updateMenu);
       s.snapping.addListener(_updateMenu);
       s.copiedSettings.addListener(_updateMenu);
-      s.showTranscript.addListener(_updateMenu);
+      s.showText.addListener(_updateMenu);
+      s.showWaves.addListener(_updateMenu);
+      s.pictures.addListener(_onPictures);
       s.transcripts.addListener(_updateMenu);
       unawaited(s.loadTranscripts());
       // Timeline snapping is an app setting (on unless turned off).
@@ -251,6 +254,29 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       }
       prefs.flag(kSnappingOffFlag).then((off) {
         if (mounted && !s.isDisposed) s.snapping.value = !off;
+      }).catchError((Object _) {});
+      // "Show sound waves" and the Text window's place and size.
+      prefs.flag(kSoundWavesOffFlag).then((off) {
+        if (!mounted || s.isDisposed || !off) return;
+        s.showWaves.value = false;
+        s.pictures.enabled = false;
+      }).catchError((Object _) {});
+      prefs.text(kTextDockText).then((v) {
+        if (mounted && !s.isDisposed && v == 'below') {
+          s.textDock.value = TextDock.below;
+        }
+      }).catchError((Object _) {});
+      prefs.text(kTextWidthText).then((v) {
+        final w = double.tryParse(v ?? '');
+        if (mounted && !s.isDisposed && w != null && w >= kTextMinWidth) {
+          s.textWidth.value = w;
+        }
+      }).catchError((Object _) {});
+      prefs.text(kTextHeightText).then((v) {
+        final h = double.tryParse(v ?? '');
+        if (mounted && !s.isDisposed && h != null && h >= kTextMinHeight) {
+          s.textHeight.value = h;
+        }
       }).catchError((Object _) {});
       _updateMenu();
       _saveWatch = Timer.periodic(
@@ -270,6 +296,44 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   void _onEdited() {
     _checkSaved();
     _updateMenu();
+  }
+
+  /// Whether there is speech to jump to changes as the sound pictures
+  /// arrive.
+  bool _hadSpeakers = false;
+  void _onPictures() {
+    final has = _session?.pictures.speakers.any((t) => t.stretches.isNotEmpty) ??
+        false;
+    if (has == _hadSpeakers) return;
+    _hadSpeakers = has;
+    _updateMenu();
+  }
+
+  /// Turns "Show sound waves" on or off and remembers it.
+  void _setWaves(EditorSession s, bool on) {
+    s.showWaves.value = on;
+    s.pictures.enabled = on;
+    final prefs = ref.read(appPrefsProvider);
+    (on ? prefs.clearFlag(kSoundWavesOffFlag) : prefs.setFlag(kSoundWavesOffFlag))
+        .catchError((Object _) {});
+  }
+
+  void _setTextDock(EditorSession s, TextDock dock) {
+    s.textDock.value = dock;
+    ref
+        .read(appPrefsProvider)
+        .setText(kTextDockText, dock.name)
+        .catchError((Object _) {});
+  }
+
+  void _rememberTextSize(EditorSession s) {
+    final prefs = ref.read(appPrefsProvider);
+    prefs
+        .setText(kTextWidthText, s.textWidth.value.round().toString())
+        .catchError((Object _) {});
+    prefs
+        .setText(kTextHeightText, s.textHeight.value.round().toString())
+        .catchError((Object _) {});
   }
 
   /// Tells the menu bar (macOS; Windows and Linux: the one in the
@@ -415,6 +479,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       toggleSnapping: _inFront(() => _setSnapping(s, !s.snapping.value)),
       snapping: s.snapping.value,
       showShortcuts: _inFront(() => showHelpArticle(context, 'keyboard-shortcuts')),
+      showText: _inFront(() => _toggleText(s)),
+      textShown: s.showText.value,
+      findInText: _inFront(() => _findInText(s)),
+      toggleWaves: _inFront(() => _setWaves(s, !s.showWaves.value)),
+      wavesOn: s.showWaves.value,
+      previousSpeech:
+          f(_hadSpeakers, () => s.goToSpeechStart(forward: false)),
+      nextSpeech: f(_hadSpeakers, () => s.goToSpeechStart(forward: true)),
       // Computers only: without a speech service there is no Speech menu.
       speech: s.speech == null
           ? null
@@ -425,8 +497,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   f(canTranscribe(p), () => captionsFromSpeech(context, s)),
               fillers:
                   f(canTranscribe(p), () => removeFillerWords(context, s)),
-              showTranscript: _inFront(() => _toggleTranscript(s)),
-              transcriptShown: s.showTranscript.value,
               autoCuts: f(p.autoCuts.isNotEmpty, () => showAutoCuts(context, s)),
             ),
     );
@@ -570,7 +640,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         s.editor.redo();
         return KeyEventResult.handled;
       }
+      // Ctrl/Cmd+Left / Right: where speech last started / next starts.
+      if (key == LogicalKeyboardKey.arrowLeft ||
+          key == LogicalKeyboardKey.arrowRight) {
+        _stopReverse();
+        s.goToSpeechStart(forward: key == LogicalKeyboardKey.arrowRight);
+        return KeyEventResult.handled;
+      }
       if (repeat) return KeyEventResult.ignored;
+      if (key == LogicalKeyboardKey.keyF && !shift) {
+        _findInText(s);
+        return KeyEventResult.handled;
+      }
       if (key == LogicalKeyboardKey.keyD && !shift) {
         duplicateSelection(context, s);
         return KeyEventResult.handled;
@@ -680,6 +761,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   /// Deletes what is selected on the timeline (Delete key, menu bar).
   /// False when nothing is.
   static bool _deleteSelection(EditorSession s) {
+    // Several captions selected in the Text window go together.
+    if (s.textDeleteHook?.call() ?? false) return true;
     final selection = s.selection.value;
     if (selection == null) return false;
     switch (selection.kind) {
@@ -788,24 +871,26 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
-  /// Shows or hides the Transcript column; in a narrow window it opens as
-  /// a dialog instead (computers only).
-  void _toggleTranscript(EditorSession s) {
-    if (s.speech == null) return;
+  /// Shows or hides the Text window; in a narrow window (and on phones)
+  /// it opens as a full-screen sheet instead.
+  void _toggleText(EditorSession s) {
     if (MediaQuery.sizeOf(context).width < kWideLayoutWidth) {
-      showDialog<void>(
-        context: context,
-        builder: (dialog) => Dialog(
-          child: SizedBox(
-            width: 360,
-            height: MediaQuery.sizeOf(dialog).height * 0.7,
-            child: TranscriptPanel(session: s),
-          ),
-        ),
-      );
+      showTextSheet(context, s);
     } else {
-      s.showTranscript.value = !s.showTranscript.value;
+      s.showText.value = !s.showText.value;
     }
+  }
+
+  /// Ctrl/Cmd+F: the Text window's search box (opening the window first).
+  void _findInText(EditorSession s) {
+    if (MediaQuery.sizeOf(context).width < kWideLayoutWidth) {
+      showTextSheet(context, s);
+    } else {
+      s.showText.value = true;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !s.isDisposed) s.findInText.value++;
+    });
   }
 
   /// Shows or hides the History column (wide windows) or opens the
@@ -980,11 +1065,42 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Expanded(
-                            child: Column(
-                              children: [
-                                Expanded(child: preview),
-                                TransportBar(session: s),
-                              ],
+                            child: ListenableBuilder(
+                              listenable: Listenable.merge(
+                                  [s.showText, s.textDock, s.textHeight]),
+                              builder: (context, _) {
+                                final below = s.showText.value &&
+                                    s.textDock.value == TextDock.below;
+                                return LayoutBuilder(
+                                  builder: (context, column) => Column(
+                                    children: [
+                                      Expanded(child: preview),
+                                      TransportBar(session: s),
+                                      if (below) ...[
+                                        _SizeHandle(
+                                          key: const ValueKey('text-size-handle'),
+                                          vertical: true,
+                                          onDrag: (d) => s.textHeight.value =
+                                              (s.textHeight.value - d)
+                                                  .clamp(kTextMinHeight, 2000.0)
+                                                  .toDouble(),
+                                          onEnd: () => _rememberTextSize(s),
+                                        ),
+                                        SizedBox(
+                                          // The preview keeps at least a
+                                          // strip of 120.
+                                          height: s.textHeight.value.clamp(
+                                              kTextMinHeight,
+                                              math.max(
+                                                  kTextMinHeight,
+                                                  column.maxHeight - 56 - 126)),
+                                          child: _textPanel(s),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                );
+                              },
                             ),
                           ),
                           const VerticalDivider(width: 1),
@@ -1008,21 +1124,47 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                                   )
                                 : const SizedBox.shrink(),
                           ),
-                          if (s.speech != null)
-                            ValueListenableBuilder<bool>(
-                              valueListenable: s.showTranscript,
-                              builder: (context, shown, _) => shown
-                                  ? Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const VerticalDivider(width: 1),
-                                        SizedBox(
-                                            width: 300,
-                                            child: TranscriptPanel(session: s)),
-                                      ],
-                                    )
-                                  : const SizedBox.shrink(),
-                            ),
+                          ListenableBuilder(
+                            listenable: Listenable.merge([
+                              s.showText, s.textDock, s.textWidth, //
+                              s.showHistory,
+                            ]),
+                            builder: (context, _) {
+                              if (!s.showText.value ||
+                                  s.textDock.value != TextDock.right) {
+                                return const SizedBox.shrink();
+                              }
+                              // At least 420 wide; the preview keeps
+                              // 300 where the window allows.
+                              final most = math.max(
+                                  kTextMinWidth,
+                                  box.maxWidth -
+                                      340 -
+                                      (s.showHistory.value ? 261 : 0) -
+                                      300);
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _SizeHandle(
+                                    key: const ValueKey('text-size-handle'),
+                                    vertical: false,
+                                    onDrag: (d) => s.textWidth.value =
+                                        (s.textWidth.value.clamp(
+                                                    kTextMinWidth, most) -
+                                                d)
+                                            .clamp(kTextMinWidth, most)
+                                            .toDouble(),
+                                    onEnd: () => _rememberTextSize(s),
+                                  ),
+                                  SizedBox(
+                                    width: s.textWidth.value
+                                        .clamp(kTextMinWidth, most),
+                                    child: _textPanel(s),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
                         ],
                       ),
                     ),
@@ -1047,6 +1189,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         ),
     );
   }
+
+  Widget _textPanel(EditorSession s) => TextPanel(
+        key: const ValueKey('text-window'),
+        session: s,
+        onClose: () => s.showText.value = false,
+        onDock: (dock) => _setTextDock(s, dock),
+      );
 
   PreferredSizeWidget _topBar(EditorSession s) {
     final narrow = MediaQuery.sizeOf(context).width < kWideLayoutWidth;
@@ -1116,15 +1265,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     onPressed: () => _toggleHistory(s),
                   ),
                 ),
-              if (!narrow && s.speech != null)
+              if (!narrow)
                 ValueListenableBuilder<bool>(
-                  valueListenable: s.showTranscript,
+                  valueListenable: s.showText,
                   builder: (context, shown, _) => IconButton(
-                    key: const ValueKey('transcript-button'),
-                    tooltip: shown ? 'Hide transcript' : 'Transcript',
+                    key: const ValueKey('text-button'),
+                    tooltip: shown
+                        ? 'Hide the Text window'
+                        : 'Text: read and search what is said',
                     isSelected: shown,
-                    icon: const Icon(Icons.subject, semanticLabel: 'Transcript'),
-                    onPressed: () => _toggleTranscript(s),
+                    icon: const Icon(Icons.subject, semanticLabel: 'Text'),
+                    onPressed: () => _toggleText(s),
                   ),
                 ),
               TourAnchor(
@@ -1231,6 +1382,48 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The edge of the Text window that is dragged to resize it.
+class _SizeHandle extends StatelessWidget {
+  const _SizeHandle({
+    super.key,
+    required this.vertical,
+    required this.onDrag,
+    required this.onEnd,
+  });
+
+  /// True: a bar across, dragged up and down.
+  final bool vertical;
+  final ValueChanged<double> onDrag;
+  final VoidCallback onEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: vertical
+          ? SystemMouseCursors.resizeRow
+          : SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onVerticalDragUpdate: vertical ? (d) => onDrag(d.delta.dy) : null,
+        onVerticalDragEnd: vertical ? (_) => onEnd() : null,
+        onHorizontalDragUpdate: vertical ? null : (d) => onDrag(d.delta.dx),
+        onHorizontalDragEnd: vertical ? null : (_) => onEnd(),
+        child: SizedBox(
+          width: vertical ? double.infinity : 7,
+          height: vertical ? 7 : double.infinity,
+          child: Center(
+            child: Container(
+              width: vertical ? double.infinity : 1,
+              height: vertical ? 1 : double.infinity,
+              color: AppColors.outline,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1349,6 +1542,36 @@ class TransportBar extends StatelessWidget {
                 ),
               ),
             ),
+            // Where speech starts (when the sound pictures show any, and
+            // there is room: phones have these under More).
+            if (MediaQuery.sizeOf(context).width >= 520)
+              ListenableBuilder(
+                listenable: session.pictures,
+                builder: (context, _) => session.pictures.speakers
+                        .any((t) => t.stretches.isNotEmpty)
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            key: const ValueKey('previous-speech'),
+                            tooltip: 'Previous speech start (Ctrl+Left)',
+                            icon: const Icon(Icons.keyboard_double_arrow_left,
+                                semanticLabel: 'Previous speech start'),
+                            onPressed: () =>
+                                session.goToSpeechStart(forward: false),
+                          ),
+                          IconButton(
+                            key: const ValueKey('next-speech'),
+                            tooltip: 'Next speech start (Ctrl+Right)',
+                            icon: const Icon(Icons.keyboard_double_arrow_right,
+                                semanticLabel: 'Next speech start'),
+                            onPressed: () =>
+                                session.goToSpeechStart(forward: true),
+                          ),
+                        ],
+                      )
+                    : const SizedBox.shrink(),
+              ),
             if (onAdd != null)
               IconButton(
                 tooltip: 'Add videos, photos, music or text',

@@ -8,7 +8,7 @@ every release: a test fails when CHANGELOG.md has a version this file does
 not mention.
 
 Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
-1.8.0, 1.9.0, 1.10.0, 1.11.0, 1.12.0.
+1.8.0, 1.9.0, 1.10.0, 1.11.0, 1.12.0, 1.13.0.
 
 ## Projects
 
@@ -31,6 +31,24 @@ Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
 | Find file: Search the gallery (Android) | 1.8.0 | Looks for a missing file by its name on the phone and copies it in. |
 | Clean-up never deletes what is in use | 1.8.0 | Files the open project or its undo history still needs are always kept. |
 | "Open in the app" mark | 1.9.0 | An open project is marked, so Claude does not change it at the same time; leftovers of a crash are ignored and cleaned up. |
+
+## Text window, sound waves, who is speaking (1.13.0)
+
+| Feature | Since | Where | What it does |
+|---|---|---|---|
+| Text window | 1.13.0 | Both (phones: a full-screen sheet under More > Text) | Everything said or written as a readable document: Captions (whatever made them), Transcript (computer), Titles, with a switch. Takes the place of the Transcript column. |
+| Paragraphs by speaker and pauses | 1.13.0 | Both | A caption starting with "Name:" is that speaker's; lines of one speaker join into a paragraph, the name shown once in the speaker's colour, a time at each paragraph; right to left for Hebrew / Arabic. |
+| Follow playback, click to jump | 1.13.0 | Both | The line (for transcripts: the word) being spoken is marked and kept in view; a follow toggle that scrolling by hand turns off, and Now; click a sentence to move the playhead and select the caption; selecting a caption on the timeline shows it in the window. |
+| Find in the text | 1.13.0 | Both | Search with a count, next and previous; Ctrl/Cmd+F. |
+| Fix or delete captions in the Text window | 1.13.0 | Both (several at once with Shift-click: computer) | Double-click or Edit changes a caption in place; Delete caption(s); each one undo step named in the History. |
+| Cut this part out of the video… | 1.13.0 | Computer | For the selected lines: shows from / to / length, asks, cuts with the editor's own cut and records it under Automatic cuts (kind "text") for Put back. |
+| Copy all text, Save as text file, Save as .srt | 1.13.0 | Both | Plain, or with times and speaker names. |
+| Text window at the right or under the preview | 1.13.0 | Computer | Resizable (at least 420 wide), place and size remembered. |
+| Sound waves on the timeline | 1.13.0 | Both | A waveform in every sound item and a slim one along video clips whose sound is on; read once per file in the background and kept on disk; only the visible part is drawn. "Show sound waves" switch. |
+| Who is speaking | 1.13.0 | Both | On speech tracks, talk is bright in the speaker's colour and pauses are dim; microphones recorded together are compared so that bleed does not count. |
+| Snap to speech, next / previous speech start | 1.13.0 | Both (keys: computer) | Dragging snaps to where talk starts and ends; Ctrl/Cmd+Right / Left, buttons next to Play, Playback menu, More on phones. |
+| Slim marks and the caption line | 1.13.0 | Both | Zoomed out, narrow caption blocks become slim marks, a line above them shows the caption under the playhead, and a tooltip shows a block's text. |
+| Claude: get_captions, replace_in_captions, get_speech_map | 1.13.0 | Computer | Read captions as compact text; find and replace over all captions (dry run by default); who talks when from the sound, as speaker turns (62 tools). |
 
 ## Updates and Claude connection (1.12.0)
 
@@ -67,7 +85,7 @@ Both = phones too.
 | Right-to-left lines (Hebrew, Arabic) | 1.11.0 | Both | Titles and captions are laid out right to left in preview and export (punctuation and numbers on the correct side). |
 | Remove filler words | 1.11.0 | Computer | Finds "um", "uh", "э-э", "אה"…; Light / Normal / Strong; review list with jump rating; cuts kept apart; short dissolve on slight picture changes. |
 | Automatic cuts, Put back | 1.11.0 | Computer (cuts made on a phone by Remove silences are recorded too) | Every automatic cut (fillers, silences) is remembered and can be put back one by one or all together. |
-| Transcript column | 1.11.0 | Computer | Read-only text by phrase with time and speaker; click to jump; search. |
+| Transcript column | 1.11.0 | Computer | Read-only text by phrase with time and speaker; click to jump; search. Since 1.13.0 it is the Transcript source of the Text window. |
 | Claude: transcribe, read, find, captions, fillers, shorts | 1.11.0 | Computer | Tools for Claude to transcribe in the background, read and search the transcript, make captions, remove fillers gently, list and restore automatic cuts, and make a short from a part of the timeline. |
 | Project names are unique | 1.11.0 | Both | A new project or copy whose name is taken gets "(2)", "(3)"… |
 

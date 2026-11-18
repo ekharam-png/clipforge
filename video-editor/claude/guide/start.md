@@ -33,7 +33,10 @@ it always matches the version of ClipForge that is installed. This is the
 
 **You cannot see the picture.** Since ClipForge 1.11 you CAN know what is
 said: `transcribe` turns the speech into text with times, and
-`get_transcript` / `find_in_transcript` let you read and search it. Apart
+`get_transcript` / `find_in_transcript` let you read and search it.
+Captions that are already on the timeline (from a subtitle file, say) are
+read with `get_captions`, and `get_speech_map` tells you WHO talks WHEN
+from the sound alone. Apart
 from that you know only what the tools report: file names, lengths, sizes,
 where the silences are, caption text, and what is on the timeline. So:
 
@@ -159,6 +162,19 @@ or `"mp3"`. Details in `get_guide` section "tools".
   adding the two numbers up. `list_auto_cuts` shows what was cut so far.
 - `make_short` copies the project and keeps one part; the long project is
   never cut.
+- **Captions that are already there** (imported subtitles, often with
+  "Name:" in front): read them with `get_captions`, not page by page with
+  `get_project`. A wrong word in one caption: `update_title`. The same
+  wrong word in many: `replace_in_captions` (dry run first; tell the
+  owner the count before doing it).
+- **Who speaks when**: `get_speech_map` gives speaker turns with times
+  from the sound itself, also when nothing was transcribed. Use it to cut
+  by turns ("remove my long question at the start", "keep only the
+  guest's answers") and to say how the talking is shared. It cannot tell
+  what is said.
+- In the app the owner reads all of this in the **Text window** (Edit >
+  Text window): captions, transcript and titles as a document, with
+  search; they can fix a caption there themselves.
 
 ## Rules that are easy to get wrong
 

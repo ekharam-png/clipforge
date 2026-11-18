@@ -20,6 +20,7 @@ import 'media_jobs.dart';
 import 'sound_filters.dart';
 import 'sound_align_job.dart';
 import 'jump_check.dart';
+import 'sound_peaks_job.dart';
 import 'sound_render_job.dart';
 import 'media_fonts.dart';
 import 'video_encoder.dart';
@@ -30,6 +31,7 @@ class FfmpegKitMediaEngine
         ThumbnailStripEngine,
         SilenceJobEngine,
         SoundAlignEngine,
+        SoundPeaksEngine,
         JumpCheckEngine {
   FfmpegKitMediaEngine({
     FontResolver? fontResolver,
@@ -171,6 +173,12 @@ class FfmpegKitMediaEngine
           {int videoAudioTrack = 0, int voiceAudioTrack = 0}) =>
       alignSoundWith(_ffmpeg, probe, videoPath, voicePath,
           videoAudioTrack: videoAudioTrack, voiceAudioTrack: voiceAudioTrack);
+
+  @override
+  Future<SoundPeaks?> soundPeaks(String path,
+          {int audioTrack = 0, String? cacheDir}) =>
+      soundPeaksWith(_ffmpeg, probe, path,
+          audioTrack: audioTrack, cacheDir: cacheDir);
 
   @override
   Future<List<double?>> jumpScores(

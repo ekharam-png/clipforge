@@ -1,6 +1,6 @@
 # ClipForge tools
 
-All 59 tools of the `clipforge` MCP server (ClipForge 1.12). A test in the
+All 62 tools of the `clipforge` MCP server (ClipForge 1.13). A test in the
 ClipForge repository fails when a tool is missing from this file.
 
 General rules:
@@ -98,6 +98,8 @@ General rules:
 | `remove_title` | Removes one, or all captions with `all_captions: true` (titles stay). | |
 | `import_srt` | Every cue of an .srt file becomes a caption. | `path` or `srt_text`, `time_base` ("timeline" / "source"), `offset_ms`, `replace_existing_captions` |
 | `export_srt` | The captions as .srt text, written to `path` when given. | `time_base`, `path`, `overwrite` |
+| `get_captions` | The captions on the timeline as compact text, whatever made them (a subtitle file, the speech, typed): one line each, "start-end [m:ss] Speaker: text". The way to READ a captioned project (500 captions are about 35 KB; `get_project` shows 30 at a time with their whole look). | `from_ms` / `to_ms`, `offset` / `limit` (400, max 2000), `format` ("text", "paragraphs"), `ids` (adds each `title_id`), `kind` ("captions", "titles", "all") |
+| `replace_in_captions` | Find and replace over ALL captions at once (a misspelt name). **Dry run by default**: says how many places in how many captions and shows examples; `dry_run: false` does it as one undo step. | `find`, `replace`, `whole_word`, `case_sensitive`, `from_ms` / `to_ms`, `include_titles`, `dry_run` |
 
 - `style`: "classic", "outline", "boxed", "yellow", "elegant",
   "handwritten" (sets several things at once; choose it first).
@@ -107,6 +109,12 @@ General rules:
   "center", "right" (also moves the text to that side).
 - `animation_in` / `animation_out`: "fade", "slide_up", "pop", "none".
 - Titles and captions follow their clip through cuts, moves and speed.
+- Speakers in captions: a caption that starts with "Name:" is that
+  speaker's; captions without a name belong to whoever spoke last. The
+  app's Text window and `get_captions` read them the same way. To fix one
+  caption use `update_title` with `text` (get the `title_id` from
+  `get_captions` with `ids: true`); to fix the same word everywhere use
+  `replace_in_captions` (`whole_word: true` for names).
 - .srt time bases: "timeline" files fit only the cut they were made from.
   `export_srt` with `time_base: "source"` writes times of the ORIGINAL
   recording, and `import_srt` with `time_base: "source"` puts them back in
@@ -205,7 +213,7 @@ unless `download_pack` is true** — ask the owner first.
 | `find_in_transcript` | Where a word or phrase is said: times, clip, speaker, the words around it. | `phrase`, `prefix`, `limit` |
 | `captions_from_transcript` | Captions from the speech: 1–2 lines of about 32–42 characters, split at sentences and pauses, never overlapping; the project's caption look; Hebrew drawn right to left. | `dry_run`, `from_ms` / `to_ms`, `max_line_chars`, `max_lines`, `min_duration_ms`, `max_duration_ms`, `replace_existing`, `keep_filler_sounds`, title style arguments |
 | `remove_fillers` | Cuts "um", "uh", "э-э", "אה"… out, gently. **Dry run by default.** Reports found / cut / left because too close / left because the picture would jump, time saved, cuts per minute, the 5 riskiest cuts. | `strength` ("light" default, "normal", "strong"), `dry_run`, `include_word_fillers`, `fillers`, `language`, `allow_estimated_times`, `jump_check`; advanced: `min_cut_ms`, `min_distance_ms`, `max_cuts_per_minute`, `min_piece_ms`, `pad_ms` |
-| `list_auto_cuts` | The automatic cuts the project remembers (fillers and silences): id, word, file and part removed, by whom, jump score, dissolve; totals. | `kind`, `sort` ("time", "risk"), `offset` / `limit` |
+| `list_auto_cuts` | The automatic cuts the project remembers (fillers, silences, and parts the owner cut out from the app's Text window, kind "text"): id, word, file and part removed, by whom, jump score, dissolve; totals. | `kind`, `sort` ("time", "risk"), `offset` / `limit` |
 | `restore_cut` | Puts a cut back (the two pieces become one clip again), or all of them. | `cut_id` (an id or "all"), `kind`, `dry_run` |
 | `make_short` | A NEW project with only one part of this one's timeline: upright 9:16 by default, 1080p, captions from the speech. The original is untouched. | `from_ms`, `to_ms`, `name`, `shape`, `captions` |
 
@@ -218,6 +226,26 @@ unless `download_pack` is true** — ask the owner first.
 | most cuts a minute | 4 | 8 | no limit |
 | picture would jump | left in | left in | cut anyway |
 | slight picture change | cut with a short dissolve | same | same |
+
+## Who speaks when (1.13, no transcript needed)
+
+| Tool | What it does | Arguments worth knowing |
+|---|---|---|
+| `get_speech_map` | Who talks when, from the SOUND: per speaker (a speech track: a voice added with `add_voice`, or a voice-over; without speech tracks the video's own sound is the one speaker) the stretches of talk on the timeline as it is cut now, the total and the share of the talking. Default `view: "turns"`: speaker turns in time order, "start-end [m:ss] Name 12.4 s". | `view` ("turns", "stretches"), `from_ms` / `to_ms`, `speaker`, `min_ms`, `offset` / `limit` (300, max 2000) |
+
+- It is worked out from loudness with the same adaptive rule as
+  `remove_silences`. Microphones recorded together are compared: one
+  speaker heard faintly in the other's microphone does not count, both
+  loud at once is an overlap (the turns then overlap).
+- A turn's start and end are safe cut points (`split_at`, then
+  `remove_clip`). Leave about 150 ms of air; check a doubtful spot with
+  `view: "stretches"` and `from_ms` / `to_ms`.
+- It tells loud from quiet, not speech from music or laughter, and not
+  WHAT is said: for that, `transcribe` and `get_transcript`.
+- The first call listens to each file once (a few seconds for 40
+  minutes) and keeps the result; later calls are instant.
+- The app draws the same thing on the timeline: sound waves on every
+  sound, each speaker's talk in that speaker's colour.
 
 Word times: whisper.cpp, faster-whisper and OpenAI whisper time every
 word; the FFmpeg filter times phrases only (word times are then

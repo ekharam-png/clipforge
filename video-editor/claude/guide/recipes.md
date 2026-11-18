@@ -143,6 +143,34 @@ if MP3 is refused because this FFmpeg cannot make it, offer M4A).
    second camera should start. Lining up by sound is not available.
 6. Export; ask them to watch the first seconds of the overlay for sync.
 
+## Cut by who is speaking (no transcript needed)
+
+For a talk with one voice file per person (see above), or any video
+where people take turns.
+
+1. `get_speech_map`: read the totals (who talks how much) and the turns.
+2. Say what you found in plain words ("Dana talks for 14 minutes, Sam for
+   8; the first 40 seconds are Sam's introduction") and ask what should
+   go or stay. You cannot know what is said without `transcribe`.
+3. To take a turn out: `split_at` its start and its end (keep about
+   150 ms of air on each side), then `remove_clip` the piece between.
+   Work from the END of the video backwards, so that earlier times stay
+   valid; or call `get_speech_map` again after each cut.
+4. Tell them which times to watch. Linked voices follow the cuts.
+
+## Fix captions that are already there
+
+Subtitles they imported, or captions made from speech, with mistakes.
+
+1. `get_captions` to read them (page with `offset` when it says so).
+2. A name or word that is wrong everywhere: `replace_in_captions` with
+   `whole_word: true`; the dry run says how many places. Tell them the
+   number, then `dry_run: false`.
+3. Single mistakes: `get_captions` with `ids: true` and `from_ms` /
+   `to_ms` around the place, then `update_title` with the new `text`.
+4. They can also do this themselves in the app's Text window (double
+   click a caption).
+
 ## Captions from speech
 
 1. `transcribe` with the `language` they speak ("en", "ru", "he"). If it
