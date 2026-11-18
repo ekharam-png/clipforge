@@ -693,6 +693,20 @@ STEPS_5 = [
    "With a talking video in the project, look at: the Sound panel of clip A, the Transcript button in the top bar, and every item of Edit > Speech and the two voice items of Edit > Sound. Then select the music on its track and look at Edit > Sound again.",
    "Transcribe speech…, Captions from speech…, Remove filler words… and Transcript can be clicked. The only greyed items are those with a reason: Automatic cuts… while nothing is cut automatically, and Line up with the video while no sound is selected (it can be clicked once the music is selected; with the music selected the panel also offers \"This is a voice: line up with the video\"). The Sound panel always shows Transcribe speech… for a video clip with sound. Write down anything else that is greyed out or missing.", ""),
  ]),
+ ("New in 1.12", [
+  ("u-menu", "Update items in the Help menu",
+   "Open the Help menu. Click Check for updates….",
+   "The Help menu has Connect to Claude…, Check for updates… and a switch for checking automatically. Check for updates… answers with a plain message: either that this is the newest version, or that a version is available with What's new, Update and Later. Write down exactly what it says. Do NOT click Update unless the owner says so.", ""),
+  ("u-connect", "Connect to Claude page",
+   "Open Help > Connect to Claude….",
+   "The page says whether the Claude helper is installed, has a button Save the Claude extension file… and shows one line for Claude Code with a Copy button. Click Copy and paste the line into the note. Click Save the Claude extension file… and save it into the clipforge-test-output folder: a file ending in .mcpb appears there.", ""),
+  ("u-rename", "Renaming to a name that exists",
+   "On the project list, rename a project to the exact name of another project.",
+   "The renamed project gets \" (2)\" at the end of its name; no two projects share a name.", ""),
+  ("u-fillerplay", "Filler preview plays the cut",
+   "Only if Remove filler words… listed at least one filler: open it again and press the play button of one row.",
+   "The preview plays about 1.5 seconds before the filler, skips the filler itself, and continues about 1.5 seconds after it. Ask the owner to listen: the filler word is not heard.", "listen"),
+ ]),
  ("Finish", [
   ("t-remove", "Remove a language pack",
    "Ask the owner whether the pack downloaded in this round should stay. Only if the owner says remove it: open Transcribe speech… and click Remove on that row. Otherwise set Not tested with \"owner keeps the pack\".",
@@ -700,7 +714,7 @@ STEPS_5 = [
  ]),
 ]
 
-INSTR_5 = """You are testing ClipForge 1.11.0 (build 106), a video editor, on the owner's Windows PC. Problems are expected; your job is to find them and write them down precisely. This round checks only what is new in 1.10 and 1.11 on the computer: a voice recorded separately (the "What is this sound?" question, lining up, nudging, unlinking), speech to text (Transcribe speech…, language packs), Captions from speech…, the Transcript, Remove filler words… and Automatic cuts…, project names, the export window and the menus, plus five steps that check the basics still work. Older features were tested in round 4.
+INSTR_5 = """You are testing ClipForge 1.12.0 (build 109), a video editor, on the owner's Windows PC. Problems are expected; your job is to find them and write them down precisely. This round checks only what is new in 1.10 and 1.11 on the computer: a voice recorded separately (the "What is this sound?" question, lining up, nudging, unlinking), speech to text (Transcribe speech…, language packs), Captions from speech…, the Transcript, Remove filler words… and Automatic cuts…, project names, the export window and the menus, plus five steps that check the basics still work. Older features were tested in round 4.
 
 BEFORE YOU START
 - Fill in "Device" (for example "Windows 11 laptop, RTX 4070") and "Tester".
