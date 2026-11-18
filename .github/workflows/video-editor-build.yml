@@ -39,7 +39,8 @@
 # version code (Flutter: 2000 + build for 64-bit) is higher, so the
 # numbers continue above the old ones.
 #
-# Releases: pushing a tag v<version> (it must match pubspec.yaml) builds
+# Releases: pushing a tag v<version> (it must match pubspec.yaml), or a
+# manual run on main with "publish" ticked, builds
 # Android, Windows and macOS and the "release" job publishes them as a
 # GitHub Release, with fixed-name copies (ClipForge-windows.zip, ...) so
 # releases/latest/download/<name> always gives the newest version, and
@@ -48,6 +49,11 @@ name: ClipForge builds
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish this build of main as a GitHub Release (creates the tag v<version>)"
+        type: boolean
+        default: false
   push:
     branches: [main]
     tags: ["v*"]
@@ -570,7 +576,11 @@ jobs:
   release:
     name: GitHub Release
     needs: [check, android, windows, macos]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # For a pushed tag v<version>, or a manual run on main with "publish"
+    # ticked (the release then creates the tag itself).
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -607,7 +617,7 @@ jobs:
           copy "$CF_NAME-claude-windows.mcpb"     ClipForge-claude-windows.mcpb
           copy "$CF_NAME-claude-macos.mcpb"       ClipForge-claude-macos.mcpb
           copy "ClipForge-$CF_VERSION-claude-skill.zip" ClipForge-claude-skill.zip
-          tag="${GITHUB_REF#refs/tags/}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then tag="${GITHUB_REF#refs/tags/}"; else tag="v$CF_VERSION"; fi
           # latest.json: version, build, date, notes_url as before, plus
           # (1.12) per system the address, size and SHA-256 of the
           # fixed-name file, which the app checks before it uses a download.
@@ -624,7 +634,15 @@ jobs:
       - name: Create the release
         working-directory: ${{ runner.temp }}/release
         run: |
-          tag="${GITHUB_REF#refs/tags/}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"; how=(--verify-tag)
+          else
+            # Manual publish from main: the release creates the tag here.
+            tag="v$CF_VERSION"; how=(--target "$GITHUB_SHA")
+            if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "::error::release $tag exists already: raise the version in pubspec.yaml first"; exit 1
+            fi
+          fi
           gh release create "$tag" -R "$GITHUB_REPOSITORY" \
-            --title "ClipForge $CF_VERSION" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag \
+            --title "ClipForge $CF_VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${how[@]}" \
             ./*.zip ./*.apk ./*.mcpb latest.json

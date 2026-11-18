@@ -17,7 +17,9 @@ shared with a few friends later.
 ## Where things are
 
 - Repository: this public repository, folder `video-editor/`,
-  branch `main`. Versions are published as GitHub Releases (tags `v*`) and
+  branch `main`. Versions are published as GitHub Releases (push a tag
+  `v<version>`, or run the build workflow by hand on `main` with "publish"
+  ticked: the release then creates the tag) and
   the download page lives in `site/` (GitHub Pages).
 - CI: `.github/workflows/video-editor-build.yml` (repo root).
 - User docs: `video-editor/README.md` (install steps, features, Claude control).
