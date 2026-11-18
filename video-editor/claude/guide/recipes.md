@@ -1,7 +1,7 @@
 # ClipForge recipes
 
 Each recipe is a plan to show the owner in a few plain bullets before you
-start (SKILL.md, "The workflow"). Skip steps they do not want. After every
+start (`get_guide` section "start", "The workflow"). Skip steps they do not want. After every
 recipe: tell them where the result is and what to watch or listen for, and
 ask them to open the project in ClipForge.
 
@@ -147,7 +147,7 @@ if MP3 is refused because this FFmpeg cannot make it, offer M4A).
 
 1. `transcribe` with the `language` they speak ("en", "ru", "he"). If it
    answers that a language pack is needed, tell them the sizes and ask
-   which (see SKILL.md); then call again with `quality` and
+   which (see the "start" section); then call again with `quality` and
    `download_pack: true`. Poll `get_transcribe_status` to the end.
 2. `captions_from_transcript` with `dry_run: true`; show them the first
    few. Upright video gets shorter lines by itself.

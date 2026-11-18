@@ -503,8 +503,16 @@ class ProjectBundles {
   /// Returns the media files that are not in the bundle because they could
   /// not be found (empty when everything is in).
   Future<List<String>> exportBundle(Project project, String zipPath,
-          {void Function(double fraction)? onProgress}) =>
-      bundle.exportBundleReport(project, zipPath, onProgress: onProgress);
+      {void Function(double fraction)? onProgress}) async {
+    // The project's transcripts travel with it (1.12).
+    String? transcripts;
+    try {
+      transcripts = p.join((await getApplicationDocumentsDirectory()).path, 'ClipForge',
+          'projects', project.id, bundle.kBundleTranscriptsDir);
+    } catch (_) {}
+    return bundle.exportBundleReport(project, zipPath,
+        onProgress: onProgress, transcriptsDir: transcripts);
+  }
 
   Future<Project> importBundle(String zipPath,
           {required ProjectStore store, required String mediaDir}) =>

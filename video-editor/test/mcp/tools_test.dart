@@ -49,6 +49,7 @@ void main() {
         'transcribe', 'get_transcribe_status', 'cancel_transcribe',
         'get_transcript', 'find_in_transcript', 'captions_from_transcript',
         'remove_fillers', 'list_auto_cuts', 'restore_cut', 'make_short',
+        'get_guide', 'self_test',
       ]);
       for (final t in tools) {
         final name = t['name'] as String;
@@ -72,6 +73,7 @@ void main() {
         if (!const {
           'get_status', 'list_projects', 'create_project', 'get_export_status', //
           'cancel_export', 'get_transcribe_status', 'cancel_transcribe',
+          'get_guide', 'self_test',
         }
             .contains(name)) {
           expect(props.containsKey('project_id'), isTrue, reason: name);
@@ -318,24 +320,31 @@ void main() {
       final r = await c.ok('get_project', {'project_id': 'p1'});
       expect(r.text, contains('Project "Film" (project_id p1)'));
       expect(r.text, contains('Length: 19000 ms (0:19.000)'));
-      expect(r.text, contains('#0 clip_id=a video "one.mp4" timeline 0–10000, source 0–10000 of 10000, speed 1x'));
-      expect(r.text, contains('#1 clip_id=b video "two.mp4" timeline 10000–16000, source 0–6000 of 6000, speed 1x'));
-      expect(r.text, contains('#2 clip_id=c photo "photo.png" timeline 16000–19000'));
+      // 1.12: every file once in a media table, the clips name its key.
+      expect(r.text, contains('m1 = "one.mp4"  ${b.file('one.mp4')}  (used 1x)'));
+      expect(r.text, contains('#0 clip_id=a video m1 timeline 0–10000, source 0–10000 of 10000, speed 1x'));
+      expect(r.text, contains('#1 clip_id=b video m2 timeline 10000–16000, source 0–6000 of 6000, speed 1x'));
+      expect(r.text, contains('#2 clip_id=c photo m3 timeline 16000–19000'));
+      expect(b.file('one.mp4').allMatches(r.text).length, 1, reason: 'each path once');
+      final media = (r.project['media'] as Map).cast<String, dynamic>();
+      expect(media.keys, ['m1', 'm2', 'm3']);
+      expect(media['m2'], {'file': 'two.mp4', 'path': b.file('two.mp4'), 'fileMissing': false, 'uses': 1});
       expect(r.text, contains('Music / sound: none.'));
       expect(r.text, contains('Titles and captions: none.'));
       expect(r.clips.map((x) => x['index']), [0, 1, 2]);
       expect(r.clips[1], containsPair('timelineStartMs', 10000));
       expect(r.clips[1], containsPair('timelineEndMs', 16000));
-      expect(r.clips[1], containsPair('file', 'two.mp4'));
-      expect(r.clips[1], containsPair('fileMissing', false));
+      expect(r.clips[1], containsPair('media', 'm2'));
+      expect(r.clips[1].containsKey('path'), isFalse);
       expect(r.clips[2], containsPair('type', 'photo'));
     });
 
     test('a missing media file is flagged', () async {
       File(b.file('two.mp4')).deleteSync();
       final r = await c.ok('get_project', {'project_id': 'p1'});
-      expect(r.text, contains('[FILE MISSING: ${b.file('two.mp4')}]'));
-      expect(r.clips[1]['fileMissing'], isTrue);
+      expect(r.text, contains('${b.file('two.mp4')}  (used 1x)  [FILE MISSING]'));
+      expect(r.text, contains('speed 1x  [FILE MISSING]'));
+      expect(((r.project['media'] as Map)['m2'] as Map)['fileMissing'], isTrue);
     });
 
     test('trim_clip takes source times and reports limits', () async {
@@ -731,7 +740,9 @@ void main() {
       expect(r.project['titlesOmitted'], 41 - kSummaryTitles);
       expect(r.project['captionCount'], 40);
       expect(r.text, contains('… and ${41 - kSummaryTitles} more (get_project lists all of them)'));
-      final all = await c.ok('get_project', {'project_id': 'p1'});
+      final page = await c.ok('get_project', {'project_id': 'p1'});
+      expect(page.titles, hasLength(kDefaultTitlePage), reason: 'a small default page');
+      final all = await c.ok('get_project', {'project_id': 'p1', 'title_limit': 100});
       expect(all.titles, hasLength(41));
       expect(all.project['titlesOmitted'], 0);
     });
@@ -843,7 +854,7 @@ void main() {
 
     test('the summary shows the item and that it runs past the end', () async {
       final r = await c.ok('get_project', {'project_id': 'p1'});
-      expect(r.text, contains('audio_id=m "song.mp3" timeline 0–30000, source 0–30000 of 30000, volume 1'));
+      expect(r.text, contains('audio_id=m m2 timeline 0–30000, source 0–30000 of 30000, volume 1'));
       expect(r.text, contains('runs past the end of the video'));
       expect(r.audio.single, containsPair('timelineEndMs', 30000));
     });

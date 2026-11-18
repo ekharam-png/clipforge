@@ -348,6 +348,10 @@ class HelpMenuActions {
     required this.showTour,
     this.showAbout,
     this.copyVersionInfo,
+    this.checkForUpdates,
+    this.autoUpdateCheck = true,
+    this.toggleAutoUpdateCheck,
+    this.connectClaude,
   });
   final VoidCallback openHelp;
   final VoidCallback showTour;
@@ -357,6 +361,17 @@ class HelpMenuActions {
 
   /// Copies the version and device details for a bug report.
   final VoidCallback? copyVersionInfo;
+
+  /// Asks now whether a newer version exists (lib/ui/update).
+  final VoidCallback? checkForUpdates;
+
+  /// Whether the app checks for updates by itself (once a day), and the
+  /// switch for it.
+  final bool autoUpdateCheck;
+  final VoidCallback? toggleAutoUpdateCheck;
+
+  /// Opens "Connect to Claude" (computers only; null on phones).
+  final VoidCallback? connectClaude;
 }
 
 /// The one [AppMenuController] of the app.
@@ -675,6 +690,19 @@ List<PlatformMenuItem> buildAppMenus(EditorMenuActions? editor,
         PlatformMenuItem(
             label: 'Keyboard shortcuts', onSelected: x?.showShortcuts),
         PlatformMenuItem(label: 'Show the tour', onSelected: help?.showTour),
+        PlatformMenuItemGroup(members: [
+          PlatformMenuItem(
+              label: 'Connect to Claude…', onSelected: help?.connectClaude),
+        ]),
+        PlatformMenuItemGroup(members: [
+          PlatformMenuItem(
+              label: 'Check for updates…', onSelected: help?.checkForUpdates),
+          PlatformMenuItem(
+              label: (help?.autoUpdateCheck ?? true)
+                  ? 'Check for updates automatically ✓'
+                  : 'Check for updates automatically',
+              onSelected: help?.toggleAutoUpdateCheck),
+        ]),
         PlatformMenuItem(
             label: 'Copy version info', onSelected: help?.copyVersionInfo),
       ],
@@ -1118,6 +1146,18 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
                         key: const ValueKey('menu-shortcuts'),
                         onPressed: x?.showShortcuts),
                     item('Show the tour', onPressed: help?.showTour),
+                    divider,
+                    item('Connect to Claude…',
+                        key: const ValueKey('menu-connect-claude'),
+                        onPressed: help?.connectClaude),
+                    divider,
+                    item('Check for updates…',
+                        key: const ValueKey('menu-check-updates'),
+                        onPressed: help?.checkForUpdates),
+                    check('Check for updates automatically',
+                        key: const ValueKey('menu-auto-updates'),
+                        value: help?.autoUpdateCheck ?? true,
+                        onPressed: help?.toggleAutoUpdateCheck),
                     divider,
                     item('Copy version info',
                         onPressed: help?.copyVersionInfo),

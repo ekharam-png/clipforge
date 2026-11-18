@@ -4,6 +4,10 @@
 // Layout of a bundle:
 //   project.json        the project; bundled media paths are `media/<name>`
 //   media/<name>        the media files (stored, not compressed)
+//   transcripts/<key>.json   (1.12) the speech-to-text of the media, so it
+//                        does not have to be made again on the other device.
+//                        The key is a fingerprint of the media file's
+//                        content, so it still fits after unpacking.
 
 import 'dart:convert';
 import 'dart:io';
@@ -20,6 +24,9 @@ const String kBundleProjectFile = 'project.json';
 
 /// Folder of the media files inside a bundle.
 const String kBundleMediaDir = 'media';
+
+/// Folder of the transcripts inside a bundle (and inside a project folder).
+const String kBundleTranscriptsDir = 'transcripts';
 
 /// Writes [project] and the media files it uses to a .zip at [zipPath]
 /// (replacing an existing file).
@@ -46,7 +53,20 @@ Future<void> exportBundle(
   String zipPath, {
   void Function(double)? onProgress,
   void Function(List<String> skippedPaths)? onSkipped,
+  String? transcriptsDir,
 }) async {
+  // The project's transcripts ([transcriptsDir]: its `transcripts` folder).
+  final transcripts = <({String source, String entry})>[];
+  if (transcriptsDir != null && await Directory(transcriptsDir).exists()) {
+    await for (final e in Directory(transcriptsDir).list()) {
+      if (e is File && e.path.endsWith('.json')) {
+        transcripts.add((
+          source: e.path,
+          entry: '$kBundleTranscriptsDir/${p.basename(e.path)}',
+        ));
+      }
+    }
+  }
   // Give every existing media file a unique entry name.
   final entryOf = <String, String>{}; // source path -> entry name
   final taken = <String>{};
@@ -87,6 +107,7 @@ Future<void> exportBundle(
       tmpPath: tmpPath,
       jsonText: jsonText,
       files: [for (final e in entryOf.entries) (source: e.key, entry: e.value)],
+      transcripts: transcripts,
       progress: onProgress == null ? null : progress.sendPort,
     ));
     await File(tmpPath).rename(zipPath);
@@ -110,10 +131,13 @@ Future<List<String>> exportBundleReport(
   Project project,
   String zipPath, {
   void Function(double)? onProgress,
+  String? transcriptsDir,
 }) async {
   var skipped = const <String>[];
   await exportBundle(project, zipPath,
-      onProgress: onProgress, onSkipped: (paths) => skipped = paths);
+      onProgress: onProgress,
+      onSkipped: (paths) => skipped = paths,
+      transcriptsDir: transcriptsDir);
   return skipped;
 }
 
@@ -196,6 +220,19 @@ Future<Project> importBundle(
     }
     final project = Project.fromJson(json);
     await store.save(project);
+    // Transcripts that came along go into the new project's folder (their
+    // names are fingerprints of the media, which is the same here).
+    if (store is FileProjectStore && result.transcripts.isNotEmpty) {
+      try {
+        final dir = Directory(p.join(store.rootPath, id, kBundleTranscriptsDir));
+        await dir.create(recursive: true);
+        for (final e in result.transcripts.entries) {
+          await File(p.join(dir.path, e.key)).writeAsString(e.value, flush: true);
+        }
+      } catch (_) {
+        // The project is in; its speech can be transcribed again.
+      }
+    }
     return project;
   } catch (_) {
     await cleanUp();
@@ -232,6 +269,7 @@ typedef _ZipJob = ({
   String tmpPath,
   String jsonText,
   List<({String source, String entry})> files,
+  List<({String source, String entry})> transcripts,
   SendPort? progress,
 });
 
@@ -256,6 +294,14 @@ Future<void> _zip(_ZipJob job) async {
   try {
     encoder.addArchiveFile(ArchiveFile.bytes(
         kBundleProjectFile, utf8.encode(job.jsonText)));
+    for (final t in job.transcripts) {
+      try {
+        encoder.addArchiveFile(
+            ArchiveFile.bytes(t.entry, File(t.source).readAsBytesSync()));
+      } on FileSystemException {
+        // Gone since it was listed: the bundle is fine without it.
+      }
+    }
     var done = 0;
     job.progress?.send(0.0);
     for (var i = 0; i < job.files.length; i++) {
@@ -279,10 +325,16 @@ Future<void> _zip(_ZipJob job) async {
 typedef _UnzipJob = ({String zipPath, String target});
 
 class _Unzipped {
-  const _Unzipped.ok(String this.jsonText, this.extracted) : error = null;
+  const _Unzipped.ok(String this.jsonText, this.extracted,
+      [this.transcripts = const {}])
+      : error = null;
   const _Unzipped.bad(String this.error)
       : jsonText = null,
-        extracted = const {};
+        extracted = const {},
+        transcripts = const {};
+
+  /// Transcript file name (`<key>.json`) -> its text.
+  final Map<String, String> transcripts;
 
   /// What is wrong with the bundle, or null.
   final String? error;
@@ -328,6 +380,7 @@ _Unzipped _unzip(_UnzipJob job) {
     // Check every entry before writing anything.
     ArchiveFile? projectEntry;
     final media = <({ArchiveFile file, List<String> segments})>[];
+    final transcripts = <String, String>{};
     for (final file in archive.files) {
       final segments = _safeSegments(file.name);
       if (segments == null) {
@@ -344,6 +397,15 @@ _Unzipped _unzip(_UnzipJob job) {
               'Bundle entry "${file.name}" points outside the bundle');
         }
         media.add((file: file, segments: segments));
+      } else if (segments.length == 2 &&
+          segments[0] == kBundleTranscriptsDir &&
+          RegExp(r'^[A-Za-z0-9_.-]+\.json$').hasMatch(segments[1]) &&
+          file.size < 20 * 1024 * 1024) {
+        try {
+          transcripts[segments[1]] = utf8.decode(file.content);
+        } catch (_) {
+          // An unreadable transcript is simply left out.
+        }
       }
     }
     if (projectEntry == null) {
@@ -385,7 +447,7 @@ _Unzipped _unzip(_UnzipJob job) {
       }
       extracted[m.segments.join('/')] = out;
     }
-    return _Unzipped.ok(jsonText, extracted);
+    return _Unzipped.ok(jsonText, extracted, transcripts);
   } finally {
     input.closeSync();
   }

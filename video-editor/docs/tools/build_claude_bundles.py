@@ -34,7 +34,18 @@
 #   icon.png
 #   server/clipforge-mcp(.exe)
 #   server/fonts/*.ttf + the font licences
-#   server/CLAUDE.md                (the guide, for reference)
+#   server/CLAUDE.md                (a pointer to the guide in the helper)
+#
+# Since ClipForge 1.12 the extension is installed ONCE: the helper in it is
+# only the way in. When it starts it looks at the per-user folder the app
+# keeps up to date (lib/core/claude/helper_install.dart) and hands over to
+# the helper the app installed there (lib/mcp/delegate.dart), so an app
+# update reaches Claude without a new extension. The manifest therefore says
+# "tools_generated": the tool list in it is the list at build time. The
+# desktop app carries the same file as an asset (--asset assets/claude): it
+# unpacks the helper from it at start and saves it from Help > Connect to
+# Claude. The skill zip is a thin pointer to the helper's get_guide tool and
+# never needs to be uploaded again either.
 import argparse
 import json
 import os
@@ -82,6 +93,7 @@ Good to know:
 - Go back to ClipForge's project list (or close the app) before asking Claude to change a project.
 - Claude never deletes your projects, videos, photos or music.
 - Claude cannot see or hear the video. It works with lengths, times and text, and asks you to check the result in ClipForge.
+- Install this extension once. ClipForge keeps its Claude helper up to date by itself when the app is updated (ClipForge 1.12 and later).
 - Adding files, finding silences and exporting need the free program FFmpeg on this computer (Windows: `winget install ffmpeg`; Mac: `brew install ffmpeg`). Ask Claude "What is the ClipForge status?" to see whether it was found.
 
 Build: {display}
@@ -106,7 +118,7 @@ def tool_names_from_source():
     tools_speech.dart (fallback when the program cannot be run on this
     computer)."""
     names = []
-    for name in ("tools.dart", "tools_speech.dart"):
+    for name in ("tools.dart", "tools_speech.dart", "tools_selftest.dart"):
         with open(os.path.join(ROOT, "lib", "mcp", name), encoding="utf-8") as f:
             names += re.findall(r"^\s{6,10}name: '([a-z_]+)',$", f.read(), re.M)
     return [{"name": n} for n in names]
@@ -130,8 +142,11 @@ def tools_from_binary(binary):
             {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
              "params": {"name": "get_status", "arguments": {}}},
         ]
+        # The program in the bundle itself, not a helper installed on this
+        # computer (lib/mcp/delegate.dart).
+        env = dict(os.environ, CLIPFORGE_MCP_NO_HANDOVER="1")
         run = subprocess.run(
-            [binary, "--projects-dir", os.path.join(tmp, "projects")],
+            [binary, "--projects-dir", os.path.join(tmp, "projects")], env=env,
             input="".join(json.dumps(m) + "\n" for m in messages).encode("utf-8"),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
     tools, status = None, None
@@ -171,6 +186,9 @@ def make_manifest(platform, version, display, tools):
             },
         },
         "tools": tools,
+        # The helper hands over to the version the app installed, which may
+        # have more tools than this list.
+        "tools_generated": True,
         "keywords": ["video", "video editor", "clipforge", "podcast", "subtitles", "export"],
         "compatibility": {"platforms": [node_platform]},
     }
@@ -339,6 +357,11 @@ def cmd_mcpb(args):
         shutil.rmtree(stage, ignore_errors=True)
 
     check_mcpb(out, exe)
+    if args.asset:
+        # The copy the desktop app is built with (assets/claude/README.txt).
+        os.makedirs(args.asset, exist_ok=True)
+        shutil.copyfile(out, os.path.join(args.asset, "ClipForge-claude.mcpb"))
+        print("copied to " + os.path.join(args.asset, "ClipForge-claude.mcpb"))
     print("%s (%d files, %.1f MB, %d tools, %s)" % (
         out, count, os.path.getsize(out) / 1e6, len(tools),
         "tools read from the program" if status is not None else "tools read from the source"))
@@ -403,8 +426,15 @@ def read_skill(folder):
     if not description or len(description) > 1024:
         problems.append("description is required (max 1024 characters, now %d)" % len(description))
     lines = body.splitlines()
-    if len(lines) > 500:
-        problems.append("SKILL.md body is %d lines; keep it under 500" % len(lines))
+    # 1.12: the skill is a thin pointer to the guide inside the helper
+    # (the get_guide tool), so that it never has to be uploaded again.
+    if len(lines) > 60:
+        problems.append("SKILL.md body is %d lines; the skill must stay a thin pointer (under 60)" % len(lines))
+    if "get_guide" not in body:
+        problems.append("SKILL.md must tell Claude to call get_guide")
+    extra = sorted(n for n in os.listdir(folder) if n != "SKILL.md")
+    if extra:
+        problems.append("the skill folder must hold only SKILL.md (found: %s); the guide lives in claude/guide" % ", ".join(extra))
     # Every reference file the skill points at must be there.
     for ref in sorted(set(re.findall(r"\]\(([A-Za-z0-9_./-]+\.md)\)", text))):
         if not os.path.isfile(os.path.join(folder, ref)):
@@ -446,6 +476,7 @@ def main():
     m.add_argument("--fonts", help="folder with the title fonts (default: assets/fonts)")
     m.add_argument("--icon", help="a PNG icon (default: the app icon, 256 px)")
     m.add_argument("--out", default="dist", help="output folder (default: dist)")
+    m.add_argument("--asset", help="also copy the file to this folder as ClipForge-claude.mcpb (the app's assets/claude)")
     m.add_argument("--no-run", action="store_true",
                    help="do not start the program (when it was built for another system); the tool list then comes from the source")
     m.set_defaults(run=cmd_mcpb)

@@ -62,6 +62,9 @@ class ToolResult {
 class ToolCall {
   ToolCall._(this._sendProgress);
 
+  /// A call nobody listens to (a tool run by another tool).
+  ToolCall.silent() : _sendProgress = null;
+
   final void Function(double progress, double? total, String? message)?
       _sendProgress;
   final List<FutureOr<void> Function()> _onCancel = [];
@@ -229,6 +232,33 @@ class ToolDef {
   }
 }
 
+/// A fixed text the client can read (`resources/list`, `resources/read`):
+/// the sections of the guide.
+class McpResource {
+  const McpResource({
+    required this.uri,
+    required this.name,
+    required this.text,
+    this.title,
+    this.description,
+    this.mimeType = 'text/markdown',
+  });
+  final String uri;
+  final String name;
+  final String? title;
+  final String? description;
+  final String mimeType;
+  final String text;
+
+  Map<String, dynamic> toJson() => {
+        'uri': uri,
+        'name': name,
+        'title': ?title,
+        'description': ?description,
+        'mimeType': mimeType,
+      };
+}
+
 /// The protocol state machine. Tool calls run one after another in the
 /// order they arrive (they edit files); ping, cancellation and the other
 /// requests are answered at once, also while a tool is running.
@@ -239,8 +269,10 @@ class McpServer {
     required List<ToolDef> tools,
     this.title,
     this.instructions,
+    List<McpResource> resources = const [],
     void Function(String message)? log,
   })  : tools = {for (final t in tools) t.name: t},
+        resources = {for (final r in resources) r.uri: r},
         _log = log ?? ((_) {});
 
   final String name;
@@ -250,6 +282,10 @@ class McpServer {
   /// Usage notes given to the client in the initialize result.
   final String? instructions;
   final Map<String, ToolDef> tools;
+
+  /// Fixed texts offered as MCP resources (none: the capability is not
+  /// announced).
+  final Map<String, McpResource> resources;
   final void Function(String message) _log;
 
   /// Protocol revision agreed in `initialize` (null before that).
@@ -391,6 +427,24 @@ class McpServer {
         }));
       case 'tools/call':
         _callTool(id, params);
+      case 'resources/list' when resources.isNotEmpty:
+        _send(_result(id, {
+          'resources': [for (final r in resources.values) r.toJson()],
+        }));
+      case 'resources/templates/list' when resources.isNotEmpty:
+        _send(_result(id, const {'resourceTemplates': <Object>[]}));
+      case 'resources/read' when resources.isNotEmpty:
+        final r = resources[params['uri']];
+        if (r == null) {
+          // -32002: resource not found (MCP).
+          _send(_error(id, -32002, 'Resource not found: ${params['uri']}'));
+        } else {
+          _send(_result(id, {
+            'contents': [
+              {'uri': r.uri, 'mimeType': r.mimeType, 'text': r.text},
+            ],
+          }));
+        }
       default:
         _send(_error(id, kMethodNotFound, 'Method not found: $method'));
     }
@@ -412,6 +466,8 @@ class McpServer {
       'protocolVersion': agreed,
       'capabilities': {
         'tools': {'listChanged': false},
+        if (resources.isNotEmpty)
+          'resources': {'subscribe': false, 'listChanged': false},
       },
       'serverInfo': {
         'name': name,

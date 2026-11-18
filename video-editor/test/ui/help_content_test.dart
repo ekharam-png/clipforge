@@ -33,6 +33,7 @@ const kRequiredTopics = [
   'phone-and-computer', 'missing-files', 'storage', 'keyboard-shortcuts',
   'claude-control', 'mac-cant-open', 'windows-smartscreen', 'android-install',
   'crashes', 'voice-separation', 'auto-subtitles', 'assistant',
+  'updates', 'connect-claude', 'claude-self-test',
 ];
 
 /// Bold words in the help that are not labels of this app: the systems'
@@ -55,7 +56,7 @@ void main() {
 
   group('help file', () {
     test('every article parses and has what it needs', () {
-      expect(library.articles.length, inInclusiveRange(25, 60));
+      expect(library.articles.length, inInclusiveRange(25, 64));
       for (final a in library.articles) {
         expect(a.title, isNotEmpty, reason: a.id);
         expect(a.keywords, isNotEmpty, reason: a.id);

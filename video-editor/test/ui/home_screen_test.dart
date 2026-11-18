@@ -96,6 +96,25 @@ void main() {
     expect(find.text('Holiday'), findsOneWidget);
   });
 
+  testWidgets('renaming to a name another project has gives it (2), and says so',
+      (tester) async {
+    useScreen(tester, phone);
+    final fakes = Fakes(projects: someProjects());
+    await tester.pumpWidget(fakes.app(const HomeScreen()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Project options').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'garden');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(fakes.store.projects['p1']!.name, 'garden (2)');
+    expect(fakes.store.projects['p3']!.name, 'Garden');
+    expect(find.textContaining('so this one is now "garden (2)"'), findsOneWidget);
+  });
+
   for (final (label, size) in [('phone', phone), ('desktop', desktop)]) {
     testWidgets('duplicate and share a project file on a $label screen',
         (tester) async {

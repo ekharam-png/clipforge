@@ -21,6 +21,10 @@
         android:maxSdkVersion="32" />
     <!-- Free music search (Openverse): streaming a preview and downloading. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Updates from inside the app (1.12): the downloaded, checked APK is
+         handed to Android's own installer, which asks the user to confirm
+         (and, the first time, to allow installs from ClipForge). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING" />
@@ -56,6 +60,17 @@
             android:name=".ExportService"
             android:exported="false"
             android:foregroundServiceType="dataSync|mediaProcessing" />
+        <!-- Lets the system installer read the downloaded update APK
+             (only the app's cache/updates folder, see res/xml/update_paths.xml). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -71,6 +86,11 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- "What's new" / "Open the download page": a web browser. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

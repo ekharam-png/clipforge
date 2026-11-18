@@ -13,6 +13,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
+import 'package:clipforge/core/claude/helper_install.dart';
 import 'package:clipforge/mcp/mcp_protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -34,7 +36,9 @@ class ServerProcess {
   static Future<ServerProcess> start(List<String> command, List<String> args,
       {String? workingDirectory, Map<String, String>? environment}) async {
     final process = await Process.start(command.first, [...command.skip(1), ...args],
-        workingDirectory: workingDirectory, environment: environment);
+        workingDirectory: workingDirectory,
+        // Always the program under test, not a helper installed on this computer.
+        environment: {'CLIPFORGE_MCP_NO_HANDOVER': '1', ...?environment});
     final s = ServerProcess._(process);
     process.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
       s.stdoutLines.add(line);
@@ -70,6 +74,7 @@ class ServerProcess {
   static const _noDetail = {
     'get_status', 'list_projects', 'get_project', 'export_srt', 'export_video', //
     'get_export_status', 'cancel_export', 'list_sound_tracks',
+    'get_guide', 'self_test',
   };
 
   Future<Reply> call(String tool, [Map<String, dynamic> arguments = const {}, Object? progressToken]) async {
@@ -164,8 +169,10 @@ void main() {
     } catch (_) {}
   });
 
-  Future<ServerProcess> start(String projects, {List<String> extra = const [], Map<String, String>? env}) =>
-      ServerProcess.start(command, ['--projects-dir', projects, ...extra], workingDirectory: workDir, environment: env);
+  Future<ServerProcess> start(String projects,
+          {List<String> extra = const [], Map<String, String>? env, String? exe}) =>
+      ServerProcess.start(exe == null ? command : [exe], ['--projects-dir', projects, ...extra],
+          workingDirectory: workDir, environment: env);
 
   test('the single-file executable was built', () {
     expect(compiled, isTrue, reason: 'bin/build_mcp.dart must produce the executable that is shipped');
@@ -192,18 +199,104 @@ void main() {
     expect(bad.stderr as String, contains('Unknown option: --nope'));
   }, skip: dart == null ? 'no dart executable found' : false, timeout: const Timeout(Duration(minutes: 2)));
 
+  test('an app update reaches Claude: the copy Claude starts hands over to the installed helper', () async {
+    // What the app does at start: unpack the helper from the extension
+    // file into the per-user folder (here: a temporary XDG_DATA_HOME).
+    if (!compiled) return; // needs the single-file program
+    final exe = command.first;
+    final data = p.join(tmp.path, 'handover-data');
+    final bundle = Archive()
+      ..addFile(ArchiveFile.bytes('server/clipforge-mcp', File(exe).readAsBytesSync()))
+      ..addFile(ArchiveFile.bytes('manifest.json', utf8.encode('{}')));
+    for (final name in ['DejaVuSans.ttf', 'DejaVuSans-Bold.ttf']) {
+      bundle.addFile(ArchiveFile.bytes(
+          'server/fonts/$name', File(p.join(root, 'assets', 'fonts', name)).readAsBytesSync()));
+    }
+    final stable = claudeStableDir('linux', {'XDG_DATA_HOME': data})!;
+    final installed = await installClaudeHelper(
+        stableDir: stable,
+        bundleBytes: ZipEncoder().encode(bundle),
+        version: '1.12.0',
+        build: 1,
+        os: 'linux');
+    // Claude was pointed, once, at the copy inside its extension...
+    final projects = p.join(tmp.path, 'ho', 'ClipForge', 'projects');
+    final env = {'XDG_DATA_HOME': data, 'CLIPFORGE_MCP_NO_HANDOVER': ''};
+    for (final started in [exe, installed.launcherPath]) {
+      final s = await start(projects, env: env, exe: started);
+      await s.initialize();
+      final status = await s.ok('get_status');
+      final helper = (status.data['helper'] as Map).cast<String, dynamic>();
+      // ...and what answers is the helper the app installed.
+      expect(helper['program'], installed.currentPath, reason: 'started $started');
+      expect(helper['startedThrough'], started);
+      expect(helper['isCurrent'], isTrue);
+      expect(status.data['fontsDir'], p.join(p.dirname(installed.currentPath), 'fonts'));
+      expect(status.text, contains('started through $started'));
+      // The tools work through the hand-over (stdin / stdout are passed on).
+      expect((await s.ok('create_project', {'name': 'Through'})).project['name'], isNotNull);
+      expect(await s.close(), 0, reason: 'closing the input ends both programs');
+    }
+    // With the hand-over switched off the started copy answers itself.
+    final own = await start(projects, env: {'XDG_DATA_HOME': data});
+    await own.initialize();
+    final helper = ((await own.ok('get_status')).data['helper'] as Map);
+    expect(helper['program'], exe);
+    expect(helper['startedThrough'], isNull);
+    expect(helper['isCurrent'], isFalse);
+    await own.close();
+  }, skip: Platform.isLinux ? false : 'uses the Linux folder layout');
+
+  test('the guide (tool and resources) and the self-test, through the real program', () async {
+    final projects = p.join(tmp.path, 'st', 'ClipForge', 'projects');
+    final s = await start(projects);
+    await s.initialize();
+    final guide = await s.ok('get_guide');
+    expect(guide.text, contains('The workflow, every time'));
+    final listed = (((await s.request('resources/list'))['result'] as Map)['resources'] as List)
+        .map((r) => (r as Map)['uri']);
+    expect(listed, [
+      'clipforge://guide/start', 'clipforge://guide/recipes', //
+      'clipforge://guide/tools', 'clipforge://guide/troubleshooting',
+    ]);
+    final read = await s.request('resources/read', {'uri': 'clipforge://guide/tools'});
+    expect((((read['result'] as Map)['contents'] as List).single as Map)['text'],
+        contains('`self_test`'));
+    expect((await s.request('resources/read', {'uri': 'clipforge://nope'}))['error'], isNotNull);
+
+    // The self-test: real handlers, its own media, a temporary folder, the
+    // export in a separate worker process. The user's folder stays empty.
+    final r = await s.call('self_test', const {}, 'st');
+    expect(r.isError, isFalse, reason: r.text);
+    expect(r.text, startsWith('ClipForge self-test: PASS'), reason: r.text);
+    final checks = (r.data['checks'] as List).cast<Map>();
+    expect(checks.where((c) => c['result'] == 'FAIL'), isEmpty);
+    expect(checks.map((c) => c['name']), containsAll([
+      'Titles (Latin, Cyrillic, Hebrew)', 'Export as a background job', //
+      'Refuses while open in the app', 'Undo / redo', 'Clean up',
+    ]));
+    expect(
+        checks.firstWhere((c) => c['name'] == 'Export as a background job')['note'],
+        contains('a separate process'));
+    expect((r.data['seconds'] as num) < 70, isTrue, reason: 'about a minute at most');
+    expect(Directory(projects).existsSync() && Directory(projects).listSync().isNotEmpty,
+        isFalse, reason: 'the user\'s projects folder was not touched');
+    expect(await s.close(), 0);
+  }, skip: skipWithoutFfmpeg, timeout: const Timeout(Duration(minutes: 4)));
+
   test('handshake, tool list and status; stdout carries only protocol messages', () async {
     final projects = p.join(tmp.path, 'hs', 'ClipForge', 'projects');
     final s = await start(projects);
     final init = await s.initialize();
     expect(init['protocolVersion'], '2025-11-25');
     expect(init['serverInfo'], containsPair('name', 'clipforge'));
-    expect((init['capabilities'] as Map).keys, ['tools']);
+    expect((init['capabilities'] as Map).keys, ['tools', 'resources']);
+    expect(init['instructions'], contains('get_guide'));
     expect(init['instructions'], contains('CLOSED in the ClipForge app'));
 
     expect((await s.request('ping'))['result'], isEmpty);
     final tools = (((await s.request('tools/list'))['result'] as Map)['tools'] as List).cast<Map>();
-    expect(tools.length, 57);
+    expect(tools.length, 59);
     expect(tools.map((t) => t['name']), containsAll(['get_status', 'add_media', 'remove_silences', 'export_video']));
 
     final status = await s.ok('get_status');

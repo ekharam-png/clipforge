@@ -55,6 +55,14 @@ abstract class SpeechService {
   /// Frees a pack's space.
   Future<void> removePack(SpeechModel model);
 
+  /// True when [model] was downloaded but failed its check (the file is
+  /// kept aside, unused).
+  bool packCheckFailed(SpeechModel model);
+
+  /// "Use it anyway": accepts such a download as the pack. False when
+  /// there is none.
+  Future<bool> usePackAnyway(SpeechModel model);
+
   /// "A model file I already have" (null: forget it).
   Future<void> useModelFile(String? path);
 
@@ -169,6 +177,14 @@ class DesktopSpeechService implements SpeechService {
   Future<void> removePack(SpeechModel model) async {
     (await _ready()).models.remove(model);
   }
+
+  @override
+  bool packCheckFailed(SpeechModel model) =>
+      _service?.models.unverifiedOf(model).existsSync() ?? false;
+
+  @override
+  Future<bool> usePackAnyway(SpeechModel model) async =>
+      (await _ready()).models.acceptUnverified(model);
 
   @override
   SpeechTask<Transcript> transcribe(String projectId, SpeechSource source,

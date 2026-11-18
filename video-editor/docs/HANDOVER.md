@@ -2,8 +2,8 @@
 
 Read this first in a new session. It records what was built, why, how it fits
 together, how to build and test it, and what is still open. Last updated
-18 November 2026 (1.11.0: speech to text, captions from speech, gentle
-filler removal, shorts for Claude; computers only).
+18 November 2026 (1.12.0: the app updates itself, the Claude helper follows
+the app, get_guide and self_test; before that 1.11.0: speech to text).
 
 ## What ClipForge is
 
@@ -62,7 +62,9 @@ shared with a few friends later.
 - `claude/CLAUDE.md` (guide for Claude Code), `claude/skill/clipforge-editing/`
   (the skill), `docs/tools/build_claude_bundles.py` (.mcpb extension and
   skill zip), `docs/claude-setup.html` (owner's setup guide).
-- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1516 tests (1.11.0; 1393 at 1.10.0).
+- `lib/core/update`, `lib/ui/update`, `lib/core/claude`, `lib/ui/claude`,
+  `assets/update`, `tool/ci` — 1.12 self-update and the Claude helper folder.
+- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1611 tests (1.12.0; 1516 at 1.11.0).
   `integration_test/real_app_test.dart` — drives the real app on Linux.
 
 ## What was built, and why
@@ -1458,7 +1460,155 @@ eye; Claude using the tools in a real session; the Windows worker process
 for transcribe jobs (same caveat as export jobs: Claude Code ending the
 process tree ends the job).
 
+## Self-update, Claude helper that follows the app, self-test (1.12.0, 18 Nov 2026)
+
+Owner: friends download from the page in `site/`; every update meant a new
+download, a new Claude extension and a new skill upload. 1.12 makes all
+three "once".
+
+### Where the code is
+- `lib/core/update/update_info.dart` (latest.json, newer / skip / once a
+  day), `update_download.dart` (resume, size + SHA-256, a failed file is
+  deleted), `update_install.dart` (where the app is, unpack next to it,
+  start the swap script, result file). Pure Dart.
+- `assets/update/clipforge-update.ps1` (Windows) and `.sh` (macOS): the
+  swap scripts, shipped as assets and written to the app's support folder
+  before use.
+- `lib/ui/update/update_controller.dart` (`UpdatePlatform` = what differs
+  per system; `UpdateController`), `update_ui.dart` (banner, Update window,
+  "Check for updates").
+- `lib/core/claude/helper_install.dart` (the per-user helper folder),
+  `lib/mcp/delegate.dart` (hand-over), `lib/ui/claude/claude_helper.dart`,
+  `connect_claude.dart` (Help > Connect to Claude…).
+- `claude/guide/*.md` -> `tool/gen_guide.dart` -> `lib/mcp/guide_content.dart`
+  (generated, checked in); `lib/mcp/tools_selftest.dart` (get_guide,
+  self_test; a `part` of tools.dart).
+- `tool/ci/`: `make_latest_json.py`, `windows_swap_test.py`,
+  `job_survives_test.py`, `mcp_client.py`.
+- Android: `MainActivity.kt` channel `clipforge/update` (openUrl,
+  installApk, is64Bit), manifest `REQUEST_INSTALL_PACKAGES`, FileProvider
+  `${applicationId}.updates` (`res/xml/update_paths.xml`: cache/updates only).
+
+### Decisions
+- **latest.json** keeps `version`, `build`, `date`, `notes_url` and gains
+  `platforms.{windows,macos,android,android32}.{url,size,sha256}`. The url
+  is the fixed-name file of THAT release (`releases/download/<tag>/…`), not
+  `latest/…`, so size and hash always belong to the file. The release job
+  also checks that latest.json carries the hashes of the files it uploads.
+  The app accepts https addresses only and never keeps a file that failed
+  the check. A latest.json without `platforms` (1.11 and older releases)
+  only offers the download page.
+- **The check**: once per run on the project list, at most every 24 h
+  (`updateLastCheck` in settings.json), not when `updateCheckOff`, and
+  **never for builds made on someone's own computer** (`BuildInfo.isCi`
+  false: their build number is 1, so every release would look newer).
+  Errors are silent; "Check for updates…" reports them. "Later" = this run;
+  "Skip this version" = `updateSkipBuild`, shown again by a manual check or
+  a newer build. No URL-launcher plugin was added: pages open through
+  `rundll32 url.dll` / `open` / `xdg-open` / an Android intent.
+- **Windows swap**: unpack to `<install>.update-new` (Dart, in an isolate),
+  "Restart ClipForge" starts PowerShell detached (`-ExecutionPolicy Bypass
+  -WindowStyle Hidden -File …`, working folder = the app's support folder,
+  never the install folder) and quits. The script waits for the app's pid
+  (60 s), `Directory.Move` install -> `.update-old` (30 tries: a rename of a
+  folder is all or nothing, so a locked file means nothing changed), new ->
+  install (on failure old is moved back), writes `update-result.json`
+  (`updated` / `failed` / `broken`), starts the app, deletes `.update-old`.
+  The app reads the result once on the next start and tidies leftovers.
+  Not writable (Program Files) or unknown place -> the download page, nothing
+  downloaded. Exit codes 0/2/3/4/5 are the same in both scripts.
+- **macOS**: the same swap with `ClipForge.app` (`ditto -x -k` to unpack,
+  `/bin/sh` script, `open -n`). Reasoning: a zip the app itself downloaded
+  is not quarantined, so the swapped app should open without a Gatekeeper
+  prompt; `mv` keeps the ad-hoc signature. When the bundle path contains
+  `/AppTranslocation/` (opened straight from Downloads) or its folder is
+  not writable, nothing is replaced: the new app is unpacked into
+  `~/Downloads/ClipForge <version>/` and shown in Finder with one sentence.
+- **Android**: the APK goes to `<cache>/updates/`, is checked, then
+  `ACTION_VIEW` with a FileProvider uri; Android's own dialogs do the rest
+  (the "allow from this source" prompt is explained before it appears).
+  32-bit devices get `android32`.
+- **Claude helper**: built BEFORE the app in CI, packed into the .mcpb,
+  and the .mcpb is an app asset (`assets/claude/ClipForge-claude.mcpb`,
+  not in git). The app unpacks `server/` from it into
+  `%LOCALAPPDATA%\ClipForge\claude` / `~/Library/Application Support/
+  ClipForge/claude` (`versions/<version>-b<build>-<hash8>/`), switches
+  `current.json`, and refreshes the stable-path copy by rename-then-copy
+  (Windows lets a running .exe be renamed, not overwritten); failure there
+  does not matter. **The .mcpb still carries a full helper** rather than a
+  manifest that points at the stable path: the MCPB variables
+  (`${HOME}`, `${user_config.*}`) could not be re-read here (github.com
+  docs were not fetched in this round), `entry_point` must exist in the
+  bundle, and %LOCALAPPDATA% is not always `${HOME}\AppData\Local`. Any
+  copy that is started (extension, stable path) reads `current.json` and
+  starts the installed version when its build is >= its own
+  (`ProcessStartMode.inheritStdio`, exit code passed on); `--version`,
+  workers and `dart run` never hand over; `CLIPFORGE_MCP_NO_HANDOVER=1`
+  switches it off (all tests and CI checks set it). The manifest says
+  `tools_generated: true`. The previous version's folder is kept one update
+  longer (Claude may still run it and needs its fonts); older ones are
+  removed program-first so a folder in use stays whole.
+  **clipforge-mcp.exe is no longer next to clipforge.exe** (a helper
+  running from the install folder would block the folder swap); the Mac zip
+  has no `ClipForge-Claude` folder any more. Owners who connected Claude
+  before 1.12 must connect once more (setup page says so).
+- **Guide**: `get_guide` (start / recipes / tools / troubleshooting), also
+  as MCP resources `clipforge://guide/<section>` (the server gained
+  `resources/list` / `read`; prompts were not added). Server instructions
+  start with "call get_guide first". Skill and `claude/CLAUDE.md` are thin
+  pointers; `claude_guides_test` checks generated == Markdown, every tool
+  is in the bundled tools section, no unknown tool names, thin skill.
+- **self_test**: a second `ClipForgeTools` on a temp folder with the same
+  media tools and the SAME export launcher (so the worker process is
+  tested), in-process speech with the real packs. 15 rows; about 2-6 s
+  here. `keep_files` leaves the folder.
+- **Windows worker** (`startWorkerProcess` in export_jobs.dart): started by
+  a short-lived `powershell.exe … Start-Process -WindowStyle Hidden
+  -PassThru` (values through CF_WORKER_* environment variables, no
+  quoting), so its parent is gone and `taskkill /T` on the server does not
+  reach it; falls back to the old child process. WMI was rejected (drops
+  the environment). Does NOT help against a job object without breakaway.
+- get_project default page is 30 clips / 30 titles (was 60); `media` table
+  only in get_project (edit answers with detail "full" are unchanged).
+
+### Verified here (Linux container, FFmpeg 6.1.1) / not verified
+Verified: `flutter analyze` clean; `flutter test` 1611 passed; Linux e2e
+passed with a new step 0 (the banner on the real project list; the real app
+unpacked the helper from its asset into a per-user folder and the stable
+path answered); `flutter build linux --release`; `flutter build apk --debug`
+(manifest shows the permission and the provider); the built helper's
+self_test through the app-installed stable path: 14 PASS, 1 skipped (no
+speech engine), hand-over visible in get_status; `tool/ci/
+job_survives_test.py` on Linux (process group killed, 150 s export
+finished); the sh swap script in every branch (pretend folders, a failing
+`mv`); downloads against a local server (resume, bad hash, bad size).
+**Not verified, first real run is the next workflow / the owner's devices:**
+- Windows: the PowerShell swap script (never executed anywhere yet;
+  `windows_swap_test.py` in the Windows job is its first run), execution
+  policy set by group policy, antivirus reaction to a detached PowerShell,
+  whether a window flashes, Explorer holding the folder; the PowerShell
+  worker start and whether Claude Code really uses a plain tree kill;
+  `rundll32` opening the page; `choco install ffmpeg` on the runner.
+- macOS: everything (ditto, quarantine assumption, Gatekeeper after the
+  swap, translocation detection, `open -n` relaunch, /Applications
+  permission, the helper started from Application Support without a
+  quarantine prompt, Intel Macs have no helper).
+- Android: the installer hand-off, the FileProvider grant on Samsung, the
+  "unknown sources" flow, that the release-signed APK installs over itself.
+- The real latest.json and release assets (URL redirects, Range support on
+  GitHub's download host), the release job's new lines, the new CI steps.
+- Claude Desktop: that the .mcpb with `tools_generated` installs, that the
+  bundled copy handing over works inside Claude's extension sandbox, that
+  Claude reads the instructions and calls get_guide; MCP resources in a
+  real client.
+- The release app could not be started under xvfb here (the debug build in
+  the e2e can); filler preview and "Use it anyway" by eye / ear.
+
 ## One-click Claude install, the skill, test documents (17 Nov 2026, no app change)
+
+(1.12 changed this: the extension is installed once and hands over to the
+helper the app installs, the skill is a thin pointer, the guide is in
+`claude/guide`; see the 1.12 section above.)
 
 The owner had to hand-edit `claude_desktop_config.json` (Claude Desktop from
 the Microsoft Store) to add `clipforge-mcp.exe` and found it painful. Added,
@@ -1777,12 +1927,17 @@ tester, and must say exactly which build they ran).
    watch" tags), 4-phone = the Android phone through Phone Link (42 steps).
    For Claude itself: `docs/testing/claude-control-test-3.md` (paste into a
    chat).
+   Since 1.12 a release is what running apps update to: push the tag
+   `v<version>` only when the build is good; the release job writes
+   latest.json with the files' sizes and SHA-256. After changing
+   `claude/guide/*.md` run `dart run tool/gen_guide.dart`. Keep the
+   fixed-name assets and the latest.json fields: old apps read them.
 5. The run's artifacts now also include the Claude Desktop extension
    (`…-claude-windows.mcpb`, `…-claude-macos.mcpb`) and
    `ClipForge-<version>-claude-skill.zip`; the owner's guide is
    `docs/claude-setup.html`.
 
-History so far: 1.11 speech to text on computers (transcribe, captions from speech, gentle filler removal with put back, Transcript column, shorts for Claude, right-to-left text), unique project names, app lock fix; 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
+History so far: 1.12 self-update (banner, Windows / Mac swap, Android installer), Claude helper installed by the app + hand-over, Connect to Claude page, get_guide, self_test, Windows jobs survive Claude Code, old -> new answers, media table; 1.11 speech to text on computers (transcribe, captions from speech, gentle filler removal with put back, Transcript column, shorts for Claude, right-to-left text), unique project names, app lock fix; 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
 Claude control; 1.3 Voice focus, quit crash fix, drag and drop, graphics
 card; 1.4 help and tour, Windows menu bar, instant sound, History, long
 videos, version numbers.
@@ -1811,8 +1966,11 @@ Not verified:
 ## Not built yet
 
 - Speech to text on phones, a speech engine built into the app (1.11 uses a
-  program installed on the computer), transcripts inside project bundles,
-  previewing a filler cut before applying it.
+  program installed on the computer). (Transcripts inside project bundles
+  and previewing a filler cut: built in 1.12.)
+- Signed / notarized builds and an installer; a signature on latest.json
+  (today: https + SHA-256 from the same release page); update for the
+  Linux build; MCP prompts.
 - Searchable music library — built in 1.8 (Openverse); Jamendo direct needs a client_id.
 - Voiceover recording — no microphone in the build container.
 - Saved (user-made) title styles and intro / outro templates (one-tap filters and built-in title styles exist since 1.7).
@@ -1848,7 +2006,7 @@ building** until they report results. Read the checklist marks first.
 export PATH=/opt/sdk/flutter/bin:$PATH ANDROID_HOME=/opt/sdk/android
 cd video-editor
 flutter analyze
-flutter test                                   # all tests (1516)
+flutter test                                   # all tests (1611)
 flutter build apk --release --split-per-abi --target-platform android-arm64
 dart run bin/build_mcp.dart -o build/clipforge-mcp
 # real app on Linux:

@@ -3,10 +3,14 @@ import 'package:material_ui/material_ui.dart';
 
 import 'about.dart';
 import 'app_menu.dart';
+import 'claude/claude_helper.dart';
+import 'claude/connect_claude.dart';
 import 'help/help_screen.dart';
 import 'help/tour.dart';
 import 'home/home_screen.dart';
 import 'theme.dart';
+import 'update/update_controller.dart';
+import 'update/update_ui.dart';
 
 /// The app's navigator, for the menu bar (which sits above it).
 final GlobalKey<NavigatorState> appNavigatorKey =
@@ -18,6 +22,13 @@ class ClipForgeApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tour = ref.watch(tourControllerProvider);
+    final updates = ref.watch(updateControllerProvider);
+    final claude = ref.watch(claudeHelperProvider);
+    void withNavigator(void Function(BuildContext context) action) {
+      final navigator = appNavigatorKey.currentState;
+      if (navigator != null) action(navigator.context);
+    }
+
     return MaterialApp(
       title: 'ClipForge',
       debugShowCheckedModeBanner: false,
@@ -27,8 +38,20 @@ class ClipForgeApp extends ConsumerWidget {
       // The app's menu bar: macOS in the system's bar; Windows and Linux
       // along the top of the window (File, Edit, Playback, Help).
       // Everywhere: the guided tour draws over every screen.
-      builder: (context, child) => AppMenuBar(
+      // The Help menu shows whether the automatic update check is on.
+      builder: (context, child) => ListenableBuilder(
+        listenable: updates,
+        child: TourOverlayHost(child: child!),
+        builder: (context, child) => AppMenuBar(
         help: HelpMenuActions(
+          checkForUpdates: () => withNavigator(checkForUpdatesNow),
+          autoUpdateCheck: updates.autoCheck,
+          toggleAutoUpdateCheck: () => updates.setAutoCheck(!updates.autoCheck),
+          connectClaude: claude.supported
+              ? () => withNavigator((c) {
+                    openConnectClaude(c);
+                  })
+              : null,
           openHelp: () {
             final navigator = appNavigatorKey.currentState;
             if (navigator != null) openHelp(navigator.context);
@@ -43,7 +66,8 @@ class ClipForgeApp extends ConsumerWidget {
             if (navigator != null) copyVersionInfo(navigator.context);
           },
         ),
-        child: TourOverlayHost(child: child!),
+        child: child!,
+      ),
       ),
     );
   }

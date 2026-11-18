@@ -13,6 +13,19 @@
 # and the check job uploads the skill ClipForge-<version>-claude-skill.zip
 # (claude/skill/clipforge-editing).
 #
+# Since 1.12 the Claude helper travels INSIDE the desktop apps: clipforge-mcp
+# and the .mcpb are built BEFORE `flutter build`, and the .mcpb is put into
+# assets/claude/ so that the build packs it into the app. The app installs
+# the helper from it into a per-user folder on every start and saves the
+# extension file from Help > Connect to Claude (assets/claude/README.txt).
+#
+# Updates from inside the app (1.12): the release job writes latest.json
+# with, per system, the address, size and SHA-256 of the fixed-name file
+# (tool/ci/make_latest_json.py). The Windows job runs the update script
+# with a pretend app folder (tool/ci/windows_swap_test.py) and checks that
+# an export survives the helper's process tree being killed
+# (tool/ci/job_survives_test.py).
+#
 # Version numbers (lib/core/build_info.dart): the version comes from
 # pubspec.yaml, the build number is this workflow's run number, and the
 # "check" job records the build time (UTC) and commit once for the whole
@@ -30,7 +43,7 @@
 # Android, Windows and macOS and the "release" job publishes them as a
 # GitHub Release, with fixed-name copies (ClipForge-windows.zip, ...) so
 # releases/latest/download/<name> always gives the newest version, and
-# latest.json for the app's future "Update" button.
+# latest.json for the app's update check (Help > Check for updates).
 name: ClipForge builds
 
 on:
@@ -105,6 +118,8 @@ jobs:
       - run: flutter pub get
       # Errors fail the build; lint infos and warnings are only reported.
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      # The guide compiled into the Claude helper must match claude/guide/*.md.
+      - run: dart run tool/gen_guide.dart --check
       - run: flutter test
       # Compile smoke test of the Claude control server (test/mcp/e2e_test.dart
       # above already drives a full editing session through it): the
@@ -128,6 +143,19 @@ jobs:
             | build/mcp/clipforge-mcp --projects-dir "$RUNNER_TEMP/projects")"
           grep -q '"protocolVersion":"2025-11-25"' <<<"$reply"
           grep -q '"name":"export_video"' <<<"$reply"
+          grep -q '"name":"get_guide"' <<<"$reply"
+      # The built helper checks itself (its own sample media, a temporary
+      # folder), and an export must outlive the helper's process group.
+      - name: Self-test and export-survives check with the built clipforge-mcp
+        run: |
+          cp -r assets/fonts build/mcp/fonts
+          reply="$(printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"self_test","arguments":{}}}' \
+            | CLIPFORGE_MCP_NO_HANDOVER=1 build/mcp/clipforge-mcp --projects-dir "$RUNNER_TEMP/selftest-projects")"
+          python3 -c 'import json,sys; [print(json.loads(l)["result"]["content"][0]["text"]) for l in sys.stdin if l.strip() and json.loads(l).get("id") == 2]' <<<"$reply"
+          grep -q 'ClipForge self-test: PASS' <<<"$reply" || { echo "::error::self_test did not pass"; exit 1; }
+          python3 tool/ci/job_survives_test.py build/mcp/clipforge-mcp
       # The skill that teaches Claude how to edit with ClipForge
       # (Claude > Customize > Skills > Upload a skill). The zip holds the
       # folder clipforge-editing/, as the upload expects. The extension is
@@ -271,9 +299,6 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - run: flutter pub get
-      # FFmpeg comes with the ffmpeg_kit_flutter_new plugin: its DLLs and their
-      # licence notices are downloaded and placed next to clipforge.exe by the
-      # build, so no separate ffmpeg.exe is needed.
       # The build time, commit and channel for the app's About box
       # (--dart-define-from-file), and the release notes for this version
       # (its section of CHANGELOG.md) for the download.
@@ -293,59 +318,97 @@ jobs:
           cat "dist/$CF_NAME-release-notes.txt"
           grep -q "^## $CF_VERSION" "dist/$CF_NAME-release-notes.txt" || {
             echo "::error::CHANGELOG.md has no section for $CF_VERSION"; exit 1; }
-      # File and product version of clipforge.exe: 1.4.0.<run number>.
-      - run: >-
-          flutter build windows --release
-          --build-name=${{ env.CF_VERSION }} --build-number=${{ needs.check.outputs.build }}
-          --dart-define-from-file=build/clipforge_build.json
-      # The Claude control server goes next to clipforge.exe. It finds the
-      # title fonts in the app's own data\flutter_assets\assets\fonts folder,
-      # so nothing else has to be copied. Unlike the app it needs a separately
-      # installed ffmpeg.exe / ffprobe.exe on the user's PC (README).
+      # The Claude helper is built FIRST (1.12): it goes into the app as part
+      # of the extension file (assets/claude), not next to clipforge.exe any
+      # more - a program running from the install folder would block the
+      # app's own update. Unlike the app it needs a separately installed
+      # ffmpeg.exe / ffprobe.exe on the user's PC (README).
       # The build script is run from a copy outside the package so that Dart
       # does not run the Flutter plugins' build hooks for it.
       - name: Build clipforge-mcp.exe and check that it answers
         shell: pwsh
         run: |
-          $release = "build\windows\x64\runner\Release"
+          $env:CLIPFORGE_MCP_NO_HANDOVER = "1"
+          New-Item -ItemType Directory -Force build\mcp | Out-Null
           Copy-Item bin\build_mcp.dart "$env:RUNNER_TEMP\build_mcp.dart"
-          dart "$env:RUNNER_TEMP\build_mcp.dart" -o "$release\clipforge-mcp.exe" `
+          dart "$env:RUNNER_TEMP\build_mcp.dart" -o "build\mcp\clipforge-mcp.exe" `
             "--build-name=$env:CF_VERSION" "--build-number=${{ needs.check.outputs.build }}" `
             "--dart-define-from-file=build\clipforge_build.json"
           if ($LASTEXITCODE -ne 0) { throw "building clipforge-mcp.exe failed" }
-          $version = (& "$release\clipforge-mcp.exe" --version) -join "`n"
+          $version = (& "build\mcp\clipforge-mcp.exe" --version) -join "`n"
           Write-Host $version
           if (-not $version.Contains("$env:CF_VERSION (build ${{ needs.check.outputs.build }})")) { throw "clipforge-mcp.exe reports the wrong version" }
-          foreach ($font in "DejaVuSans.ttf", "DejaVuSans-Bold.ttf") {
-            if (-not (Test-Path "$release\data\flutter_assets\assets\fonts\$font")) {
-              throw "$font is missing from the app bundle; clipforge-mcp.exe needs it for titles"
-            }
-          }
           $messages = @(
             '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}',
             '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_status","arguments":{}}}'
           )
-          $reply = ($messages | & "$release\clipforge-mcp.exe" --projects-dir "$env:RUNNER_TEMP\projects") -join "`n"
+          $reply = ($messages | & "build\mcp\clipforge-mcp.exe" --projects-dir "$env:RUNNER_TEMP\projects" --fonts-dir assets\fonts) -join "`n"
           if ($LASTEXITCODE -ne 0) { throw "clipforge-mcp.exe exited with $LASTEXITCODE" }
           Write-Host $reply
           if ($reply -notmatch '"protocolVersion":"2025-11-25"') { throw "no MCP handshake from clipforge-mcp.exe" }
           if ($reply -notmatch '"fontsDir":"[^"]') { throw "clipforge-mcp.exe did not find the title fonts" }
-          # Guide that tells Claude how to work with ClipForge (README, Claude control).
-          Copy-Item claude\CLAUDE.md "$release\CLAUDE.md"
-          Copy-Item docs\claude-setup.html "$release\Connect Claude to ClipForge.html"
       # One-click install for Claude Desktop: a .mcpb file (a zip with
       # manifest.json, clipforge-mcp.exe and the title fonts in server\fonts).
       # The script starts the program from the assembled bundle and fails
       # when it does not find the bundle's fonts or lists other tools than
-      # lib/mcp/tools.dart.
+      # lib/mcp/tools.dart. --asset puts a copy into assets\claude, from
+      # where the app build below packs it into the app.
       - name: Build the Claude Desktop extension (.mcpb)
         shell: pwsh
         run: |
           python docs\tools\build_claude_bundles.py mcpb `
-            --binary "build\windows\x64\runner\Release\clipforge-mcp.exe" --platform windows `
+            --binary "build\mcp\clipforge-mcp.exe" --platform windows `
             --version "$env:CF_VERSION" --build ${{ needs.check.outputs.build }} `
-            --display "$env:CF_DISPLAY" --out dist
+            --display "$env:CF_DISPLAY" --out dist --asset assets\claude
           if ($LASTEXITCODE -ne 0) { throw "building the .mcpb failed" }
+      # FFmpeg comes with the ffmpeg_kit_flutter_new plugin: its DLLs and their
+      # licence notices are downloaded and placed next to clipforge.exe by the
+      # build, so no separate ffmpeg.exe is needed.
+      # File and product version of clipforge.exe: 1.4.0.<run number>.
+      - run: >-
+          flutter build windows --release
+          --build-name=${{ env.CF_VERSION }} --build-number=${{ needs.check.outputs.build }}
+          --dart-define-from-file=build/clipforge_build.json
+      - name: Check what the app carries
+        shell: pwsh
+        run: |
+          $release = "build\windows\x64\runner\Release"
+          $assets = "$release\data\flutter_assets\assets"
+          foreach ($file in "fonts\DejaVuSans.ttf", "fonts\DejaVuSans-Bold.ttf",
+                            "claude\ClipForge-claude.mcpb", "update\clipforge-update.ps1") {
+            if (-not (Test-Path "$assets\$file")) { throw "$file is missing from the app bundle" }
+          }
+          if (Test-Path "$release\clipforge-mcp.exe") { throw "clipforge-mcp.exe must not sit next to clipforge.exe any more" }
+          Copy-Item docs\claude-setup.html "$release\Connect Claude to ClipForge.html"
+      # The update script, on real Windows, with a pretend app folder
+      # (swap, a locked folder, roll-back; see the script's header).
+      - name: Test the update script with a pretend app folder
+        shell: pwsh
+        run: |
+          python tool\ci\windows_swap_test.py "build\mcp\clipforge-mcp.exe"
+          if ($LASTEXITCODE -ne 0) { throw "the update script test failed" }
+      # An export started through the helper must survive the helper's
+      # whole process tree being ended (what Claude Code does on Windows
+      # when it quits). Needs ffmpeg.exe, which the runner does not have.
+      # Then the helper's own check of everything (self_test), on Windows.
+      - name: Test that an export survives the helper's process tree being killed
+        shell: pwsh
+        run: |
+          choco install ffmpeg -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "installing ffmpeg failed" }
+          $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+          ffmpeg -hide_banner -version | Select-Object -First 1
+          Copy-Item assets\fonts build\mcp\fonts -Recurse
+          python tool\ci\job_survives_test.py "build\mcp\clipforge-mcp.exe"
+          if ($LASTEXITCODE -ne 0) { throw "an export did not survive the helper's process tree being killed" }
+          $env:CLIPFORGE_MCP_NO_HANDOVER = "1"
+          $messages = @(
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}',
+            '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"self_test","arguments":{}}}'
+          )
+          $reply = ($messages | & "build\mcp\clipforge-mcp.exe" --projects-dir "$env:RUNNER_TEMP\selftest-projects") -join "`n"
+          Write-Host ($reply -replace '\\n', "`n")
+          if ($reply -notmatch 'ClipForge self-test: PASS') { throw "self_test did not pass on Windows" }
       - name: Add the Visual C++ runtime and zip
         shell: pwsh
         run: |
@@ -412,32 +475,26 @@ jobs:
           cat "dist/$CF_NAME-release-notes.txt"
           grep -q "^## $CF_VERSION" "dist/$CF_NAME-release-notes.txt" || {
             echo "::error::CHANGELOG.md has no section for $CF_VERSION"; exit 1; }
-      # CFBundleShortVersionString = the version, CFBundleVersion = the run
-      # number (Finder > Get Info shows "1.4.0 (21)").
-      - run: >-
-          flutter build macos --release
-          --build-name=${{ env.CF_VERSION }} --build-number=${{ needs.check.outputs.build }}
-          --dart-define-from-file=build/clipforge_build.json
-      # The Claude control server is shipped BESIDE the app, in its own
-      # folder with the title fonts, not inside ClipForge.app: adding a
-      # file to the bundle after the build would break the bundle's ad-hoc
-      # signature (its sealed resources), and the app could then refuse to
-      # start. The executable itself gets an ad-hoc signature (Apple Silicon
-      # does not run unsigned code). It is built for the runner's CPU only
+      # The Claude helper is built FIRST (1.12) and travels inside the app
+      # as part of the extension file (assets/claude): the app installs it
+      # into ~/Library/Application Support/ClipForge/claude at start. A file
+      # added to the bundle AFTER the build would break the bundle's ad-hoc
+      # signature (its sealed resources); an asset is part of the build. The
+      # executable itself gets an ad-hoc signature (Apple Silicon does not
+      # run unsigned code). It is built for the runner's CPU only
       # (macos-latest = Apple Silicon); unlike the app it is not universal.
       # The build script is run from a copy outside the package so that Dart
       # does not run the Flutter plugins' build hooks for it.
       - name: Build clipforge-mcp and check that it answers
         run: |
-          out="dist/stage/ClipForge-Claude"
-          mkdir -p "$out/fonts"
+          export CLIPFORGE_MCP_NO_HANDOVER=1
+          out="build/mcp"
+          mkdir -p "$out/fonts" dist/stage
           cp bin/build_mcp.dart "$RUNNER_TEMP/build_mcp.dart"
           dart "$RUNNER_TEMP/build_mcp.dart" -o "$out/clipforge-mcp" \
             --build-name="$CF_VERSION" --build-number=${{ needs.check.outputs.build }} \
             --dart-define-from-file=build/clipforge_build.json
-          cp assets/fonts/*.ttf assets/fonts/*LICENSE*.txt assets/fonts/*-OFL.txt "$out/fonts/"
-          cp claude/CLAUDE.md "$out/CLAUDE.md"
-          cp docs/claude-setup.html "dist/stage/Connect Claude to ClipForge.html"
+          cp assets/fonts/*.ttf "$out/fonts/"
           codesign --verify "$out/clipforge-mcp" 2>/dev/null || codesign --force --sign - "$out/clipforge-mcp"
           codesign --verify --verbose "$out/clipforge-mcp"
           file "$out/clipforge-mcp"
@@ -454,29 +511,46 @@ jobs:
       # manifest.json, the ad-hoc signed clipforge-mcp and the title fonts
       # in server/fonts). Apple Silicon only, like the program. The program
       # is unpacked again and checked: still executable, signature intact.
+      # --asset puts a copy into assets/claude for the app build below.
       # Not notarized: if macOS blocks it after installing, see
       # docs/claude-setup.html ("If the Mac blocks it").
       - name: Build the Claude Desktop extension (.mcpb)
         run: |
           python3 docs/tools/build_claude_bundles.py mcpb \
-            --binary dist/stage/ClipForge-Claude/clipforge-mcp --platform macos \
+            --binary build/mcp/clipforge-mcp --platform macos \
             --version "$CF_VERSION" --build ${{ needs.check.outputs.build }} \
-            --display "$CF_DISPLAY" --out dist
+            --display "$CF_DISPLAY" --out dist --asset assets/claude
           check="$RUNNER_TEMP/mcpb-unpacked"
           mkdir -p "$check"
           unzip -q "dist/$CF_NAME-claude-macos.mcpb" -d "$check"
           test -x "$check/server/clipforge-mcp"
           codesign --verify --verbose "$check/server/clipforge-mcp"
-          "$check/server/clipforge-mcp" --version | grep -qF "$CF_DISPLAY"
+          CLIPFORGE_MCP_NO_HANDOVER=1 "$check/server/clipforge-mcp" --version | grep -qF "$CF_DISPLAY"
+      # CFBundleShortVersionString = the version, CFBundleVersion = the run
+      # number (Finder > Get Info shows "1.4.0 (21)").
+      - run: >-
+          flutter build macos --release
+          --build-name=${{ env.CF_VERSION }} --build-number=${{ needs.check.outputs.build }}
+          --dart-define-from-file=build/clipforge_build.json
+      # The update script and the helper install, run on a real Mac with
+      # pretend app folders (the same tests as on Linux).
+      - name: Test the update script and the Claude helper install on macOS
+        run: |
+          flutter test test/core/update_install_test.dart test/core/update_test.dart test/mcp/claude_helper_test.dart
       # Not signed with an Apple developer certificate (ad-hoc signature only),
       # so macOS asks for confirmation on first launch. ditto keeps the
       # symlinks inside the .app intact, which a plain zip would break.
-      # The zip holds ClipForge.app, the ClipForge-Claude folder and the
-      # release notes side by side.
+      # The zip holds ClipForge.app, the setup guide and the release notes
+      # side by side (the Claude helper is inside the app since 1.12).
       - name: Zip the app
         run: |
           app="$(ls -d build/macos/Build/Products/Release/*.app | head -n 1)"
+          assets="$app/Contents/Frameworks/App.framework/Resources/flutter_assets/assets"
+          test -f "$assets/claude/ClipForge-claude.mcpb" || { echo "::error::the Claude extension file is not inside the app"; exit 1; }
+          test -f "$assets/update/clipforge-update.sh" || { echo "::error::the update script is not inside the app"; exit 1; }
+          codesign --verify --deep --verbose "$app" || echo "::warning::codesign --verify reported a problem for the app bundle"
           ditto "$app" "dist/stage/$(basename "$app")"
+          cp docs/claude-setup.html "dist/stage/Connect Claude to ClipForge.html"
           cp "dist/$CF_NAME-release-notes.txt" "dist/stage/Release notes.txt"
           ditto -c -k --sequesterRsrc dist/stage "dist/$CF_NAME-macos.zip"
       - uses: actions/upload-artifact@v7
@@ -534,10 +608,17 @@ jobs:
           copy "$CF_NAME-claude-macos.mcpb"       ClipForge-claude-macos.mcpb
           copy "ClipForge-$CF_VERSION-claude-skill.zip" ClipForge-claude-skill.zip
           tag="${GITHUB_REF#refs/tags/}"
-          printf '{"version":"%s","build":%s,"date":"%s","notes_url":"%s"}\n' \
-            "$CF_VERSION" "$CF_BUILD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" > latest.json
-          cat latest.json
+          # latest.json: version, build, date, notes_url as before, plus
+          # (1.12) per system the address, size and SHA-256 of the
+          # fixed-name file, which the app checks before it uses a download.
+          python3 "$GITHUB_WORKSPACE/video-editor/tool/ci/make_latest_json.py" \
+            --dir . --version "$CF_VERSION" --build "$CF_BUILD" \
+            --base-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --tag "$tag" --out latest.json
+          # The numbers in it must be those of the files that get uploaded.
+          for file in ClipForge-windows.zip ClipForge-macos.zip ClipForge-android.apk; do
+            want="$(sha256sum "$file" | cut -d' ' -f1)"
+            grep -q "\"sha256\":\"$want\"" latest.json || { echo "::error::latest.json does not carry the SHA-256 of $file"; exit 1; }
+          done
           awk -v v="$CF_VERSION" '/^## /{p = ($2 == v)} p' "$GITHUB_WORKSPACE/video-editor/CHANGELOG.md" > "$RUNNER_TEMP/notes.md"
           test -s "$RUNNER_TEMP/notes.md" || { echo "::error::CHANGELOG.md has no section for $CF_VERSION"; exit 1; }
       - name: Create the release

@@ -26,6 +26,7 @@ import '../media/transcribe/transcription_service.dart';
 import 'export_jobs.dart'
     show
         kJobCancelled,
+        startWorkerProcess,
         kJobFailed,
         kJobFinished,
         kJobHeartbeat,
@@ -294,23 +295,14 @@ TranscribeLauncher inProcessTranscribeLauncher(
       return pid;
     }, description: 'inside this server');
 
-/// Starts each job as `<this program> --transcribe-job <file>`; detached
-/// on macOS / Linux, a normal child on Windows (as for exports).
+/// Starts each job as `<this program> --transcribe-job <file>` in a
+/// process that outlives the server and its client (see
+/// startWorkerProcess in export_jobs.dart).
 TranscribeLauncher separateTranscribeLauncher({List<String>? command}) =>
     TranscribeLauncher((store, id) async {
       final cmd = command ?? selfCommand();
       final args = [...cmd.skip(1), '--transcribe-job', store.fileOf(id).path];
-      final proc = await Process.start(cmd.first, args,
-          workingDirectory: store.dir,
-          mode: Platform.isWindows
-              ? ProcessStartMode.normal
-              : ProcessStartMode.detached);
-      if (Platform.isWindows) {
-        proc.stdout.drain<void>().ignore();
-        proc.stderr.drain<void>().ignore();
-        proc.stdin.close().ignore();
-      }
-      return proc.pid;
+      return startWorkerProcess(cmd.first, args, workingDirectory: store.dir);
     }, description: 'a separate process');
 
 /// Entry point of `--transcribe-job <file>`.

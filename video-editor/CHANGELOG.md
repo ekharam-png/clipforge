@@ -4,6 +4,27 @@ Newest first. The version you have is in Help > About ClipForge (and at the
 bottom of the project list). This file is also the "What's new" page in the
 app's Help.
 
+## 1.12.0 – 18 November 2026
+
+- ClipForge updates itself. When a newer version is out, the project list shows a quiet line: "Version X is available", with **What's new**, **Update** and **Later** (the three dots have **Skip this version**).
+  - It looks once a day when the app starts. The only thing it reads from the internet for this is one small file that says which version is the newest; nothing about you or your videos is sent. Switch it off in Help > **Check for updates automatically** (phones: the three dots on the project list); **Check for updates…** asks right now.
+  - Windows and Mac: **Update** downloads the new version, checks that it is exactly the published file, then ClipForge closes and opens again as the new version. If anything goes wrong the old version stays as it was.
+  - Android: ClipForge downloads and checks the new version and hands it to Android, which asks you to confirm. The first time, Android asks to allow installs from ClipForge.
+  - **Open the download page** is always there as the other way. Your projects and videos are never touched by an update.
+- Connect Claude once. Help > **Connect to Claude…** (computers) shows whether the Claude helper is installed, saves the Claude extension file straight from the app (**Save the Claude extension file…**) and shows the one line for Claude Code with **Copy**. From this version on ClipForge keeps the helper up to date by itself: after an app update there is nothing to install or upload again.
+- Claude control:
+  - The guide for Claude now lives inside ClipForge's helper, so it always fits the installed version. The skill is only a short pointer and never needs uploading again.
+  - "Run the ClipForge self-test": Claude checks everything in under a minute with its own sample video in a temporary folder (your projects are not touched) and shows a list of what passed.
+  - On Windows an export or a transcription started by Claude keeps running when Claude or Claude Code is closed.
+  - Answers say exactly what changed (old value → new value) for a single change, and a dry run lists which settings would change.
+  - A project's files are listed once with short names, so answers for long projects are much smaller; the first page is smaller too.
+  - "What is the ClipForge status?" also says which helper is running and where it is.
+- **Remove filler words…**: the play button in the list now plays the spot the way it would be after the cut (a moment before, skipping the filler, a moment after).
+- A language pack whose check failed after downloading can be used with **Use it anyway** (or removed).
+- **Share project file** now includes the transcripts, so speech does not have to be transcribed again on the other device.
+- Renaming a project to a name another project has gives it " (2)".
+- New help pages: "Updates", "Connect Claude (computer only)", "Check that Claude works (self-test)".
+
 ## 1.11.0 – 18 November 2026
 
 - Speech to text, on the computer (Windows, Mac, Linux; not on phones). ClipForge can turn what is said in a video into text with the time of every word. Select a clip, open **Sound** and click **Transcribe speech…** (also Edit > Speech).

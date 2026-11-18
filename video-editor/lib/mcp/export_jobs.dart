@@ -310,29 +310,95 @@ List<String> selfCommand() {
   return [exe];
 }
 
+/// Set to "child" to start workers the pre-1.12 way on Windows (a normal
+/// child process); for tests and as an escape hatch.
+const String kEnvWorkerStart = 'CLIPFORGE_WORKER_START';
+
+/// The PowerShell command that starts a worker OUTSIDE this server's
+/// process tree on Windows and prints its process id. Everything it needs
+/// comes in through environment variables (no quoting of paths on a
+/// command line): CF_WORKER_EXE, CF_WORKER_DIR, CF_WORKER_ARGC and
+/// CF_WORKER_ARG0..n.
+const String kWindowsWorkerStartScript =
+    r"$q = [char]34; $a = @(); "
+    r"for ($i = 0; $i -lt [int]$env:CF_WORKER_ARGC; $i++) { "
+    r"$a += $q + [Environment]::GetEnvironmentVariable('CF_WORKER_ARG' + $i) + $q }; "
+    r"$p = Start-Process -FilePath $env:CF_WORKER_EXE -ArgumentList $a "
+    r"-WorkingDirectory $env:CF_WORKER_DIR -WindowStyle Hidden -PassThru; "
+    r"[Console]::Out.Write($p.Id)";
+
+/// How the last worker was started ("outside the process tree",
+/// "child process", "detached"); shown by get_status.
+String lastWorkerStart = '';
+
+/// Starts `<exe> <args>` as a job worker that outlives this server and
+/// the program that started the server, and returns its process id.
+///
+/// macOS / Linux: detached (its own session).
+///
+/// Windows (decision, 1.12): Claude Code ends the server's whole process
+/// TREE when it disconnects or quits, and a normal child (what 1.9 - 1.11
+/// started) is part of that tree. The worker is therefore started by a
+/// short-lived PowerShell (`Start-Process -WindowStyle Hidden -PassThru`):
+/// PowerShell exits at once, so the worker's parent is gone and a tree
+/// kill of the server (`taskkill /T`) no longer reaches it; it gets its
+/// own hidden console, so FFmpeg opens no window; it inherits the
+/// server's environment (PATH, CLIPFORGE_* settings). WMI
+/// (Win32_Process.Create) would also leave the tree but drops the
+/// environment; scheduled tasks need no thought. When PowerShell cannot be
+/// run the worker is started as a normal child, as before. Checked by the
+/// Windows job of the build workflow (tool/ci/job_survives_test.py).
+Future<int> startWorkerProcess(String exe, List<String> args,
+    {required String workingDirectory}) async {
+  if (!Platform.isWindows) {
+    final proc = await Process.start(exe, args,
+        workingDirectory: workingDirectory, mode: ProcessStartMode.detached);
+    lastWorkerStart = 'detached';
+    return proc.pid;
+  }
+  if (Platform.environment[kEnvWorkerStart] != 'child') {
+    try {
+      final r = await Process.run(
+        'powershell.exe',
+        [
+          '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', //
+          '-WindowStyle', 'Hidden', '-Command', kWindowsWorkerStartScript,
+        ],
+        environment: {
+          'CF_WORKER_EXE': exe,
+          'CF_WORKER_DIR': workingDirectory,
+          'CF_WORKER_ARGC': '${args.length}',
+          for (var i = 0; i < args.length; i++) 'CF_WORKER_ARG$i': args[i],
+        },
+        workingDirectory: workingDirectory,
+      ).timeout(const Duration(seconds: 30));
+      final started = int.tryParse('${r.stdout}'.trim());
+      if (r.exitCode == 0 && started != null && started > 0) {
+        lastWorkerStart = 'outside the process tree';
+        return started;
+      }
+    } catch (_) {
+      // No PowerShell, or it hung: the old way below.
+    }
+  }
+  final proc = await Process.start(exe, args,
+      workingDirectory: workingDirectory, mode: ProcessStartMode.normal);
+  // Nothing is written there; drained so the pipes never fill.
+  proc.stdout.drain<void>().ignore();
+  proc.stderr.drain<void>().ignore();
+  proc.stdin.close().ignore();
+  lastWorkerStart = 'child process';
+  return proc.pid;
+}
+
 /// Starts each job as `<this program> --export-job <file>` in its own
-/// process. macOS / Linux: detached (own session), so stopping the server,
-/// or the client that started it, does not stop the export. Windows: a
-/// normal child that keeps the server's (hidden) console, so FFmpeg opens
-/// no window; it is not stopped when the server ends (Windows does not end
-/// children with their parent), but a client that ends a whole job object
-/// when it quits takes it along. Unverified on Windows.
+/// process that outlives the server and its client: see
+/// [startWorkerProcess].
 ExportLauncher separateProcessLauncher({List<String>? command}) => ExportLauncher(
       (store, id) async {
         final cmd = command ?? selfCommand();
         final args = [...cmd.skip(1), '--export-job', store.fileOf(id).path];
-        final proc = await Process.start(cmd.first, args,
-            workingDirectory: store.dir,
-            mode: Platform.isWindows
-                ? ProcessStartMode.normal
-                : ProcessStartMode.detached);
-        if (Platform.isWindows) {
-          // Nothing is written there; drained so the pipes never fill.
-          proc.stdout.drain<void>().ignore();
-          proc.stderr.drain<void>().ignore();
-          proc.stdin.close().ignore();
-        }
-        return proc.pid;
+        return startWorkerProcess(cmd.first, args, workingDirectory: store.dir);
       },
       description: 'a separate process',
       survivesServer: true,

@@ -1,6 +1,6 @@
 # ClipForge tools
 
-All 57 tools of the `clipforge` MCP server (ClipForge 1.11). A test in the
+All 59 tools of the `clipforge` MCP server (ClipForge 1.12). A test in the
 ClipForge repository fails when a tool is missing from this file.
 
 General rules:
@@ -12,21 +12,33 @@ General rules:
   `list_sound_tracks` and from the answers of the tools that add things.
 - Edit tools answer with a short summary: counts, length, the output size
   and why, the ids added / removed / changed, warnings, who saved last.
+  When one item (up to three) changed, the answer lists every changed
+  setting as old -> new (`changes.clips.fields`); when many changed, which
+  settings changed on how many items (`fieldsChanged`). A dry run of
+  `apply_to_all` / `copy_clip_settings` shows the same under "What would
+  change".
   `detail: "full"` adds the whole timeline (small projects only; otherwise
   page through `get_project`).
-- Edit tools refuse while the project is open in the app (SKILL.md).
+- Edit tools refuse while the project is open in the app (section "start").
 - File paths are full paths. Files are used where they are, not copied, so
   they must stay in place.
 - Adding media or music, `remove_silences`, `freeze_frame` and exporting
   need FFmpeg on the computer.
 
+## The guide and the self-test
+
+| Tool | What it does | Arguments worth knowing |
+|---|---|---|
+| `get_guide` | This guide, from inside the helper (always the installed version). Call with no arguments first in a conversation. | `section`: "start" (default), "recipes", "tools", "troubleshooting" |
+| `self_test` | Checks the whole installation in under a minute with its own sample video in a temporary folder (create, add, split, speed, titles in Cyrillic and Hebrew, sound tracks, separate sound, silences, an export job checked with ffprobe, undo / redo, the open-in-app refusal, speech-to-text when installed). Never touches the owner's projects. Returns a PASS / FAIL table. | `keep_files` |
+
 ## Status and projects
 
 | Tool | What it does | Arguments worth knowing |
 |---|---|---|
-| `get_status` | Version, program path, projects folder, title fonts, FFmpeg found or not, running exports, and for speech-to-text: which speech programs and language packs are on the computer. Call first. | none |
+| `get_status` | Version, which helper program runs and from where (and whether it is the one the app installed), projects folder, title fonts, FFmpeg found or not, running exports, and for speech-to-text: which speech programs and language packs are on the computer. Call first. | none |
 | `list_projects` | All projects, newest first, with id, name, length. | none |
-| `get_project` | The timeline: clips, music, overlays, titles, size and why, warnings, whether it is open in the app. | `clip_offset` / `clip_limit` (60, max 300), `title_offset` / `title_limit`, `from_ms` / `to_ms` |
+| `get_project` | The timeline: clips, music, overlays, titles, size and why, warnings, whether it is open in the app. Every media file is listed once in a `media` table (`m1`, `m2`, … with the full path, whether it is missing, how often it is used); clips, sound and overlays name the key. | `clip_offset` / `clip_limit` (30, max 300), `title_offset` / `title_limit`, `from_ms` / `to_ms` |
 | `create_project` | New empty project. | `name`, `aspect` ("original", "9:16", "16:9", "1:1", "4:5") |
 | `duplicate_project` | A copy (media shared, not copied). The safety copy, or a second version. | `name` |
 | `rename_project` | New name. | `name` |

@@ -44,7 +44,9 @@ On Windows and Mac, ClipForge comes with a small helper that lets Claude
 4. You open the project in ClipForge and watch the result.
 
 Claude cannot see the picture; it works from times, pauses and, with voice
-to text, the words that are said. Setup steps are on the
+to text, the words that are said. You connect it once, from the app's
+**Help > Connect to Claude…** page; after that ClipForge keeps the helper
+up to date by itself. Setup steps are on the
 [download page](https://ekharam-png.github.io/clipforge/claude-setup.html).
 
 ## Where it stands
@@ -59,6 +61,12 @@ not planned for now.
 **[Download ClipForge](https://ekharam-png.github.io/clipforge/)** (Windows,
 Mac and Android, with install steps). All versions are on the
 [Releases](https://github.com/ekharam-png/clipforge/releases) page.
+
+From version 1.12 on the app updates itself: it shows "Version … is
+available" on the project list and installs the new version when you press
+**Update**. For that check it reads one small file from the release page,
+at most once a day (it can be switched off in the Help menu); nothing about
+you or your videos is sent.
 
 ClipForge is a beta, made for personal use, and comes with no warranty.
 

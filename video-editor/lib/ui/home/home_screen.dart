@@ -6,6 +6,7 @@ import '../../core/storage/project_store.dart';
 import '../about.dart';
 import '../app_menu.dart';
 import '../app_prefs.dart';
+import '../claude/claude_helper.dart';
 import '../editor/editor_screen.dart';
 import '../file_drop.dart';
 import '../format.dart';
@@ -14,6 +15,8 @@ import '../help/tour.dart';
 import '../help/tour_sample.dart';
 import '../services.dart';
 import '../theme.dart';
+import '../update/update_controller.dart';
+import '../update/update_ui.dart';
 import '../widgets.dart';
 
 /// The list of saved projects.
@@ -65,7 +68,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (once.mediaCleaned) return;
       once.mediaCleaned = true;
       _cleanMedia();
+      _startUpdatesAndClaude();
     });
+  }
+
+  /// Once per run of the app: say how an update that just ran went, look
+  /// for a newer version (quietly; at most once a day) and refresh the
+  /// Claude helper in its per-user folder (computers).
+  Future<void> _startUpdatesAndClaude() async {
+    final updates = ref.read(updateControllerProvider);
+    final claude = ref.read(claudeHelperProvider);
+    try {
+      await updates.onAppStart();
+      final result = updates.lastResult;
+      if (result != null && mounted) {
+        updates.clearLastResult();
+        _say(result.updated
+            ? 'ClipForge was updated${result.version.isEmpty ? '' : ' to version ${result.version}'}. '
+                'What is new: Help > What\'s new.'
+            : 'The update could not be installed'
+                '${result.message.isEmpty ? '' : ' (${result.message})'}. '
+                '${result.status == 'broken' ? '' : 'ClipForge is unchanged. '}'
+                'You can get the new version from the download page '
+                '(Help > Check for updates).');
+      }
+    } catch (_) {
+      // Updates are never in the way of using the app.
+    }
+    try {
+      await claude.installAtStart();
+    } catch (_) {}
   }
 
   @override
@@ -256,12 +288,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final name = await promptText(context,
         title: 'Rename project', initial: info.name);
     if (name == null || name == info.name) return;
+    String? given;
     await _run('Could not rename the project.', () async {
       final store = await _store;
       final project = await store.load(info.id);
+      // Two projects with one name are hard to tell apart (also for
+      // Claude): a taken name gets " (2)".
+      given = await freeProjectName(store, name, exceptId: info.id);
       await store
-          .save(project.copyWith(name: name, updatedAt: DateTime.now()));
+          .save(project.copyWith(name: given, updatedAt: DateTime.now()));
     });
+    if (given != null && given != name.trim()) {
+      _say('Another project is already called "${name.trim()}", so this one '
+          'is now "$given".');
+    }
   }
 
   Future<void> _duplicate(ProjectInfo info) =>
@@ -563,18 +603,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onSelected: (choice) => switch (choice) {
                 _HomeMore.about => showAboutClipForge(context),
                 _HomeMore.copyVersion => copyVersionInfo(context),
+                _HomeMore.checkUpdates => checkForUpdatesNow(context),
+                _HomeMore.autoUpdates => () {
+                    final updates = ref.read(updateControllerProvider);
+                    return updates.setAutoCheck(!updates.autoCheck);
+                  }(),
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                    value: _HomeMore.checkUpdates,
+                    child: Text('Check for updates')),
+                CheckedPopupMenuItem(
+                    value: _HomeMore.autoUpdates,
+                    checked: ref.read(updateControllerProvider).autoCheck,
+                    child: const Text('Check automatically')),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
                     value: _HomeMore.about, child: Text('About ClipForge')),
-                PopupMenuItem(
+                const PopupMenuItem(
                     value: _HomeMore.copyVersion,
                     child: Text('Copy version info')),
               ],
             ),
         ],
       ),
-      body: SafeArea(bottom: false, child: body),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // "Version X is available" (nothing when there is no update).
+            const UpdateBanner(),
+            Expanded(child: body),
+          ],
+        ),
+      ),
       // Which build this is, small and out of the way (tap: About).
       bottomNavigationBar: const SafeArea(
         top: false,
@@ -595,7 +657,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-enum _HomeMore { about, copyVersion }
+enum _HomeMore { about, copyVersion, checkUpdates, autoUpdates }
 
 class _Message extends StatelessWidget {
   const _Message({

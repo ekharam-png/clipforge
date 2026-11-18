@@ -117,6 +117,39 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
+        // Updates (lib/ui/update): open a web page, and hand a downloaded,
+        // checked APK to the system installer. Android asks the user to
+        // confirm; the first time it also asks to allow installs from
+        // ClipForge.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "clipforge/update")
+            .setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "openUrl" -> {
+                            startActivity(Intent(Intent.ACTION_VIEW,
+                                Uri.parse(call.argument<String>("url")))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            result.success(true)
+                        }
+                        "installApk" -> {
+                            val file = File(call.argument<String>("path")!!)
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                this, "$packageName.updates", file)
+                            startActivity(Intent(Intent.ACTION_VIEW)
+                                .setDataAndType(uri, "application/vnd.android.package-archive")
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                    or Intent.FLAG_ACTIVITY_NEW_TASK))
+                            result.success(true)
+                        }
+                        "is64Bit" -> result.success(
+                            Build.SUPPORTED_64_BIT_ABIS.isNotEmpty() &&
+                                android.os.Process.is64Bit())
+                        else -> result.notImplemented()
+                    }
+                } catch (e: Exception) {
+                    result.error("update", e.toString(), null)
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "clipforge/gallery")
             .setMethodCallHandler { call, result ->
                 try {

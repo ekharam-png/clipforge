@@ -301,6 +301,40 @@ void main() {
     expect(find.text('Download'), findsNWidgets(3));
   });
 
+  testWidgets('desktop: a pack whose check failed can be used anyway, or removed',
+      (tester) async {
+    final speech = FakeSpeech(backend: FakeSpeech.whisperCpp);
+    for (final language in ['auto', 'en', '']) {
+      for (final row in speech.packs(language)) {
+        if (row.size == SpeechQuality.medium || row.size == SpeechQuality.small) {
+          speech.checkFailedIds.add(row.model.id);
+        }
+      }
+    }
+    final fakes = await open(tester, desktop, speech: speech);
+    await selectClip(tester);
+    await openClipTool(tester, desktop, 'Sound');
+    await tester.ensureVisible(key('transcribe-button'));
+    await tester.tap(key('transcribe-button'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('not the file ClipForge expected'), findsNWidgets(2));
+    expect(key('pack-use-anyway-medium'), findsOneWidget);
+    expect(key('pack-remove-medium'), findsNothing, reason: 'not counted as installed');
+    await fakes.screenshot(tester, 'editor_desktop_pack_use_anyway');
+
+    await tester.ensureVisible(key('pack-use-anyway-medium'));
+    await tester.tap(key('pack-use-anyway-medium'));
+    await tester.pumpAndSettle();
+    expect(key('pack-use-anyway-medium'), findsNothing);
+    expect(key('pack-remove-medium'), findsOneWidget, reason: 'it is the pack now');
+
+    await tester.ensureVisible(key('pack-discard-small'));
+    await tester.tap(key('pack-discard-small'));
+    await tester.pumpAndSettle();
+    expect(key('pack-discard-small'), findsNothing);
+    expect(key('pack-download-small'), findsOneWidget, reason: 'back to "Download"');
+  });
+
   testWidgets('desktop: Captions from speech, one undo step', (tester) async {
     {
     final speech = FakeSpeech(backend: FakeSpeech.whisperCpp, packs: {'base'})
@@ -415,7 +449,7 @@ void main() {
     expect(find.textContaining('1 of 5 selected'), findsOneWidget);
     await tester.tap(key('filler-2'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Play this spot').first);
+    await tester.tap(find.byTooltip('Play it as it would be after the cut').first);
     await tester.pump(const Duration(seconds: 5));
 
     await tester.tap(key('fillers-remove'));

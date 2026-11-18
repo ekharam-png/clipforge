@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the update FileProvider may hand to the system installer: only
+     the folder the app downloads updates into. -->
+<paths>
+    <cache-path name="updates" path="updates/" />
+</paths>

@@ -87,6 +87,58 @@ String _oneLine(String text, [int max = 70]) {
   return flat.length <= max ? flat : '${flat.substring(0, max - 1)}…';
 }
 
+/// Short keys ("m1", "m2", ...) for the media files of [project], in the
+/// order they are first used (clips, then sound, then overlays): get_project
+/// lists every path ONCE in a `media` table and the items name the key.
+Map<String, String> mediaKeys(Project project) {
+  final keys = <String, String>{};
+  void add(String path) => keys.putIfAbsent(path, () => 'm${keys.length + 1}');
+  for (final c in project.clips) {
+    add(c.path);
+  }
+  for (final a in project.audio) {
+    add(a.path);
+  }
+  for (final o in project.overlays) {
+    add(o.clip.path);
+  }
+  return keys;
+}
+
+/// The `media` table: key -> full path, file name, whether it is missing
+/// and how many items use it.
+Map<String, dynamic> mediaTableJson(Project project) {
+  final keys = mediaKeys(project);
+  int uses(String path) =>
+      project.clips.where((c) => c.path == path).length +
+      project.audio.where((a) => a.path == path).length +
+      project.overlays.where((o) => o.clip.path == path).length;
+  return {
+    for (final e in keys.entries)
+      e.value: {
+        'file': p.basename(e.key),
+        'path': e.key,
+        'fileMissing': _missing(e.key),
+        'uses': uses(e.key),
+      },
+  };
+}
+
+/// [json] of an item with its file named by the key from [keys] instead
+/// of `file` / `path` / `fileMissing`.
+Map<String, dynamic> _withMediaKey(
+    Map<String, dynamic> json, Map<String, String> keys) {
+  final path = json['path'];
+  if (path is! String || !keys.containsKey(path)) return json;
+  return {
+    for (final e in json.entries)
+      if (e.key == 'file')
+        'media': keys[path]
+      else if (e.key != 'path' && e.key != 'fileMissing')
+        e.key: e.value,
+  };
+}
+
 Map<String, dynamic> clipJson(Project project, int index) {
   final c = project.clips[index];
   final overlap = project.transitionOverlapMs(index);
@@ -399,6 +451,10 @@ Map<String, dynamic> projectJson(Project project,
   final clipPage = pageClips(project, page);
   final titlePage = page == null ? null : pageTitles(project, page);
   final shown = titlePage?.shown ?? _shownTitles(project, maxTitles);
+  // get_project (a page): every path once, items name its key.
+  final keys = page == null ? const <String, String>{} : mediaKeys(project);
+  Map<String, dynamic> item(Map<String, dynamic> json) =>
+      page == null ? json : _withMediaKey(json, keys);
   return {
     'id': project.id,
     'name': project.name,
@@ -414,15 +470,17 @@ Map<String, dynamic> projectJson(Project project,
     'soundTracks': [for (final t in project.soundTracks) trackJson(project, t)],
     'updatedAt': project.updatedAt.toUtc().toIso8601String(),
     'clipCount': project.clips.length,
-    'clips': [for (final i in clipPage.shown) clipJson(project, i)],
+    if (page != null) 'media': mediaTableJson(project),
+    'clips': [for (final i in clipPage.shown) item(clipJson(project, i))],
     'audio': [
       for (final a in project.audio)
-        if (page == null || page.overlaps(a.startMs, a.endMs)) audioJson(a, project),
+        if (page == null || page.overlaps(a.startMs, a.endMs))
+          item(audioJson(a, project)),
     ],
     'overlays': [
       for (final o in project.overlays)
         if (page == null || page.overlaps(o.startMs, o.endMs))
-          overlayJson(project, o),
+          item(overlayJson(project, o)),
     ],
     'titles': [for (final t in shown) titleJson(t)],
     'titleCount':
@@ -456,6 +514,16 @@ String projectText(Project project, {int? maxTitles, ProjectPage? page}) {
   final clipPage = pageClips(project, page);
   final titlePage = page == null ? null : pageTitles(project, page);
   final canvas = project.canvasSize;
+  // get_project (a page): files are named by a short key, every full path
+  // is listed once in "Media files".
+  final keys = page == null ? const <String, String>{} : mediaKeys(project);
+  String fileRef(String path) =>
+      keys[path] ?? '"${p.basename(path)}"';
+  String missingNote(String path) => !_missing(path)
+      ? ''
+      : keys.containsKey(path)
+          ? '  [FILE MISSING]'
+          : '  [FILE MISSING: $path]';
   final out = StringBuffer()
     ..writeln('Project "${project.name}" (project_id ${project.id})')
     ..writeln('Shape: ${_aspectLabel(project.aspect)}, '
@@ -478,6 +546,17 @@ String projectText(Project project, {int? maxTitles, ProjectPage? page}) {
     }
   }
 
+  if (keys.isNotEmpty) {
+    final table = mediaTableJson(project);
+    out.writeln('Media files (each listed once; clips, sound and overlays '
+        'name them by key):');
+    for (final e in table.entries) {
+      final m = e.value as Map;
+      out.writeln('  ${e.key} = "${m['file']}"  ${m['path']}  '
+          '(used ${m['uses']}x)${m['fileMissing'] == true ? '  [FILE MISSING]' : ''}');
+    }
+  }
+
   if (project.clips.isEmpty) {
     out.writeln('Clips: none yet (add some with add_media).');
   } else {
@@ -497,7 +576,7 @@ String projectText(Project project, {int? maxTitles, ProjectPage? page}) {
     for (final i in clipPage.shown) {
       final c = project.clips[i];
       final line = StringBuffer(
-          '  #$i clip_id=${c.id} ${c.type.name} "${p.basename(c.path)}" '
+          '  #$i clip_id=${c.id} ${c.type.name} ${fileRef(c.path)} '
           'timeline ${project.clipStartMs(i)}–${project.clipEndMs(i)}');
       if (c.type == ClipType.video) {
         line.write(', source ${c.inMs}–${c.outMs} of ${c.sourceDurationMs}'
@@ -535,7 +614,7 @@ String projectText(Project project, {int? maxTitles, ProjectPage? page}) {
         line.write(', transition ${c.transition.name} '
             '${project.transitionOverlapMs(i)} ms (overlaps the previous clip)');
       }
-      if (_missing(c.path)) line.write('  [FILE MISSING: ${c.path}]');
+      line.write(missingNote(c.path));
       out.writeln(line);
     }
   }
@@ -547,7 +626,7 @@ String projectText(Project project, {int? maxTitles, ProjectPage? page}) {
     for (final a in project.audio) {
       if (page != null && !page.overlaps(a.startMs, a.endMs)) continue;
       final line = StringBuffer(
-          '  audio_id=${a.id} "${p.basename(a.path)}" '
+          '  audio_id=${a.id} ${fileRef(a.path)} '
           'timeline ${a.startMs}–${a.endMs}, '
           'source ${a.inMs}–${a.outMs} of ${a.sourceDurationMs}, '
           'volume ${_num(a.volume)}');
@@ -576,7 +655,7 @@ String projectText(Project project, {int? maxTitles, ProjectPage? page}) {
         line.write(' (runs past the end of the video; the export stops at '
             '${project.durationMs})');
       }
-      if (_missing(a.path)) line.write('  [FILE MISSING: ${a.path}]');
+      line.write(missingNote(a.path));
       out.writeln(line);
     }
   }
@@ -590,7 +669,7 @@ String projectText(Project project, {int? maxTitles, ProjectPage? page}) {
       if (page != null && !page.overlaps(o.startMs, o.endMs)) continue;
       final c = o.clip;
       final line = StringBuffer(
-          '  overlay_id=${o.id} ${c.type.name} "${p.basename(c.path)}" '
+          '  overlay_id=${o.id} ${c.type.name} ${fileRef(c.path)} '
           'timeline ${o.startMs}–${o.endMs}');
       if (c.type == ClipType.video) {
         line.write(', source ${c.inMs}–${c.outMs} of ${c.sourceDurationMs}'
@@ -627,7 +706,7 @@ String projectText(Project project, {int? maxTitles, ProjectPage? page}) {
         line.write(' (runs past the end of the video; the export stops at '
             '${project.durationMs})');
       }
-      if (_missing(c.path)) line.write('  [FILE MISSING: ${c.path}]');
+      line.write(missingNote(c.path));
       out.writeln(line);
     }
   }

@@ -792,7 +792,7 @@ The shortcut of each item is shown next to it.
 title: Claude control (computer only)
 section: Computer
 keywords: claude, ai, assistant, mcp, claude desktop, claude code, edit with claude, ask claude, automation, chat
-related: assistant, where-files-go, export
+related: connect-claude, claude-self-test, assistant, where-files-go, export
 
 On Windows and Mac you can ask Claude, the AI assistant, to edit your ClipForge projects in plain words. For example: "Cut the silences out of my Podcast project and export it upright."
 
@@ -806,7 +806,8 @@ Good to know:
 - Long videos take a while to export. Claude starts the export and checks on it until it is done; it keeps going even if Claude's connection restarts.
 - Before a big change, such as removing silences, Claude can first tell you what it would do (how many cuts, how much time) without changing anything.
 - Give it full file locations, like C:\Users\me\Videos\clip.mp4.
-- Setting it up takes a few steps (installing FFmpeg and connecting Claude Desktop). They are in the README file that comes with ClipForge.
+- Connecting Claude is done once: **Help** > **Connect to Claude…** (see "Connect Claude"). ClipForge keeps the connection up to date by itself after that.
+- To check that everything works, ask Claude to "run the ClipForge self-test".
 
 === mac-cant-open
 title: Mac: "ClipForge can't be opened"
@@ -888,6 +889,83 @@ Every copy of ClipForge has a version number (like 1.4.0), a build number and th
 The date is shown in your own time zone; the copied text uses UTC (world time), so everyone reads the same time.
 
 To see what changed in each version, open **What's new** in Help.
+
+=== updates
+title: Updates
+section: Troubleshooting
+keywords: update, updates, upgrade, new version, newer, latest, download, install, check for updates, automatic, banner, available, skip, later, restart, apk, privacy, internet, network
+related: about-version, where-files-go, crashes
+
+When a newer ClipForge is out, the project list shows a line at the top: "Version … is available".
+
+- **What's new** opens the list of changes.
+- **Update** gets the new version (see below).
+- **Later** hides the line until you start ClipForge again.
+- The three dots have **Skip this version** (you are not asked again for this one) and **Open the download page**.
+
+## What Update does
+
+- Windows and Mac: ClipForge downloads the new version, checks that it is exactly the published file, and then asks to **Restart ClipForge**. It closes and opens again as the new version after a few seconds. If something goes wrong, the old version stays as it was and ClipForge tells you.
+- Android: ClipForge downloads and checks the new version and hands it to Android. Android asks you to confirm. The first time it may say that installing from ClipForge is not allowed: tap Settings there, switch on "Allow from this source", go back and confirm.
+- If ClipForge cannot update itself where it is installed, it opens the download page instead: get the new version there and put it over the old one.
+
+Your projects and videos are never touched by an update.
+
+## Checking
+
+ClipForge looks for a newer version by itself, at most once a day, when it starts. To ask right now: **Help** > **Check for updates…** (on a phone: the three dots at the top right of the project list > **Check for updates**).
+
+To switch the automatic check off, untick **Check for updates automatically** in the same menu (on a phone: **Check automatically**).
+
+## Privacy
+
+For the check, ClipForge reads one small file from the ClipForge release page that says which version is the newest. That is the only thing it fetches by itself. Nothing about you, your device or your videos is sent. The new version itself is downloaded only when you press **Update**.
+
+=== connect-claude
+title: Connect Claude (computer only)
+section: Computer
+keywords: claude, connect, connection, extension, mcpb, claude desktop, claude code, helper, mcp, install, setup, set up, skill, once, copy, command, terminal
+related: claude-control, claude-self-test, updates
+
+To let Claude edit your ClipForge projects, connect it once. Open **Help** > **Connect to Claude…** on your Windows PC or Mac.
+
+The page shows whether the Claude helper is installed (ClipForge puts it in place by itself every time it starts) and gives you the two ways to connect:
+
+## Claude Desktop (the Claude app)
+
+1. Click **Save the Claude extension file…** and save the file, for example on the desktop.
+2. Double-click the saved file. Claude opens and asks whether to install "ClipForge": choose Install.
+3. Close Claude completely and open it again.
+
+## Claude Code
+
+Click **Copy** next to the one line on the page, paste it into a terminal and press Enter.
+
+## You only do this once
+
+Both ways point Claude at the same helper. When ClipForge is updated, it puts the new helper in the same place and Claude uses it the next time Claude starts. Nothing has to be installed or uploaded again, also not the skill.
+
+If you connected Claude before version 1.12, do it once more with this page, and remove the old "clipforge" entry if you added one by hand.
+
+Adding videos, finding silences and exporting through Claude need the free program FFmpeg on the computer. Claude tells you the one line to install it.
+
+=== claude-self-test
+title: Check that Claude works (self-test)
+section: Computer
+keywords: self test, self-test, selftest, check, test, works, working, claude, verify, diagnose, status, pass, fail, problem
+related: connect-claude, claude-control, about-version
+
+To check that Claude and ClipForge work together on your computer, ask Claude:
+
+"Run the ClipForge self-test."
+
+Claude then makes a small sample video in a temporary folder and tries everything on it: making a project, adding and cutting clips, speed, titles (also in Russian and Hebrew), sound tracks, removing silences, exporting a video and checking the file, undo, and that it refuses to change a project that is open in ClipForge. If a speech program and a language pack are installed, it also tries speech to text.
+
+It takes under a minute and ends with a list: PASS or FAIL for each check, with how long it took.
+
+- Your own projects and files are not used and not changed. The temporary folder is deleted at the end.
+- A FAIL comes with a short reason. Most often FFmpeg is missing; Claude tells you the one line to install it.
+- "What is the ClipForge status?" shows which version of the helper Claude is using and where it is.
 
 === transcribe-speech
 title: Transcribe speech (computer only)

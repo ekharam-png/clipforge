@@ -22,7 +22,23 @@ abstract class AppPrefs {
 
   /// Sets [flag] back to false.
   Future<void> clearFlag(String name);
+
+  /// A remembered short text (a date, a number), null until [setText].
+  Future<String?> text(String name);
+
+  /// Remembers [value] under [name]; null forgets it.
+  Future<void> setText(String name, String? value);
 }
+
+/// [AppPrefs.flag] that turns the automatic update check off (it is on by
+/// default; Help > Check for updates automatically).
+const String kUpdateCheckOffFlag = 'updateCheckOff';
+
+/// [AppPrefs.text]: when updates were last checked (ISO 8601, UTC).
+const String kUpdateLastCheckText = 'updateLastCheck';
+
+/// [AppPrefs.text]: the build number the user chose to skip.
+const String kUpdateSkipBuildText = 'updateSkipBuild';
 
 /// [AppPrefs.flag] that turns timeline snapping off (it is on by default).
 const String kSnappingOffFlag = 'snappingOff';
@@ -92,6 +108,15 @@ class FileAppPrefs implements AppPrefs {
 
   @override
   Future<void> clearFlag(String name) => _set(name, false);
+
+  @override
+  Future<String?> text(String name) async {
+    final v = (await _load())[name];
+    return v is String ? v : null;
+  }
+
+  @override
+  Future<void> setText(String name, String? value) => _set(name, value);
 }
 
 /// [AppPrefs] kept in memory (tests, and the end-to-end runs).
@@ -115,6 +140,20 @@ class MemoryAppPrefs implements AppPrefs {
 
   @override
   Future<void> clearFlag(String name) async => flags.remove(name);
+
+  final Map<String, String> texts = {};
+
+  @override
+  Future<String?> text(String name) async => texts[name];
+
+  @override
+  Future<void> setText(String name, String? value) async {
+    if (value == null) {
+      texts.remove(name);
+    } else {
+      texts[name] = value;
+    }
+  }
 }
 
 final appPrefsProvider = Provider<AppPrefs>((ref) => FileAppPrefs());

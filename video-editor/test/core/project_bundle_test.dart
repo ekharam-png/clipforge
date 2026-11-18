@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:archive/archive_io.dart';
 import 'package:clipforge/core/model/project.dart';
 import 'package:clipforge/core/storage/project_bundle.dart';
+import 'package:clipforge/core/transcript/transcript_store.dart';
 import 'package:clipforge/core/storage/project_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -153,6 +154,45 @@ void main() {
       }
       // Nothing but the bundle is left next to it.
       expect(await filesUnder(p.dirname(zip)), ['trip.zip']);
+    });
+
+    test('transcripts travel with the project (1.12) and still fit after unpacking', () async {
+      final video = await write('videos/talk.mp4', Uint8List.fromList(List.generate(4000, (i) => i % 200)));
+      final project = (await store.create('Podcast')).copyWith(clips: [clipAt('c1', video)]);
+      await store.save(project);
+      // What transcribing leaves in the project folder: one file per media
+      // file, named after a fingerprint of the media's content.
+      final key = (await TranscriptStore.keyFor(video, 0))!;
+      final dir = Directory(p.join(tmp.path, 'projects', project.id, 'transcripts'))
+        ..createSync(recursive: true);
+      File(p.join(dir.path, '$key.json')).writeAsStringSync('{"words":"hello world"}');
+      File(p.join(dir.path, 'notes.txt')).writeAsStringSync('not a transcript');
+
+      final zip = p.join(tmp.path, 'out', 'podcast.clipforge.zip');
+      await exportBundle(project, zip, transcriptsDir: dir.path);
+      final entries = readZip(zip);
+      expect(entries.keys, containsAll(['project.json', 'media/talk.mp4', 'transcripts/$key.json']));
+      expect(entries.keys.where((k) => k.contains('notes')), isEmpty);
+
+      final imported = await importBundle(zip, store: store, mediaDir: mediaDir, newId: newId);
+      final arrived = File(p.join(tmp.path, 'projects', imported.id, 'transcripts', '$key.json'));
+      expect(arrived.readAsStringSync(), '{"words":"hello world"}');
+      // The unpacked media has the same content, so the same name fits it.
+      expect(await TranscriptStore.keyFor(imported.clips.single.path, 0), key);
+
+      // Without transcripts nothing changes, and odd entries are ignored.
+      final plain = p.join(tmp.path, 'out', 'plain.clipforge.zip');
+      await exportBundle(project, plain);
+      expect(readZip(plain).keys.where((k) => k.startsWith('transcripts/')), isEmpty);
+    });
+
+    test('freeProjectName: a taken name gets (2), (3); the project itself does not count', () async {
+      final a = await store.create('Holiday');
+      await store.create('holiday (2)');
+      expect(await freeProjectName(store, 'Garden'), 'Garden');
+      expect(await freeProjectName(store, ' Holiday '), 'Holiday (3)');
+      expect(await freeProjectName(store, 'HOLIDAY', exceptId: a.id), 'HOLIDAY',
+          reason: 'renaming a project to its own name (other case) is fine');
     });
 
     test('media is stored without compression', () async {

@@ -178,6 +178,31 @@ For example `ClipForge-1.4.0-build21-macos.zip`: version 1.4.0, made by run 21.
 The Windows and Mac zips also hold `Release notes.txt` (what changed in that
 version). Downloads are kept for 90 days; after that, run the workflow again.
 
+## Updates
+
+From version 1.12 on ClipForge looks for a newer version by itself, at most
+once a day when it starts, and shows "Version … is available" on the project
+list with **What's new**, **Update** and **Later** (**Skip this version**
+and **Open the download page** are under the three dots). **Help > Check for
+updates…** asks right now; **Check for updates automatically** switches the
+daily check off (phones: the three dots on the project list).
+
+Privacy: the check reads one small file, `latest.json`, from the newest
+GitHub Release. That is the only request the app makes by itself; nothing
+about you, your device or your videos is sent. The new version is downloaded
+only when you press **Update**, and it is used only if its size and SHA-256
+fingerprint are exactly the ones `latest.json` names.
+
+| System | What Update does |
+| --- | --- |
+| Windows | Downloads `ClipForge-windows.zip`, checks it, unpacks it next to the ClipForge folder, then closes the app; a small script swaps the two folders and starts the new version. If a step fails the old folder is put back. A ClipForge folder that cannot be changed (for example inside Program Files) opens the download page instead. |
+| Mac | The same with `ClipForge.app`. When the app's place cannot be changed (it was opened straight from the download, or no permission), the new app is unpacked into Downloads and shown in Finder: drag it into Applications. |
+| Android | Downloads the APK, checks it and hands it to Android's installer, which asks you to confirm (the first time also to allow installs from ClipForge). |
+| Linux (development builds) | Opens the download page. |
+
+Projects and media (`Documents/ClipForge`) are never touched by an update.
+Builds made on your own computer do not check by themselves.
+
 ## Which version do I have?
 
 Every build carries one line that says exactly what it is, for example
@@ -229,8 +254,9 @@ file**. See "Keeping projects across updates" below.
 ### macOS
 
 1. Download `ClipForge-macos.zip` and double-click it. It unpacks to a
-   folder holding `ClipForge.app` and a `ClipForge-Claude` folder. Drag
-   `ClipForge.app` into **Applications**.
+   folder holding `ClipForge.app`. Drag `ClipForge.app` into
+   **Applications** (updates from inside the app need it there, not left in
+   Downloads).
 2. The first time, right-click (or Control-click) the app and choose **Open**,
    then **Open** again in the dialog.
 3. On macOS 15 or newer that dialog has no Open button. Instead open
@@ -308,153 +334,94 @@ exporting. One command does it:
 Then quit and reopen Claude. Without FFmpeg Claude can still rearrange, trim
 and title a project; it will tell you when something needs FFmpeg.
 
-### Step 2 (Mac only): put the helper in place
+### Step 2: connect Claude, once (Help > Connect to Claude…)
 
-The Mac download unpacks to `ClipForge.app` and a folder called
-`ClipForge-Claude`. Drag that folder into **Applications** too, then open
-**Terminal** and run this once, because the helper (like the app) is not
-signed by an identified Apple developer and macOS would otherwise block it:
+Since ClipForge 1.12 the helper travels inside the app. Every time ClipForge
+starts (and so after every update) it puts the helper into one fixed folder
+of its own:
 
-```sh
-xattr -dr com.apple.quarantine /Applications/ClipForge-Claude
-```
+| Computer | Folder |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\ClipForge\claude\` |
+| Mac | `~/Library/Application Support/ClipForge/claude/` |
+
+Claude is pointed at that folder once, and never again. In ClipForge open
+**Help > Connect to Claude…**. The page shows whether the helper is
+installed and has both ways:
+
+- **Claude Desktop:** click **Save the Claude extension file…**, double-click
+  the saved `.mcpb` file, choose Install in Claude, then quit and reopen
+  Claude. (The same file is on the download page.)
+- **Claude Code:** click **Copy** next to the one line
+  (`claude mcp add --scope user clipforge -- "<the helper's path>"`), paste
+  it into a terminal and press Enter.
+
+That is all. When ClipForge is updated, the new helper goes into the same
+folder and Claude uses it the next time Claude starts: no new extension, no
+new skill. The step-by-step page is `docs/claude-setup.html` ("Connect Claude
+to ClipForge"; also on the download page and in the Windows and Mac
+downloads).
+
+If you connected Claude before 1.12, do this once more (the old helper sat
+inside the old extension or next to `clipforge.exe`, where it no longer is),
+and remove a hand-made `clipforge` entry from `claude_desktop_config.json` if
+you ever added one; the setup page shows which lines.
+
+How it works, for the curious: the folder holds `clipforge-mcp(.exe)` (the
+path Claude starts), `current.json` and `versions/<version>/` with the
+helper and its title fonts. A new version always goes into a new folder (a
+running program cannot be replaced on Windows), then `current.json` is
+switched over. Whatever copy of the helper Claude starts, also the one
+inside the extension, reads `current.json` first and hands over to the
+current version. Ask Claude "What is the ClipForge status?" to see which
+helper is running and from where.
 
 The helper is built for Macs with Apple chips (M1 and newer).
 
-On Windows there is nothing to do: `clipforge-mcp.exe` is already in the
-`ClipForge` folder next to `clipforge.exe`. Keep it there.
+### Step 3: check it ("Run the ClipForge self-test")
 
-### Step 3: connect Claude Desktop (the easy way: the extension)
+Ask Claude: **"Run the ClipForge self-test."** The helper makes its own small
+sample video in a temporary folder and runs the real tools on it: create a
+project, add media, split, speed, titles (also Cyrillic and Hebrew), sound
+tracks, separate sound, remove silences (dry run, then for real), an export
+as a background job that is checked with ffprobe, undo and redo, the refusal
+while a project is open in the app, and speech to text when a speech program
+and a language pack are installed. It takes under a minute, never touches
+your projects, deletes the temporary folder and answers with a PASS / FAIL
+list.
 
-The step-by-step page with pictures of the lines to remove is
-`docs/claude-setup.html` ("Connect Claude to ClipForge"; it is also inside
-the Windows and Mac downloads). In short:
+### The guide and the skill
 
-1. From the build page download `ClipForge-<version>-build<n>-claude-windows.mcpb`
-   (Mac: `...-claude-macos.mcpb`). This is the ClipForge **extension** for
-   Claude Desktop: one file with the helper, its fonts and a description.
-   Do not unzip it.
-2. Double-click it. Claude opens and shows **ClipForge** with **Install**.
-   If nothing happens: in Claude open **Settings > Extensions** (newer
-   layout: **Settings > Desktop app > Extensions > Manage**), then
-   **Advanced settings > Install Extension…** and choose the file.
-3. If you added `clipforge` to `claude_desktop_config.json` by hand before,
-   remove that entry (**Settings > Developer > Edit Config**), or Claude
-   gets every ClipForge tool twice.
-4. Quit Claude completely and start it again.
+The guide that tells Claude how to work (who it is helping, plan first,
+safety copy, dry runs, recipes, every tool, troubleshooting) is compiled
+into the helper and served by its `get_guide` tool, so it always matches the
+installed version. Its source is `claude/guide/*.md`
+(`dart run tool/gen_guide.dart` after changing it; a test fails otherwise).
 
-With the extension, steps 2 (Mac) and the config file below are not needed:
-the helper lives inside Claude's own extensions folder. A new ClipForge
-build means installing the new `.mcpb` the same way (extensions installed
-from a file do not update themselves).
+The skill (`claude/skill/clipforge-editing`, `ClipForge-claude-skill.zip`)
+is now only a short pointer: it helps Claude notice that a request is about
+ClipForge and tells it to call `get_guide`. Uploading it (Claude >
+**Customize** > **Skills** > **Upload a skill**) is optional and never has
+to be repeated. `claude/CLAUDE.md` is the same pointer for Claude Code.
 
-On a Mac the helper inside the extension is not signed by an identified
-Apple developer. If the extension does not start, run this once in
-Terminal and restart Claude (not yet tried on a real Mac):
+### The manual way (fallback)
 
-```sh
-xattr -dr com.apple.quarantine ~/Library/Application\ Support/Claude/Claude\ Extensions
-```
-
-### Step 3, the manual way (fallback)
-
-Use this only if the extension cannot be installed. Use one or the other,
-not both.
-
-1. In Claude Desktop open **Settings**, then **Developer**, and click
-   **Edit Config**. This shows a file called `claude_desktop_config.json`
-   (on Windows in `%APPDATA%\Claude`, on a Mac in
-   `~/Library/Application Support/Claude`).
-2. Open it with Notepad (Windows) or TextEdit (Mac) and make it look like one
-   of the examples below. If the file already has other things in it, add
-   only the `"clipforge": { ... }` part inside the existing `"mcpServers"`.
-3. Save, then quit Claude Desktop completely and start it again.
-
-Windows: use the place where *you* unpacked ClipForge, and write every `\`
-twice:
+In Claude Desktop: **Settings > Developer > Edit Config**, and in
+`claude_desktop_config.json` (on Windows every `\` is written twice):
 
 ```json
 {
   "mcpServers": {
     "clipforge": {
-      "command": "C:\\Users\\me\\ClipForge\\clipforge-mcp.exe"
+      "command": "C:\\Users\\me\\AppData\\Local\\ClipForge\\claude\\clipforge-mcp.exe"
     }
   }
 }
 ```
 
-Mac:
-
-```json
-{
-  "mcpServers": {
-    "clipforge": {
-      "command": "/Applications/ClipForge-Claude/clipforge-mcp"
-    }
-  }
-}
-```
-
-To check that it works (either way), ask Claude: **"What version of
-ClipForge are you connected to?"** It answers with the version line (the
-same as Help > About ClipForge in the app), the projects folder it uses,
-how many projects it found and whether FFmpeg was found. The first time, macOS may ask whether Claude may
-access the Documents folder: allow it, that is where the projects are.
-
-**Claude Code** (as well as, or instead of, Claude Desktop): it does not
-use the `.mcpb` file but the helper program from the ClipForge download.
-Run one command in a terminal:
-
-```sh
-# Windows (your own ClipForge folder; right-click clipforge-mcp.exe > Copy as path)
-claude mcp add --scope user clipforge -- "C:\Users\me\ClipForge\clipforge-mcp.exe"
-# Mac
-claude mcp add --scope user clipforge -- /Applications/ClipForge-Claude/clipforge-mcp
-```
-
-It prints a line starting with `Added`. `claude mcp list` shows it,
-`claude mcp remove clipforge` takes it away again. `--scope user` makes it
-available in every folder.
-
-### Step 4 (recommended): give Claude the ClipForge skill
-
-The **skill** teaches Claude how to edit with ClipForge: check the
-connection first, find your files, show its plan before big changes, offer
-a safety copy, try big changes first, wait properly for long exports, and
-recipes for a podcast clean-up, podcast with music, family video, sport
-slow motion, an upright version with the person in shot, picture-in-picture
-and shorts from a long video. It also says honestly what Claude cannot do
-(it cannot see or hear your video).
-
-1. Download `ClipForge-<version>-claude-skill.zip` from the build page. Do
-   not unzip it.
-2. In Claude open **Customize > Skills**, click **Upload a skill** and
-   choose the zip. Make sure **clipforge-editing** is switched on.
-   (Older versions: **Settings > Capabilities**. The wording may differ.)
-3. Claude Code loads the same skill when you are signed in with the same
-   Claude account; or unzip it into `~/.claude/skills/` so that
-   `~/.claude/skills/clipforge-editing/SKILL.md` exists.
-
-The same guidance as one file is `CLAUDE.md` (next to `clipforge-mcp` in
-the download), for Claude Code or a Claude Desktop Project:
-
-- **Claude Code:** copy `CLAUDE.md` into your ClipForge folder in Documents
-  (`Documents/ClipForge`, the folder that holds `projects`), then start
-  Claude Code there: `cd ~/Documents/ClipForge` and `claude`. Claude Code
-  reads `CLAUDE.md` automatically when it starts in that folder.
-- **Claude Desktop:** create a Project called ClipForge, open its
-  instructions and paste the text of `CLAUDE.md`. Start your video chats
-  inside that Project.
-
-The helper also gives Claude a shorter version of these rules on its own, so
-this step is a bonus, not a requirement.
-
-For developers: the skill is `claude/skill/clipforge-editing/` (SKILL.md
-plus `recipes.md`, `tools.md`, `troubleshooting.md`); `claude/CLAUDE.md` is
-the single-file version. `test/mcp/claude_guides_test.dart` fails when
-either does not name every tool of the server.
-`docs/tools/build_claude_bundles.py` builds the `.mcpb` (subcommand `mcpb`)
-and the skill zip (`skill`); CI runs it and uploads the results.
+On a Mac the command is
+`/Users/me/Library/Application Support/ClipForge/claude/clipforge-mcp`. Use
+either the extension or this entry, not both.
 
 ### If something does not work
 
@@ -469,8 +436,10 @@ and the skill zip (`skill`); CI runs it and uploads the results.
   `"args": ["--ffmpeg", "<full path of ffmpeg>", "--ffprobe", "<full path of ffprobe>"]`.
 - **My edits disappeared.** The project was open in ClipForge while Claude
   worked on it. Close it first (see the rule above) and ask Claude again.
-- **The server does not start on a Mac.** Run the `xattr` command from step 2
-  again after moving the folder, and check the path in the config.
+- **The helper does not start on a Mac.** See "If the Mac blocks it" in
+  `docs/claude-setup.html`.
+- **Claude still shows an old version after an update.** Quit Claude
+  completely and start it again; the helper is chosen when Claude starts.
 
 ### What Claude can do
 
@@ -482,7 +451,8 @@ and the skill zip (`skill`); CI runs it and uploads the results.
 | Speech (1.11) | transcribe in the background, read and search what is said, captions from speech, remove filler words gently, list and put back automatic cuts, make a short from one part |
 | Music | add, move, trim, volume, fades, remove |
 | Voice | add a separately recorded voice lined up with the video; line up, nudge or unlink a sound that is already there |
-| Output | export an MP4 in full or small (720p) quality, with progress |
+| Output | export an MP4 in full or small (720p) quality, with progress; the export keeps running when Claude is closed (1.12: also on Windows) |
+| Help for Claude (1.12) | `get_guide` (the guide inside the helper), `self_test` (checks the installation), `get_status` (which helper runs, and where) |
 
 Titles and captions stay on the picture they were put on when clips are cut,
 moved or sped up, exactly as in the app. Music stays where it is on the
@@ -509,7 +479,17 @@ environment variable: `--projects-dir` (`CLIPFORGE_PROJECTS_DIR`), `--ffmpeg`
 (`CLIPFORGE_FFMPEG`), `--ffprobe` (`CLIPFORGE_FFPROBE`), `--fonts-dir`
 (`CLIPFORGE_FONTS_DIR`; titles are drawn with the two DejaVu fonts, looked for
 in `fonts/` next to the executable, in the app bundle next to it, then in
-`assets/fonts`).
+`assets/fonts`). `CLIPFORGE_MCP_NO_HANDOVER=1` makes a started helper answer
+itself instead of handing over to the one the app installed (tests, CI);
+`CLIPFORGE_WORKER_START=child` starts export workers the pre-1.12 way on
+Windows.
+
+The Claude extension file is built by `docs/tools/build_claude_bundles.py`;
+with `--asset assets/claude` it is also copied to where the app build picks
+it up (`assets/claude/README.txt`). CI checks on Windows that the update
+script swaps and rolls back (`tool/ci/windows_swap_test.py`) and that an
+export survives the helper's process tree being killed
+(`tool/ci/job_survives_test.py`, also run on Linux).
 
 ## Building it yourself
 

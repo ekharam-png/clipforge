@@ -7,23 +7,32 @@ error text unless they ask.
 
 ClipForge is not connected to this Claude yet. Tell them:
 
-- **Claude Desktop:** install the ClipForge extension (the file ending in
-  `.mcpb` from the ClipForge download page): double-click it, or Settings >
-  Extensions > Advanced settings > Install Extension…, then restart Claude.
-- **Claude Code:** run once in a terminal:
-  `claude mcp add --scope user clipforge -- "<full path of clipforge-mcp>"`
-- The tools only work on the computer (Windows or Mac), not on the phone,
-  and not in claude.ai in a web browser.
+In ClipForge on the computer: **Help > Connect to Claude…**. That page
 
-The step-by-step guide is "Connect Claude to ClipForge"
-(docs/claude-setup.html in the ClipForge download / repository).
+- saves the ClipForge extension file for **Claude Desktop** (double-click
+  the saved file, choose Install, restart Claude), and
+- shows the one line for **Claude Code** with a Copy button.
+
+It needs doing only once: from ClipForge 1.12 on the app keeps the helper
+up to date by itself. The tools only work on the computer (Windows or
+Mac), not on the phone, and not in claude.ai in a web browser.
+
+## Is everything working? (after an update, or when in doubt)
+
+Run `self_test`. It makes its own small sample video in a temporary
+folder, runs the real tools on it (never on the owner's projects) and
+returns a PASS / FAIL table in under a minute. Tell the owner the result
+in one sentence; for a FAIL, the note in that row says what is wrong
+(most often FFmpeg or the title fonts are missing).
 
 ## The tools appear twice, or answers come from an old version
 
 An old hand-made `clipforge` entry in `claude_desktop_config.json` is still
-there next to the extension. `get_status` shows the program path and version
-in use. Ask them to remove the old entry (the setup guide shows which lines)
-and restart Claude.
+there next to the extension. `get_status` shows which helper program is
+running, its version, and whether it is the one the app installed. Ask them
+to remove the old entry (Help > Connect to Claude… > More in Help shows
+which lines) and restart Claude. After an app update, Claude uses the new
+helper the next time Claude is started.
 
 ## "FFmpeg could not be found"
 
@@ -74,8 +83,10 @@ and keep polling with `wait_seconds: 45`. Do not start it again.
 - `lost`: the export's process stopped without finishing (the computer went
   to sleep or the program was closed). Start it once more and ask them to
   keep the computer awake.
-- On Windows with Claude Code: closing Claude Code while an export runs may
-  stop the export. Ask them to keep it open until you say it is finished.
+- Since ClipForge 1.12 an export or a transcription keeps running when
+  Claude or Claude Code is closed (also on Windows); open Claude again and
+  call `get_export_status` to see how far it is. The computer must stay
+  awake.
 
 ## The exported video is small or blurry
 
@@ -151,6 +162,6 @@ Speech recognition makes mistakes. Say so; offer a larger pack
 
 ## Something they ask for does not exist
 
-Say so plainly and offer the nearest thing that works (SKILL.md, "Not
+Say so plainly and offer the nearest thing that works (section "start", "Not
 available yet"). Do not attempt it with shell commands or other tools on
 their files.

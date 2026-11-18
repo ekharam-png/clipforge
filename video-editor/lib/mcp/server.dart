@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../core/build_info.dart';
+import 'delegate.dart';
 import 'environment.dart';
 import 'export_jobs.dart';
 import 'mcp_protocol.dart';
@@ -64,6 +65,7 @@ Future<McpServer> createClipForgeServer(
     version: kServerVersion,
     instructions: kServerInstructions,
     tools: tools.tools,
+    resources: guideResources(),
     log: log,
   );
 }
@@ -100,6 +102,21 @@ Future<int> runClipForgeMcp(List<String> args) async {
     stdout.writeln('${BuildInfo.current.describe()} '
         '(clipforge-mcp, MCP ${kProtocolVersions.first})');
     return 0;
+  }
+
+  // An app update reaches Claude here: when the app has installed a
+  // newer (or the same) helper in the per-user folder, that one runs.
+  final self = Platform.resolvedExecutable;
+  final newer = chooseHandOver(
+      selfPath: self,
+      ownBuild: ownBuildNumber(),
+      env: Platform.environment,
+      os: Platform.operatingSystem);
+  if (newer != null) {
+    log('handing over to the helper the app installed: ${newer.path} '
+        '(${newer.version}, build ${newer.build})');
+    final code = await runHandedOver(newer, args, selfPath: self, log: log);
+    if (code != null) return code;
   }
 
   log('${BuildInfo.current.describe()}, MCP ${kProtocolVersions.first}, '

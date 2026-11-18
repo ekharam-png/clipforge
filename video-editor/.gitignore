@@ -51,3 +51,6 @@ app.*.map.json
 android/.kotlin/
 # Temporary build entrypoint
 lib/_build_probe.dart
+
+# The Claude extension file the build puts into the app (assets/claude/README.txt).
+assets/claude/*.mcpb

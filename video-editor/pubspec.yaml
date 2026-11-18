@@ -20,7 +20,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # matching section at the top of CHANGELOG.md (a test checks they agree).
 # The build number after "+" is only used for builds made on a computer;
 # CI replaces it with the GitHub Actions run number.
-version: 1.11.0+1
+version: 1.12.0+1
 
 environment:
   sdk: ^3.14.0
@@ -90,6 +90,11 @@ flutter:
     # sample video.
     - assets/help/
     - assets/tour/
+    # Updates (1.12): the scripts that swap the old app for the new one.
+    - assets/update/
+    # The Claude extension file (helper + fonts); CI puts it here before
+    # the Windows / macOS build. See assets/claude/README.txt.
+    - assets/claude/
     # Release notes, shown in Help as "What's new".
     - CHANGELOG.md
 

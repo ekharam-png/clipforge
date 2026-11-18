@@ -67,3 +67,21 @@ abstract class ProjectStore {
   /// Deletes the project folder. Deleting a missing project is a no-op.
   Future<void> delete(String id);
 }
+
+/// [name] when no OTHER project of [store] is called that, else the first
+/// of "name (2)", "name (3)", ... that is free. Upper and lower case count
+/// as the same name; the project [exceptId] (the one being renamed) does
+/// not count.
+Future<String> freeProjectName(ProjectStore store, String name,
+    {String? exceptId}) async {
+  final wanted = name.trim();
+  final taken = {
+    for (final i in await store.list())
+      if (i.id != exceptId) i.name.trim().toLowerCase(),
+  };
+  if (!taken.contains(wanted.toLowerCase())) return wanted;
+  for (var n = 2;; n++) {
+    final candidate = '$wanted ($n)';
+    if (!taken.contains(candidate.toLowerCase())) return candidate;
+  }
+}

@@ -8,7 +8,7 @@ every release: a test fails when CHANGELOG.md has a version this file does
 not mention.
 
 Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
-1.8.0, 1.9.0, 1.10.0, 1.11.0.
+1.8.0, 1.9.0, 1.10.0, 1.11.0, 1.12.0.
 
 ## Projects
 
@@ -31,6 +31,27 @@ Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
 | Find file: Search the gallery (Android) | 1.8.0 | Looks for a missing file by its name on the phone and copies it in. |
 | Clean-up never deletes what is in use | 1.8.0 | Files the open project or its undo history still needs are always kept. |
 | "Open in the app" mark | 1.9.0 | An open project is marked, so Claude does not change it at the same time; leftovers of a crash are ignored and cleaned up. |
+
+## Updates and Claude connection (1.12.0)
+
+| Feature | Since | Where | What it does |
+|---|---|---|---|
+| "Version X is available" | 1.12.0 | Both | A quiet line on the project list when a newer version is out: What's new, Update, Later, Skip this version. |
+| Check for updates (automatic, once a day; or by hand) | 1.12.0 | Both | Reads one small file (latest.json) from the release page; nothing else is sent or read. Can be switched off. |
+| Update on Windows | 1.12.0 | Windows | Downloads the zip, checks size and SHA-256, unpacks next to the app, swaps the folders after the app closed and restarts; rolls back on failure; opens the download page when the folder cannot be written. |
+| Update on Mac | 1.12.0 | Mac | The same with ClipForge.app; shows the new app in Finder instead when the app's place cannot be changed. |
+| Update on Android | 1.12.0 | Android | Downloads the APK, checks it, hands it to the system installer (Android asks to confirm). |
+| Open the download page | 1.12.0 | Both | Plan B for every update; the only way on Linux. |
+| Connect to Claude page | 1.12.0 | Computer | Help > Connect to Claude…: helper installed or not, Save the Claude extension file…, the Claude Code line with Copy. |
+| Claude helper kept up to date by the app | 1.12.0 | Computer | The app puts its helper into a fixed per-user folder at every start; Claude is pointed at it once. |
+| Guide inside the helper (get_guide) | 1.12.0 | Computer | Claude reads how to work with ClipForge from the helper itself; the skill is a thin pointer. |
+| Self-test for Claude (self_test) | 1.12.0 | Computer | A scripted check of the real tools with sample media in a temporary folder; PASS / FAIL table. |
+| Exports survive Claude Code quitting (Windows) | 1.12.0 | Windows | The export / transcribe worker is started outside the helper's process tree. |
+| Old → new values, dry-run setting lists, media table | 1.12.0 | Computer | Smaller and clearer answers for Claude. |
+| Filler preview with the cut applied | 1.12.0 | Computer | The play button in Remove filler words skips the part that would be removed. |
+| "Use it anyway" for a language pack | 1.12.0 | Computer | Accept a downloaded pack whose check failed, or remove it. |
+| Transcripts inside project files | 1.12.0 | Both | Share project file carries the transcripts along. |
+| Renaming to a taken name gives " (2)" | 1.12.0 | Both | On the project list and in the editor. |
 
 ## Speech (1.11.0)
 
@@ -193,6 +214,7 @@ From the roadmap in `docs/HANDOVER.md`; not built yet.
 
 - AI voice separation (voice and background as two levels), on the device.
 - Speech to text on phones, and a speech engine built into the app (1.11 uses a speech program installed on the computer).
+- Signed and notarized Mac app, a Windows installer; updates for the Linux development build.
 - Removing filler words ("um", "uh") and captions from speech (with the planned on-device transcription).
 - Transcript-based editing, then a local AI assistant (computers, experimental).
 - Voiceover recording.

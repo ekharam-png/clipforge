@@ -72,6 +72,9 @@ Future<bool> showTranscribeDialog(BuildContext context, EditorSession s,
 
 const _languages = ['auto', 'en', 'ru', 'he', 'other'];
 
+/// How much plays before and after a filler in its preview (ms).
+const int kFillerPreviewLeadMs = 1500;
+
 class _TranscribeDialog extends StatefulWidget {
   const _TranscribeDialog({required this.session, this.clipId});
   final EditorSession session;
@@ -180,6 +183,17 @@ class _TranscribeDialogState extends State<_TranscribeDialog> {
         }
       });
     });
+  }
+
+  /// "Use it anyway" for a pack that was downloaded but failed its check.
+  Future<void> _useAnyway(SpeechModel m) async {
+    final ok = await _speech.usePackAnyway(m);
+    if (!mounted) return;
+    setState(() {
+      _error = ok ? null : 'That download is not there any more.';
+      if (ok) _size = m.size;
+    });
+    await _refresh();
   }
 
   Future<void> _remove(SpeechModel m) async {
@@ -294,6 +308,33 @@ class _TranscribeDialogState extends State<_TranscribeDialog> {
                   LinearProgressIndicator(
                       value: pr == null || pr.fraction <= 0 ? null : pr.fraction),
                   Text(pr?.message ?? 'Starting…', style: _dim),
+                ],
+                if (!busy && !installed && _speech.packCheckFailed(m)) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                      'Downloaded, but it is not the file ClipForge expected '
+                      '(the model may have been updated since). It is not '
+                      'used unless you say so.',
+                      style: _dim),
+                  Wrap(
+                    spacing: 4,
+                    children: [
+                      TextButton(
+                        key: ValueKey('pack-use-anyway-${row.size.name}'),
+                        onPressed: _task == null && _downloading == null
+                            ? () => _useAnyway(m)
+                            : null,
+                        child: const Text('Use it anyway'),
+                      ),
+                      TextButton(
+                        key: ValueKey('pack-discard-${row.size.name}'),
+                        onPressed: _task == null && _downloading == null
+                            ? () => _remove(m)
+                            : null,
+                        child: const Text('Remove it'),
+                      ),
+                    ],
+                  ),
                 ],
               ],
             ),
@@ -875,16 +916,44 @@ class _FillersDialogState extends State<_FillersDialog> {
     if (mounted) setState(() => _checkingJumps = false);
   }
 
-  /// Plays from a moment before the filler to a moment after it, as it is
-  /// now, so that it can be judged by ear.
+  /// Previews the cut APPLIED: plays from about 1.5 s before the part
+  /// that would be removed, jumps over it, and plays about 1.5 s after it,
+  /// so the join can be judged by ear and eye before anything is cut.
   void _play(FillerHit h) {
-    final playback = widget.session.playback;
+    final s = widget.session;
+    final playback = s.playback;
     _stopPlay?.cancel();
     playback.pause();
-    playback.seek(h.startMs - 1500 < 0 ? 0 : h.startMs - 1500);
+    final project = s.project;
+    final i = h.clipIndex;
+    if (i < 0 || i >= project.clips.length || project.clips[i].id != h.clipId) {
+      return;
+    }
+    final clip = project.clips[i];
+    final base = project.clipStartMs(i);
+    int onTimeline(int sourceMs) =>
+        base + ((sourceMs - clip.inMs) / clip.speed).round();
+    final cutFrom = onTimeline(h.cutStartMs), cutTo = onTimeline(h.cutEndMs);
+    final from = cutFrom - kFillerPreviewLeadMs < 0 ? 0 : cutFrom - kFillerPreviewLeadMs;
+    final until = cutTo + kFillerPreviewLeadMs > project.durationMs
+        ? project.durationMs
+        : cutTo + kFillerPreviewLeadMs;
+    playback.seek(from);
     playback.play();
-    _stopPlay = Timer(Duration(milliseconds: 3000 + (h.endMs - h.startMs)), () {
-      playback.pause();
+    var jumped = false;
+    // Never longer than the stretch itself plus a few seconds (a player
+    // that is still loading).
+    final limitMs = (until - from) + 6000;
+    _stopPlay = Timer.periodic(const Duration(milliseconds: 30), (timer) {
+      final at = playback.positionMs;
+      if (!jumped && at >= cutFrom - 20 && at < cutTo) {
+        jumped = true;
+        playback.seek(cutTo);
+        playback.play();
+      } else if ((jumped && at >= until - 20) || timer.tick * 30 > limitMs) {
+        timer.cancel();
+        playback.pause();
+      }
     });
   }
 
@@ -1070,7 +1139,7 @@ class _FillersDialogState extends State<_FillersDialog> {
                           ),
                           rating(h),
                           IconButton(
-                            tooltip: 'Play this spot',
+                            tooltip: 'Play it as it would be after the cut',
                             visualDensity: VisualDensity.compact,
                             icon: const Icon(Icons.play_arrow, size: 18),
                             onPressed: () => _play(h),
@@ -1136,6 +1205,7 @@ class _FillersDialogState extends State<_FillersDialog> {
               ? null
               : () {
                   _stopPlay?.cancel();
+                  s.playback.pause();
                   applyPlannedCuts(
                       s.editor.editor,
                       [

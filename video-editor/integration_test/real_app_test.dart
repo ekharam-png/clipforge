@@ -24,7 +24,13 @@ import 'dart:ui' as ui;
 import 'package:clipforge/core/model/project.dart';
 import 'package:clipforge/core/model/title_layout.dart';
 import 'package:clipforge/core/storage/project_store.dart';
+import 'package:clipforge/core/build_info.dart';
+import 'package:clipforge/core/claude/helper_install.dart';
+import 'package:clipforge/core/update/update_info.dart';
+import 'package:clipforge/ui/about.dart';
 import 'package:clipforge/ui/app.dart';
+import 'package:clipforge/ui/claude/claude_helper.dart';
+import 'package:clipforge/ui/update/update_controller.dart';
 import 'package:clipforge/ui/app_prefs.dart';
 import 'package:clipforge/ui/editor/preview_view.dart';
 import 'package:clipforge/media/processed_sound_cache.dart';
@@ -36,6 +42,7 @@ import 'package:clipforge/ui/playback/timeline_player.dart';
 import 'package:clipforge/ui/services.dart';
 import 'package:clipforge/ui/speech/speech_service.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -140,6 +147,8 @@ void main() {
         ? (Directory(outEnv)..createSync(recursive: true))
         : Directory.systemTemp.createTempSync('clipforge_e2e_');
     final fx = Directory(p.join(out.path, 'fixtures'))..createSync();
+    final xdgData = p.join(out.path, 'xdg-data');
+    if (Directory(xdgData).existsSync()) Directory(xdgData).deleteSync(recursive: true);
     final storeDir = Directory(p.join(out.path, 'store'));
     if (storeDir.existsSync()) storeDir.deleteSync(recursive: true);
     final shotKey = GlobalKey();
@@ -241,11 +250,59 @@ void main() {
         speechServiceProvider.overrideWithValue(DesktopSpeechService(
             rootDir: p.join(out.path, 'ClipForge'),
             projectsDir: storeDir.path)),
+        // 1.12 updates: a release build (139) that is told a newer version
+        // (142) exists; the check itself is not sent to the internet.
+        buildInfoProvider.overrideWithValue(
+            const BuildInfo(version: '1.11.0', buildNumber: '139', channel: 'ci')),
+        updateFetcherProvider.overrideWithValue(() async => const UpdateInfo(
+            version: '1.12.0',
+            build: 142,
+            notesUrl: 'https://example.org/releases/tag/v1.12.0')),
+        // 1.12 Claude helper: the real service; its per-user folder is in
+        // the run's folder. It installs the helper only when this build
+        // carries the extension file (assets/claude/README.txt).
+        claudeHelperProvider.overrideWithValue(ClaudeHelperService(
+            build: const BuildInfo(version: '1.12.0', buildNumber: '1'),
+            environment: {...Platform.environment, 'XDG_DATA_HOME': xdgData})),
       ],
       child: RepaintBoundary(key: shotKey, child: const ClipForgeApp()),
     ));
     await waitFor(() => find.text('New project').evaluate().isNotEmpty,
         'home screen');
+
+    // 0. Updates and the Claude helper (1.12) ------------------------------
+    await waitFor(
+        () => find.byKey(const ValueKey('update-banner')).evaluate().isNotEmpty,
+        'the update banner');
+    expect(find.text('Version 1.12.0 is available'), findsOneWidget);
+    await shot('00-update-banner');
+    log('step 0: the banner "Version 1.12.0 is available" is on the project list');
+    final claudeDir = claudeStableDir('linux', {'XDG_DATA_HOME': xdgData})!;
+    var hasBundle = true;
+    try {
+      await rootBundle.load(kClaudeBundleAsset);
+    } catch (_) {
+      hasBundle = false;
+    }
+    if (hasBundle) {
+      await waitFor(() => helperStatus(claudeDir, 'linux').installed,
+          'the Claude helper in its per-user folder');
+      final installed = helperStatus(claudeDir, 'linux');
+      // What Claude would start: the stable path. It hands over to the
+      // version the app just installed and answers with its version.
+      final version = await tester.runAsync(() => Process.run(
+          installed.launcherPath, const ['--version'],
+          environment: const {'CLIPFORGE_MCP_NO_HANDOVER': ''}));
+      expect(version!.exitCode, 0, reason: '${version.stderr}');
+      expect('${version.stdout}', contains('clipforge-mcp'));
+      expect(File(p.join(p.dirname(installed.current!.path), 'fonts', 'DejaVuSans.ttf'))
+          .existsSync(), isTrue);
+      log('step 0: the app installed the Claude helper at ${installed.launcherPath} '
+          '(${'${version.stdout}'.trim()})');
+    } else {
+      log('step 0: this build carries no Claude extension file; helper install not run');
+    }
+
     await tester.tap(find.text('New project').first);
     await waitFor(
         () => find.text('Add videos or photos').evaluate().isNotEmpty,

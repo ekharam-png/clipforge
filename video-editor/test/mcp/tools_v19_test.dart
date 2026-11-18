@@ -258,11 +258,14 @@ void main() {
     test('get_project pages long projects and shows a time range', () async {
       await b.seed('big', clips: pieces(137));
       final first = await c.ok('get_project', {'project_id': 'big'});
-      expect(first.clips, hasLength(60));
+      expect(first.clips, hasLength(kDefaultClipPage));
+      expect(kDefaultClipPage, lessThanOrEqualTo(30), reason: 'the default page is small');
       final page = first.project['page'] as Map;
-      expect([page['clipsMatching'], page['nextClipOffset']], [137, 60]);
-      expect(first.text, contains('next page: clip_offset 60'));
-      final last = await c.ok('get_project', {'project_id': 'big', 'clip_offset': 120});
+      expect([page['clipsMatching'], page['nextClipOffset']], [137, kDefaultClipPage]);
+      // 137 pieces of one file: its path is in the answer once.
+      expect((first.project['media'] as Map).length, 1);
+      expect(first.text, contains('next page: clip_offset $kDefaultClipPage'));
+      final last = await c.ok('get_project', {'project_id': 'big', 'clip_offset': 120, 'clip_limit': 60});
       expect(last.clips.map((x) => x['index']), List.generate(17, (i) => 120 + i));
       expect((last.project['page'] as Map).containsKey('nextClipOffset'), isFalse);
       final range = await c.ok('get_project', {'project_id': 'big', 'from_ms': 16000, 'to_ms': 24000});

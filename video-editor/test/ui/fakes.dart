@@ -2,6 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:clipforge/core/update/update_download.dart';
+import 'package:clipforge/core/update/update_info.dart';
+import 'package:clipforge/ui/claude/claude_helper.dart';
+import 'package:clipforge/ui/update/update_controller.dart';
 import 'package:clipforge/core/storage/project_lock.dart';
 import 'package:clipforge/core/build_info.dart';
 import 'package:clipforge/ui/about.dart';
@@ -435,6 +439,16 @@ class Fakes {
   /// The device "Copy version info" reports.
   DeviceDetails device = const DeviceDetails(system: 'TestOS 1.0, test_x64');
 
+  /// Updates (1.12): what the system does, what latest.json says (null =
+  /// offline), and the download a test can steer.
+  final FakeUpdatePlatform updatePlatform = FakeUpdatePlatform();
+  UpdateInfo? latest;
+  int updateChecks = 0;
+  UpdateDownload Function(UpdateAsset asset, String dir, int build)? downloader;
+
+  /// "Connect to Claude" (a phone by default: nothing is installed).
+  ClaudeHelperService? claude;
+
   /// How many tour sample projects were made.
   int samplesMade = 0;
 
@@ -496,6 +510,26 @@ class Fakes {
           tourSampleProvider.overrideWithValue(makeTourSample),
           buildInfoProvider.overrideWithValue(buildInfo),
           deviceDetailsProvider.overrideWithValue(() async => device),
+          updatePlatformProvider.overrideWithValue(updatePlatform),
+          updateFetcherProvider.overrideWithValue(() async {
+            updateChecks++;
+            final info = latest;
+            if (info == null) {
+              throw UpdateException(
+                  'ClipForge could not reach the update server. Check the '
+                  'internet connection and try again.',
+                  kind: 'offline');
+            }
+            return info;
+          }),
+          updateDownloaderProvider.overrideWithValue((asset, dir, build) =>
+              (downloader ?? (a, d, b) => downloadUpdate(a, d, build: b))(
+                  asset, dir, build)),
+          claudeHelperProvider.overrideWithValue(claude ??
+              ClaudeHelperService(
+                  build: buildInfo,
+                  os: 'android',
+                  loadBundle: () async => null)),
         ],
         child: RepaintBoundary(
           key: shotKey,
@@ -526,6 +560,37 @@ class Fakes {
       image.dispose();
     });
   }
+}
+
+/// What the app would ask the system for an update; records it instead.
+class FakeUpdatePlatform implements UpdatePlatform {
+  @override
+  String os = 'linux';
+  String? key;
+  final List<String> opened = [];
+  final List<String> installed = [];
+  final List<String> revealed = [];
+  int quits = 0;
+  String dir = '/nonexistent/clipforge-test-updates';
+  @override
+  String? installDir;
+
+  @override
+  Future<String?> platformKey() async => key;
+  @override
+  Future<void> openUrl(String url) async => opened.add(url);
+  @override
+  Future<String> downloadDir() async => '$dir/downloads';
+  @override
+  Future<String> stateDir() async => '$dir/state';
+  @override
+  Future<String> swapScript() async => '#!/bin/sh\nexit 0\n';
+  @override
+  Future<void> installApk(String path) async => installed.add(path);
+  @override
+  Future<void> reveal(String path) async => revealed.add(path);
+  @override
+  Future<void> quit() async => quits++;
 }
 
 void useScreen(WidgetTester tester, Size size) {
@@ -1007,6 +1072,20 @@ class FakeSpeech implements SpeechService {
   Future<void> removePack(SpeechModel model) async {
     removed.add(model.id);
     installedIds.remove(model.id);
+    checkFailedIds.remove(model.id);
+  }
+
+  /// Packs that were downloaded but failed their check.
+  final Set<String> checkFailedIds = {};
+
+  @override
+  bool packCheckFailed(SpeechModel model) => checkFailedIds.contains(model.id);
+
+  @override
+  Future<bool> usePackAnyway(SpeechModel model) async {
+    if (!checkFailedIds.remove(model.id)) return false;
+    installedIds.add(model.id);
+    return true;
   }
 
   @override

@@ -162,6 +162,34 @@ Map<String, dynamic> projectChanges(Project before, Project after) {
     // (an import of 463 subtitles answered with 463 ids, 18 KB).
     List<String> some(List<String> l) =>
         l.length > kChangeIds ? l.sublist(0, kChangeIds) : l;
+    // What exactly changed: for a few items every field old -> new; for
+    // many, which fields changed on how many items (and the new value
+    // when it is the same everywhere).
+    Map<String, dynamic>? fields;
+    Map<String, dynamic>? fieldsChanged;
+    if (changed.isNotEmpty && changed.length <= kFieldDetailItems) {
+      fields = {
+        for (final id in changed)
+          id: fieldChanges(jsonDecode(a[id]!) as Map, jsonDecode(b[id]!) as Map),
+      };
+    } else if (changed.isNotEmpty) {
+      final counts = <String, int>{};
+      final values = <String, Set<String>>{};
+      for (final id in changed) {
+        final d = fieldChanges(jsonDecode(a[id]!) as Map, jsonDecode(b[id]!) as Map);
+        for (final e in d.entries) {
+          counts[e.key] = (counts[e.key] ?? 0) + 1;
+          (values[e.key] ??= {}).add(jsonEncode((e.value as Map)['to']));
+        }
+      }
+      fieldsChanged = {
+        for (final k in counts.keys)
+          k: {
+            'items': counts[k],
+            if (values[k]!.length == 1) 'to': jsonDecode(values[k]!.first),
+          },
+      };
+    }
     return {
       'added': some(added),
       'removed': some(removed),
@@ -169,6 +197,8 @@ Map<String, dynamic> projectChanges(Project before, Project after) {
       'addedCount': added.length,
       'removedCount': removed.length,
       'changedCount': changed.length,
+      'fields': ?fields,
+      'fieldsChanged': ?fieldsChanged,
     };
   }
 
@@ -193,6 +223,10 @@ Map<String, dynamic> projectChanges(Project before, Project after) {
       for (final k in {...settingsBefore.keys, ...settingsAfter.keys})
         if (jsonEncode(settingsBefore[k]) != jsonEncode(settingsAfter[k])) k,
     ],
+    // Old -> new of the settings the user knows (the canvas size the
+    // project remembers from its first clip is bookkeeping).
+    'settingsFromTo': fieldChanges(settingsBefore, settingsAfter)
+      ..removeWhere((k, _) => const ['originalWidth', 'originalHeight'].contains(k)),
     'durationMsBefore': before.durationMs,
     'durationMsAfter': after.durationMs,
   };
@@ -200,6 +234,30 @@ Map<String, dynamic> projectChanges(Project before, Project after) {
 
 /// Ids listed per kind of change in an answer.
 const int kChangeIds = 12;
+
+/// Up to this many changed items of a kind get every field old -> new.
+const int kFieldDetailItems = 3;
+
+/// The top-level fields that differ between two JSON objects:
+/// name -> {"from": old, "to": new} (null = the field was not set).
+Map<String, dynamic> fieldChanges(Map before, Map after) => {
+      for (final k in {...before.keys, ...after.keys})
+        if (jsonEncode(before[k]) != jsonEncode(after[k]))
+          '$k': {'from': before[k], 'to': after[k]},
+    };
+
+String _shortValue(Object? v) {
+  if (v == null) return 'not set';
+  final text = v is String ? '"$v"' : jsonEncode(v);
+  return text.length <= 48 ? text : '${text.substring(0, 47)}…';
+}
+
+/// "speed 1 -> 1.5, volume 1 -> 0.8".
+String fieldChangesText(Map fields) => [
+      for (final e in fields.entries)
+        '${e.key} ${_shortValue((e.value as Map)['from'])} -> '
+            '${_shortValue((e.value as Map)['to'])}',
+    ].join(', ');
 
 /// [projectChanges] in a few words.
 String changesText(Map<String, dynamic> changes) {
@@ -220,9 +278,29 @@ String changesText(Map<String, dynamic> changes) {
     if (a.isNotEmpty) parts.add('$na $noun(s) added: ${ids(a, na)}');
     if (r.isNotEmpty) parts.add('$nr $noun(s) removed: ${ids(r, nr)}');
     if (c.isNotEmpty) parts.add('$nc $noun(s) changed: ${ids(c, nc)}');
+    final fields = d['fields'] as Map?;
+    if (fields != null) {
+      for (final e in fields.entries) {
+        if ((e.value as Map).isEmpty) continue;
+        parts.add('$noun ${e.key}: ${fieldChangesText(e.value as Map)}');
+      }
+    }
+    final many = d['fieldsChanged'] as Map?;
+    if (many != null && many.isNotEmpty) {
+      parts.add('settings that change on the ${noun}s: ${[
+        for (final e in many.entries)
+          '${e.key}${(e.value as Map).containsKey('to') ? ' -> ${_shortValue((e.value as Map)['to'])}' : ''} '
+              '(${(e.value as Map)['items']})',
+      ].join(', ')}');
+    }
   }
   final settings = changes['settings'] as List;
-  if (settings.isNotEmpty) parts.add('project settings: ${settings.join(', ')}');
+  final fromTo = changes['settingsFromTo'] as Map?;
+  if (fromTo != null && fromTo.isNotEmpty) {
+    parts.add('project settings: ${fieldChangesText(fromTo)}');
+  } else if (settings.isNotEmpty) {
+    parts.add('project settings: ${settings.join(', ')}');
+  }
   final b = changes['durationMsBefore'] as int, a = changes['durationMsAfter'] as int;
   if (a != b) parts.add('length ${clock(b)} -> ${clock(a)}');
   return parts.isEmpty ? 'nothing' : parts.join('; ');

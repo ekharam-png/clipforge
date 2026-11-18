@@ -32,13 +32,16 @@ import '../media/media_api.dart';
 import '../media/sound_align.dart';
 import '../media/transcribe/transcription_service.dart';
 import '../media/video_encoder.dart' show kSmallMaxRateKbps;
+import 'delegate.dart';
 import 'environment.dart';
 import 'export_jobs.dart';
+import 'guide_content.dart';
 import 'mcp_protocol.dart';
 import 'report.dart';
 import 'summary.dart';
 import 'transcribe_jobs.dart';
 
+part 'tools_selftest.dart';
 part 'tools_speech.dart';
 
 const String kServerName = 'clipforge';
@@ -65,8 +68,8 @@ const int kDefaultExportWait = 20;
 const int kMaxStatusWait = 45;
 
 /// Clips / titles per get_project answer by default, and at most.
-const int kDefaultClipPage = 60;
-const int kDefaultTitlePage = 60;
+const int kDefaultClipPage = 30;
+const int kDefaultTitlePage = 30;
 const int kMaxClipPage = 300;
 
 const Set<String> _imageExtensions = {
@@ -89,6 +92,11 @@ const String kCloseProjectRule =
 const String kServerInstructions =
     'Tools for editing ClipForge video projects: the same project files the '
     'ClipForge desktop app opens.\n'
+    'FIRST, once per conversation, call get_guide (no arguments) and follow '
+    'its "start" section: who the user is, the workflow, the safety rules. '
+    'It has more sections (recipes, tools, troubleshooting) for when they '
+    'are needed. self_test checks the whole installation with its own '
+    'sample files in a temporary folder.\n'
     '$kCloseProjectRule\n'
     'Workflow: list_projects (or create_project) -> get_project -> edit '
     'tools -> export_video. Edit tools answer with a SHORT summary (clip '
@@ -721,7 +729,10 @@ class ClipForgeTools {
           'item(s), ${project.overlays.length} overlay item(s); length '
           '${clock(project.durationMs)} (${project.durationMs} ms).')
       ..writeln('Size: ${canvasReason(project)}');
-    if (changes != null) text.writeln('What changed: ${changesText(changes)}.');
+    if (changes != null) {
+      text.writeln('${extra['dryRun'] == true ? 'What would change' : 'What changed'}: '
+          '${changesText(changes)}.');
+    }
     if (all.isNotEmpty) {
       text.writeln('Warnings:');
       for (final w in all) {
@@ -1386,6 +1397,7 @@ class ClipForgeTools {
     'get_export_status', 'cancel_export', 'list_sound_tracks',
     'transcribe', 'get_transcribe_status', 'cancel_transcribe',
     'get_transcript', 'find_in_transcript', 'list_auto_cuts',
+    'get_guide', 'self_test',
   };
 
   /// Tools that change many clips at once and so take `dry_run`.
@@ -1449,7 +1461,9 @@ class ClipForgeTools {
       name: 'get_status',
       title: 'Server status',
       description:
-          'Shows how this server is set up: the folder the projects are read '
+          'Shows how this server is set up: its version, which helper '
+          'program is running and from where (and whether it is the one '
+          'the ClipForge app installed), the folder the projects are read '
           'from, whether FFmpeg (needed to add media, remove silences and '
           'export) was found, and the rule about closing the project in the '
           'app. Call it first when something does not work.',
@@ -1476,7 +1490,9 @@ class ClipForgeTools {
           'Shows the timeline of a project: clips (index, clip_id, file, '
           'position on the timeline, used part of the source, speed, '
           'transition), music (audio_id), overlays and titles / captions '
-          '(title_id), plus why the video has its size and warnings. Times '
+          '(title_id), plus why the video has its size and warnings. Every '
+          'media file is listed ONCE in a "media" table (m1, m2, ... with '
+          'the full path); clips, sound and overlays name the key. Times '
           'are milliseconds. Long projects come in pages: at most clip_limit '
           'clips (default $kDefaultClipPage) and title_limit titles / '
           'captions (default $kDefaultTitlePage) per answer; the answer says '
@@ -2655,6 +2671,7 @@ class ClipForgeTools {
       handler: _cancelExport,
     ),
     ..._speechToolDefs,
+    ..._selfToolDefs,
   ];
 
   // Handlers ----------------------------------------------------------------
@@ -2673,6 +2690,7 @@ class ClipForgeTools {
         if (r.isActive) r,
     ];
     final speechStatus = await _speechStatus();
+    final helper = helperReport();
     final text = StringBuffer()
       ..writeln('$kServerTitle MCP server.')
       ..writeln('Version: ${BuildInfo.current.describe()}')
@@ -2688,8 +2706,10 @@ class ClipForgeTools {
           ? 'ffprobe: NOT FOUND (it is installed together with ffmpeg).'
           : 'ffprobe: ${probe.path} (version ${probe.version})')
       ..writeln('Export jobs: ${jobs.dir} (exports run in '
-          '${exportLauncher.description}); '
+          '${exportLauncher.description}'
+          '${exportLauncher.survivesServer ? ' that keeps going when Claude or this helper closes' : ''}); '
           '${running.isEmpty ? 'none running' : '${running.length} running: ${running.map((r) => '${r.id} "${r.projectName}" ${(r.progress * 100).floor()}%').join(', ')}'}.')
+      ..writeln(helperReportText(helper))
       ..writeln(speechStatus.text)
       ..writeln()
       ..writeln('Running on $os.')
@@ -2722,6 +2742,7 @@ class ClipForgeTools {
       'build': BuildInfo.current.toJson(),
       'executable': exe,
       'command': self,
+      'helper': helper,
       'platform': os,
       'projectsDir': projectsDir.path,
       'projectsDirSource': projectsDir.source,

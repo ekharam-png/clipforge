@@ -12,6 +12,7 @@ import '../../core/editor/editor_controller.dart';
 import '../../core/model/project.dart';
 import '../../core/storage/media_import.dart' show relinkProject;
 import '../../core/storage/project_lock.dart' show AppProjectLock;
+import '../../core/storage/project_store.dart' show freeProjectName;
 import '../app_menu.dart';
 import '../app_prefs.dart';
 import '../format.dart';
@@ -820,7 +821,25 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   Future<void> _rename(EditorSession s) async {
     final name = await promptText(context,
         title: 'Rename project', initial: s.project.name);
-    if (name != null) s.editor.rename(name);
+    if (name == null || name.trim() == s.project.name) return;
+    // A name another project has gets " (2)" (as on the project list).
+    var given = name.trim();
+    try {
+      given = await freeProjectName(
+          await ref.read(projectStoreProvider.future), name,
+          exceptId: s.project.id);
+    } catch (_) {
+      // The list could not be read: keep the name as typed.
+    }
+    if (!mounted) return;
+    s.editor.rename(given);
+    if (given != name.trim()) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+            content: Text('Another project is already called '
+                '"${name.trim()}", so this one is now "$given".')));
+    }
   }
 
   Future<void> _export(EditorSession s) async {
