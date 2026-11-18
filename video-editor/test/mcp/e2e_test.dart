@@ -367,7 +367,8 @@ void main() {
   test('an export keeps going when the server stops; a new server reports it', () async {
     final media = Directory(p.join(tmp.path, 'media2'))..createSync();
     final clip = p.join(media.path, 'long.mp4');
-    makeVideo(clip, seconds: 8);
+    // Long enough that a fast machine is still rendering after the wait.
+    makeVideo(clip, seconds: 20);
     final projects = p.join(tmp.path, 'quit', 'ClipForge', 'projects');
     final s = await start(projects);
     await s.initialize();
@@ -375,7 +376,7 @@ void main() {
     await s.ok('add_media', {'project_id': id, 'paths': [clip, clip]});
     await s.ok('set_clip_properties', {'project_id': id, 'clip_id': 'all', 'speed': 0.25});
     final out = p.join(tmp.path, 'quit-out', 'survivor.mp4');
-    final started = await s.ok('export_video', {'project_id': id, 'output_path': out, 'wait_seconds': 2});
+    final started = await s.ok('export_video', {'project_id': id, 'output_path': out, 'wait_seconds': 1});
     expect(started.data['status'], anyOf('starting', 'running'), reason: started.text);
     expect(started.data['runner'], 'a separate process');
     final job = started.data['jobId'] as String;
@@ -395,7 +396,7 @@ void main() {
     expect(done!.data['status'], 'finished', reason: done.text);
     expect(done.data['outputPath'], out);
     expect(File(out).lengthSync(), done.data['sizeBytes']);
-    expect(probedDurationMs(ffprobeJson(out)), closeTo(64000, 200));
+    expect(probedDurationMs(ffprobeJson(out)), closeTo(160000, 300));
     expect(Directory(p.dirname(out)).listSync().map((f) => p.basename(f.path)), ['survivor.mp4'],
         reason: 'the .part file was renamed');
     expect(await again.close(), 0);
