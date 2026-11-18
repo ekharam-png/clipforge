@@ -714,7 +714,7 @@ STEPS_5 = [
  ]),
 ]
 
-INSTR_5 = """You are testing ClipForge 1.12.0 (build 109), a video editor, on the owner's Windows PC. Problems are expected; your job is to find them and write them down precisely. This round checks only what is new in 1.10 and 1.11 on the computer: a voice recorded separately (the "What is this sound?" question, lining up, nudging, unlinking), speech to text (Transcribe speech…, language packs), Captions from speech…, the Transcript, Remove filler words… and Automatic cuts…, project names, the export window and the menus, plus five steps that check the basics still work. Older features were tested in round 4.
+INSTR_5 = """You are testing ClipForge 1.12.0 (build 114), a video editor, on the owner's Windows PC. Problems are expected; your job is to find them and write them down precisely. This round checks only what is new in 1.10 and 1.11 on the computer: a voice recorded separately (the "What is this sound?" question, lining up, nudging, unlinking), speech to text (Transcribe speech…, language packs), Captions from speech…, the Transcript, Remove filler words… and Automatic cuts…, project names, the export window and the menus, plus five steps that check the basics still work. Older features were tested in round 4.
 
 BEFORE YOU START
 - Fill in "Device" (for example "Windows 11 laptop, RTX 4070") and "Tester".

@@ -1,4 +1,4 @@
-# Claude control test 4 (for ClipForge 1.12.0, build 109)
+# Claude control test 4 (for ClipForge 1.12.0, build 114)
 
 Checks what versions 1.10 and 1.11 added to the Claude tools, and the fixes
 that came out of the report of test 3:
@@ -36,7 +36,7 @@ Before you start:
 Paste into a new Claude chat (Claude Code on Windows):
 
 ```
-Run "ClipForge test 4" with the ClipForge tools (ClipForge 1.12.0, build 109).
+Run "ClipForge test 4" with the ClipForge tools (ClipForge 1.12.0, build 114).
 Media folder: C:\Users\<you>\Videos\clipforge-test
 Exports and files you write go to: <media folder>\clipforge-test-output\test4\
 Never delete, move, rename or overwrite anything of mine. Only create new projects whose names start with "T4 ".
@@ -53,7 +53,7 @@ A. Connection
     you to do first. Then run self_test and paste its table (every row PASS, speech may be
     SKIPPED). Report the helper's path from get_status: it should be in a ClipForge "claude"
     folder under the user's app data, not next to clipforge.exe.
- 1. get_status. Report: the version line (must say 1.12.0 and build 109), the program path, the
+ 1. get_status. Report: the version line (must say 1.12.0 and build 114), the program path, the
     projects folder, ffmpeg and ffprobe with versions, whether an export or a transcription is
     running. From the speech part report: every speech program found (id, label, whether word
     times are measured or estimated, whether it uses ClipForge's language packs or its own
@@ -259,7 +259,7 @@ What "good" looks like, for whoever reads the report:
 
 | Area | Expected in 1.12.0 |
 |---|---|
-| Status | Version line with 1.12.0 and build 109; a speech part that lists the programs found, the packs on the computer and what could be downloaded. |
+| Status | Version line with 1.12.0 and build 114; a speech part that lists the programs found, the packs on the computer and what could be downloaded. |
 | Separate voice | `add_voice` answers offset, confidence (0.5 or more = lined up) and drift; the track is named after the speaker; the camera is muted. Files of one Zoom recording have nearly the same offset and no drift. |
 | Cuts keep sync | `remove_silences` listens to the linked voices and cuts picture and every voice together; the offsets do not change. A voice that is not linked gets a warning after a cut. |
 | Transcribe | A background job with a `job_id`; `get_transcribe_status` until finished; asking again is skipped. No pack is downloaded without `download_pack`, and Claude asks the owner first with name and size. |
