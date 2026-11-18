@@ -509,9 +509,15 @@ jobs:
       CF_NAME: ClipForge-${{ needs.check.outputs.version }}-build${{ needs.check.outputs.build }}
     steps:
       - uses: actions/checkout@v7
-      - name: Download this run's files
+      # The artifacts are single files (upload-artifact archive: false);
+      # skip-decompress keeps the .zip and .mcpb files as they are instead
+      # of unpacking them.
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/artifacts
+          skip-decompress: true
+      - name: Collect this run's files
         run: |
-          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -D "$RUNNER_TEMP/artifacts"
           mkdir -p "$RUNNER_TEMP/release"
           find "$RUNNER_TEMP/artifacts" -type f -exec cp {} "$RUNNER_TEMP/release/" \;
           ls -l "$RUNNER_TEMP/release"
