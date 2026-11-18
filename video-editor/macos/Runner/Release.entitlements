@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sandbox is off: ClipForge is distributed outside the Mac App Store, and
+	     an editor must re-open media files by path in later sessions and let
+	     FFmpeg write exports anywhere the user chooses. Turn this back on (and
+	     add security-scoped bookmarks) only for an App Store build. -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<!-- Needed by file_picker if the sandbox is ever re-enabled. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>

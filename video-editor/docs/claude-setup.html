@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Connect Claude to ClipForge</title>
+<style>
+:root{--bg:#f5f6fa;--card:#fff;--fg:#161a26;--muted:#5b6274;--line:#dfe2ec;--accent:#4257d6;--ok:#1f7a4d;--bad:#a8322b;--warn:#8a5200;--code:#eef0f7;--del:#fde4e1;--delfg:#8f2019}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1118;--card:#181b25;--fg:#eceef5;--muted:#9aa1b5;--line:#2a2f3f;--accent:#8c9bff;--ok:#6fd3a0;--bad:#ff9c94;--warn:#f0b95a;--code:#10131c;--del:#3a1c1c;--delfg:#ffb3ac;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:820px;margin:0 auto;padding:28px 16px 72px;display:flex;flex-direction:column;gap:18px}
+h1{margin:0;font-size:1.9rem;line-height:1.2;text-wrap:balance}
+h2{margin:0 0 4px;font-size:1.3rem;line-height:1.25}
+h3{margin:14px 0 2px;font-size:1.05rem}
+p{margin:6px 0}
+.lead{color:var(--muted);font-size:1.05rem;margin:6px 0 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+.letter{display:inline-flex;align-items:center;justify-content:center;width:1.9em;height:1.9em;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;margin-right:8px;font-size:.9em}
+@media (prefers-color-scheme:dark){.letter{color:#0f1118}}
+ol,ul{margin:6px 0;padding-left:1.4em}
+li{margin:6px 0}
+code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;font-size:.88em}
+code{background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
+.cmd{position:relative;margin:8px 0}
+pre{background:var(--code);border:1px solid var(--line);border-radius:8px;padding:12px;margin:0;overflow-x:auto;white-space:pre;line-height:1.45}
+pre .del{display:block;background:var(--del);color:var(--delfg);margin:0 -12px;padding:0 12px}
+.copy{position:absolute;top:6px;right:6px;font:inherit;font-size:.8rem;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:6px;padding:3px 9px;cursor:pointer}
+.copy:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.note{border-left:4px solid var(--warn);padding:6px 12px;margin:10px 0;background:var(--code);border-radius:0 8px 8px 0}
+.good{border-left-color:var(--ok)}
+.say{font-weight:600}
+.muted{color:var(--muted);font-size:.93rem}
+details{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:10px 0}
+summary{cursor:pointer;font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.scroll{overflow-x:auto}
+nav a{color:var(--accent);margin-right:14px;white-space:nowrap}
+a{color:var(--accent)}
+kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;font:inherit;font-size:.9em;background:var(--card)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+<h1>Connect Claude to ClipForge</h1>
+<p class="lead">After this, you can ask Claude in plain words to edit your ClipForge videos on your computer. No file editing by hand. About 5 minutes.</p>
+</header>
+
+<section class="card">
+<h2>What you need</h2>
+<ul>
+<li>A <b>Windows PC or a Mac</b> with ClipForge 1.9.0 or newer. (Claude cannot edit on the phone.)</li>
+<li><b>Claude Desktop</b> (the Claude app for Windows or Mac) and, if you use it, <b>Claude Code</b>.</li>
+<li>From the ClipForge build page (where you download the app), two small files:
+ <ul>
+ <li><code>ClipForge-…-claude-windows.mcpb</code> (Mac: <code>…-claude-macos.mcpb</code>) &mdash; the ClipForge <b>extension</b> for Claude Desktop.</li>
+ <li><code>ClipForge-…-claude-skill.zip</code> &mdash; the <b>skill</b> that teaches Claude how to edit your videos well.</li>
+ </ul></li>
+<li><b>FFmpeg</b>, a free program Claude's helper uses to read and export videos. Install it once:
+ <div class="cmd"><pre id="c-ff-win">winget install ffmpeg</pre><button class="copy" data-copy="c-ff-win" type="button">Copy</button></div>
+ <span class="muted">Windows: open <b>Terminal</b> from the Start menu, paste, press Enter. Mac: open <b>Terminal</b> and use <code>brew install ffmpeg</code> instead (needs Homebrew from brew.sh).</span></li>
+</ul>
+<nav aria-label="Sections"><a href="#desktop">A. Claude Desktop</a><a href="#skill">B. The skill</a><a href="#code">C. Claude Code</a><a href="#check">D. Check it works</a><a href="#trouble">Problems</a></nav>
+</section>
+
+<section class="card" id="desktop">
+<h2><span class="letter">A</span>Claude Desktop: install the extension</h2>
+<ol>
+<li><b>Download</b> the <code>.mcpb</code> file for your computer from the ClipForge build page. Leave it as it is (do not unzip or rename it).</li>
+<li><b>Double-click</b> the file. Claude opens and shows <b>ClipForge</b> with an <b>Install</b> button. Click <b>Install</b>.
+ <details><summary>Nothing happens when I double-click</summary>
+ <p>Open Claude, then <b>Settings</b> &rarr; <b>Extensions</b>. (In the newer layout: <b>Settings</b> &rarr; <b>Desktop app</b> &rarr; <b>Manage</b> next to Extensions.) Click <b>Advanced settings</b>, find <b>Extension Developer</b>, click <b>Install Extension…</b> and choose the <code>.mcpb</code> file.</p>
+ <p class="muted">Names checked against Claude's help pages on 17 Nov 2026; the wording may differ a little in your version.</p>
+ </details></li>
+<li><b>Remove the old hand-made entry</b>, so Claude does not get ClipForge twice (see just below). Skip this if you never edited the config file.</li>
+<li><b>Restart Claude completely.</b> Windows: right-click the Claude icon near the clock &rarr; <b>Quit</b>, then start it again. Mac: <kbd>Cmd</kbd>+<kbd>Q</kbd>, then start it again.</li>
+</ol>
+
+<h3>Removing the old entry (only if you added one by hand before)</h3>
+<p>In Claude: <b>Settings</b> &rarr; <b>Developer</b> &rarr; <b>Edit Config</b>. A folder opens with <code>claude_desktop_config.json</code> selected. Open it with Notepad (Mac: TextEdit).</p>
+<p>Delete the <span style="background:var(--del);color:var(--delfg);padding:0 4px;border-radius:4px">marked lines</span> &mdash; the <code>"clipforge"</code> part, from its name to its closing <code>}</code>:</p>
+<div class="cmd"><pre>{
+  "mcpServers": {
+<span class="del">    "clipforge": {</span><span class="del">      "command": "C:\\Users\\&lt;you&gt;\\ClipForge\\clipforge-mcp.exe"</span><span class="del">    }</span>  }
+}</pre></div>
+<p>So that it ends up like this:</p>
+<div class="cmd"><pre id="c-empty">{
+  "mcpServers": {}
+}</pre><button class="copy" data-copy="c-empty" type="button">Copy</button></div>
+<ul>
+<li>If the file has <b>other things</b> in it (other names inside <code>"mcpServers"</code>, or a <code>"preferences"</code> part), keep them. Remove only the <code>"clipforge": { … }</code> block and the comma right before or after it, so that no comma is left dangling before a <code>}</code>.</li>
+<li>Save the file, then restart Claude (step 4 above).</li>
+<li class="muted">Not sure? Paste the file's text to Claude and ask: "Remove the clipforge entry from this config and give me the whole file back."</li>
+</ul>
+
+<h3>If the Mac blocks it</h3>
+<p>The helper inside the extension is not signed by an identified Apple developer. If Claude says the ClipForge extension could not start, or macOS shows "cannot be opened", open <b>Terminal</b>, paste this, press Enter, and restart Claude:</p>
+<div class="cmd"><pre id="c-xattr">xattr -dr com.apple.quarantine ~/Library/Application\ Support/Claude/Claude\ Extensions</pre><button class="copy" data-copy="c-xattr" type="button">Copy</button></div>
+<p class="muted">The extension is for Macs with Apple chips (M1 and newer). If it still does not start, use the manual way at the bottom of this page with the <code>ClipForge-Claude</code> folder from the Mac download. (Not yet tried on a real Mac: please tell Claude what you saw.)</p>
+
+<h3>When a new ClipForge build comes out</h3>
+<p>Download the new <code>.mcpb</code> and install it the same way; it replaces the old one. Extensions installed from a file do not update by themselves.</p>
+</section>
+
+<section class="card" id="skill">
+<h2><span class="letter">B</span>Add the ClipForge skill</h2>
+<p>The skill is a short guide for Claude: check the connection first, show you a plan before big changes, offer a safety copy, how to clean up a podcast, make a family video, a slow-motion highlight, an upright version, or shorts from a long video.</p>
+<ol>
+<li><b>Download</b> <code>ClipForge-…-claude-skill.zip</code> from the build page. <b>Do not unzip it.</b></li>
+<li>In Claude (the app or claude.ai), open <b>Customize</b> (in the side bar on the left) &rarr; <b>Skills</b>.</li>
+<li>Click <b>Upload a skill</b> and choose the zip file.</li>
+<li>Make sure <b>clipforge-editing</b> is switched <b>on</b> in the list.</li>
+</ol>
+<p class="muted">Menu names checked against Claude's help pages on 17 Nov 2026 (older versions: <b>Settings</b> &rarr; <b>Capabilities</b> &rarr; Skills). The wording may differ in your version. If there is no upload button, switch on <b>Code execution and file creation</b> under <b>Settings</b> &rarr; <b>Capabilities</b> first.</p>
+<p class="muted">A new ClipForge version may bring a newer skill: remove the old one in the same list and upload the new zip.</p>
+</section>
+
+<section class="card" id="code">
+<h2><span class="letter">C</span>Claude Code: one line</h2>
+<p>Claude Code does not use the <code>.mcpb</code> file. It starts the helper program that comes inside the ClipForge download: <code>clipforge-mcp.exe</code> in your ClipForge folder (Mac: the <code>ClipForge-Claude</code> folder).</p>
+<p><b>Windows</b> &mdash; open Terminal and run this, with <i>your</i> ClipForge folder (in File Explorer, right-click <code>clipforge-mcp.exe</code> &rarr; <b>Copy as path</b> gives you the part in quotes):</p>
+<div class="cmd"><pre id="c-cc-win">claude mcp add --scope user clipforge -- "C:\Users\&lt;you&gt;\ClipForge\clipforge-mcp.exe"</pre><button class="copy" data-copy="c-cc-win" type="button">Copy</button></div>
+<p><b>Mac</b> &mdash; after dragging <code>ClipForge-Claude</code> into Applications:</p>
+<div class="cmd"><pre id="c-cc-mac">claude mcp add --scope user clipforge -- /Applications/ClipForge-Claude/clipforge-mcp</pre><button class="copy" data-copy="c-cc-mac" type="button">Copy</button></div>
+<ul>
+<li>It answers with a line starting with <b>Added</b>. To look: <code>claude mcp list</code>. To take it away again: <code>claude mcp remove clipforge</code>.</li>
+<li><code>--scope user</code> makes ClipForge available in every folder you start Claude Code in.</li>
+<li>If you unzip a newer ClipForge into a <b>different</b> folder, remove and add it again with the new place.</li>
+<li><b>The skill in Claude Code:</b> when you are signed in to Claude Code with the same Claude account, the skill from step B loads by itself (recent Claude Code versions). Or unzip the skill zip into the folder <code>.claude\skills</code> in your user folder, so that you get <code>C:\Users\&lt;you&gt;\.claude\skills\clipforge-editing\SKILL.md</code> (Mac: <code>~/.claude/skills/clipforge-editing/SKILL.md</code>).</li>
+<li class="muted">Keep Claude Code open while a long export runs: on Windows, closing it can stop the export.</li>
+</ul>
+</section>
+
+<section class="card" id="check">
+<h2><span class="letter">D</span>Check that it works</h2>
+<p>Start a new chat and ask:</p>
+<p class="note good say">What version of ClipForge are you connected to?</p>
+<p>Claude should answer with a line like <code>ClipForge 1.9.0 (build 32) · 17 Nov 2026, 04:51 UTC · 097beac</code>, the folder your projects are in, and whether FFmpeg was found. Compare the version with <b>Help &rarr; About ClipForge</b> in the app: they should match.</p>
+<p>Then try:</p>
+<p class="note good say">List my ClipForge projects.</p>
+<p>The first time, Claude asks whether it may use the ClipForge tools: allow it. On a Mac, macOS may ask whether Claude may use your Documents folder: allow it, the projects are there.</p>
+<p class="note"><b>One rule:</b> before Claude changes a project, go back to ClipForge's project list (or close ClipForge). Open the project again afterwards to see the result. If you forget, Claude tells you; nothing breaks.</p>
+</section>
+
+<section class="card" id="trouble">
+<h2>If something does not work</h2>
+<div class="scroll"><table>
+<thead><tr><th scope="col">What you see</th><th scope="col">What to do</th></tr></thead>
+<tbody>
+<tr><td>Claude says it has no ClipForge tools</td><td>Restart Claude completely (step A4). In <b>Settings &rarr; Extensions</b>, ClipForge should be listed and switched on.</td></tr>
+<tr><td>Every ClipForge tool shows twice, or the version is an old one</td><td>The old hand-made entry is still in the config file. Remove it (section A) and restart.</td></tr>
+<tr><td>"FFmpeg could not be found"</td><td>Install FFmpeg (top of this page), then restart Claude.</td></tr>
+<tr><td>Claude finds no projects</td><td>Ask "What is the ClipForge status?" It names the folder it looks in. ClipForge keeps projects in <code>Documents\ClipForge\projects</code> (also when Documents is inside OneDrive). If it is a different folder, tell Claude (in this chat or in Claude Code) and ask for help.</td></tr>
+<tr><td>"… is open in the ClipForge app"</td><td>Go back to ClipForge's project list, then tell Claude to try again.</td></tr>
+<tr><td>Mac: the extension does not start</td><td>See "If the Mac blocks it" in section A.</td></tr>
+</tbody></table></div>
+
+<details><summary>The manual way (fallback, if the extension cannot be installed)</summary>
+<p>This is what the extension does for you. In Claude: <b>Settings &rarr; Developer &rarr; Edit Config</b>, open <code>claude_desktop_config.json</code> and make it look like this (Windows: your own folder, with every <code>\</code> written twice):</p>
+<div class="cmd"><pre id="c-man-win">{
+  "mcpServers": {
+    "clipforge": {
+      "command": "C:\\Users\\&lt;you&gt;\\ClipForge\\clipforge-mcp.exe"
+    }
+  }
+}</pre><button class="copy" data-copy="c-man-win" type="button">Copy</button></div>
+<p>Mac:</p>
+<div class="cmd"><pre id="c-man-mac">{
+  "mcpServers": {
+    "clipforge": {
+      "command": "/Applications/ClipForge-Claude/clipforge-mcp"
+    }
+  }
+}</pre><button class="copy" data-copy="c-man-mac" type="button">Copy</button></div>
+<p>Save and restart Claude. Use <b>either</b> the extension <b>or</b> this entry, not both. On a Mac, run once in Terminal: <code>xattr -dr com.apple.quarantine /Applications/ClipForge-Claude</code></p>
+</details>
+<p class="muted">More detail: the "Claude control" section of the ClipForge README.</p>
+</section>
+
+</div>
+<script>
+// Copy buttons: copy the text of the block they belong to.
+document.querySelectorAll('.copy').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var el = document.getElementById(b.getAttribute('data-copy'));
+    var text = el ? el.textContent : '';
+    function done(ok) { var old = 'Copy'; b.textContent = ok ? 'Copied' : 'Select and copy'; setTimeout(function () { b.textContent = old; }, 1600); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else {
+      try {
+        var r = document.createRange(); r.selectNodeContents(el);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        done(document.execCommand('copy'));
+      } catch (e) { done(false); }
+    }
+  });
+});
+</script>
+</body>
+</html>

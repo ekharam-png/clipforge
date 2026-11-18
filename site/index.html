@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClipForge download</title>
+<meta name="description" content="ClipForge is a free video editor for Windows, Mac and Android. Download it here.">
+<style>
+:root {
+  --paper: #eef0f4;
+  --panel: #ffffff;
+  --ink: #18202c;
+  --muted: #566173;
+  --rule: #d3d8e0;
+  --track: #e2e6ec;
+  --clip-win: #2c4a75;
+  --clip-mac: #2e7d5b;
+  --clip-and: #b06a2c;
+  --clip-text: #ffffff;
+  --head: #e0453a;
+  --link: #2f5fc4;
+  --focus: #2f5fc4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #12161d;
+    --panel: #1b212b;
+    --ink: #e9edf3;
+    --muted: #a3adbd;
+    --rule: #2c3442;
+    --track: #20262f;
+    --clip-win: #3a5f95;
+    --clip-mac: #33896a;
+    --clip-and: #b97436;
+    --head: #ff6a5c;
+    --link: #8ea2ff;
+    --focus: #8ea2ff;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #12161d; --panel: #1b212b; --ink: #e9edf3; --muted: #a3adbd;
+  --rule: #2c3442; --track: #20262f; --clip-win: #3a5f95; --clip-mac: #33896a;
+  --clip-and: #b97436; --head: #ff6a5c; --link: #8ea2ff; --focus: #8ea2ff;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.55;
+}
+a { color: var(--link); text-underline-offset: 3px; }
+a:focus-visible, summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+
+/* Hero */
+header { padding: 56px 0 28px; }
+.name {
+  font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  font-weight: 800;
+  font-size: clamp(56px, 13vw, 132px);
+  line-height: .9;
+  letter-spacing: -0.045em;
+  margin: 0;
+}
+.lede { font-size: clamp(19px, 2.4vw, 23px); max-width: 34em; margin: 18px 0 10px; }
+.meta { color: var(--muted); margin: 0; font-size: 15px; }
+.beta {
+  display: inline-block; padding: 1px 9px; margin-right: 8px;
+  border: 1.5px solid var(--head); color: var(--head);
+  border-radius: 999px; font-weight: 600; font-size: 14px;
+}
+
+/* The timeline: each download is a clip on its own track */
+.timeline {
+  margin: 34px 0 10px;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 14px 16px 18px;
+  position: relative;
+  overflow: hidden;
+}
+.ruler {
+  display: flex; justify-content: space-between;
+  color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums;
+  padding: 0 0 8px 92px; border-bottom: 1px solid var(--rule); margin-bottom: 12px;
+}
+.row { display: grid; grid-template-columns: 80px 1fr; gap: 12px; align-items: center; margin: 10px 0; }
+.label { font-weight: 600; font-size: 15px; }
+.lane { background: var(--track); border-radius: 8px; padding: 4px; }
+.clip {
+  display: flex; flex-direction: column; justify-content: space-between;
+  min-height: 72px; padding: 9px 14px;
+  border-radius: 6px; color: var(--clip-text); text-decoration: none;
+  box-shadow: inset 0 -18px 30px rgba(0,0,0,.18);
+  transition: transform .15s ease, filter .15s ease;
+}
+.clip:hover { filter: brightness(1.12); }
+.clip:active { transform: translateY(1px); }
+.clip:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.clip .top { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; opacity: .9; }
+.clip .act { font-size: 19px; font-weight: 700; }
+.win { background: var(--clip-win); width: 86%; margin-left: 2%; }
+.mac { background: var(--clip-mac); width: 70%; margin-left: 14%; }
+.and { background: var(--clip-and); width: 60%; margin-left: 30%; }
+.row.mine .label::after { content: "  (this device)"; font-weight: 400; color: var(--muted); font-size: 13px; }
+.playhead {
+  position: absolute; top: 8px; bottom: 0; width: 2px; background: var(--head);
+  left: calc(16px + 92px + 6%); pointer-events: none;
+}
+.playhead::before {
+  content: ""; position: absolute; top: 0; left: -6px; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--head);
+}
+.small { color: var(--muted); font-size: 15px; margin: 6px 0 0; }
+
+/* Sections */
+section { padding: 34px 0; border-top: 1px solid var(--rule); }
+h2 { font-size: 28px; letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 16px; }
+h3 { font-size: 19px; margin: 0 0 8px; }
+.shot { margin: 34px 0 0; }
+.shot img { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--rule); }
+.shot figcaption { color: var(--muted); font-size: 15px; margin-top: 8px; }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.steps > div { border-left: 4px solid var(--c); padding-left: 16px; }
+.steps ol { margin: 0; padding-left: 20px; }
+.steps li { margin: 4px 0; }
+.extra { max-width: 40em; }
+.extra p { margin: 0 0 12px; }
+.extra ul { margin: 0 0 12px; padding-left: 20px; }
+footer { padding: 28px 0 48px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 15px; }
+footer p { margin: 0 0 6px; max-width: 46em; }
+
+@media (max-width: 760px) {
+  header { padding-top: 36px; }
+  .steps { grid-template-columns: 1fr; }
+  .row { grid-template-columns: 1fr; gap: 4px; }
+  .ruler { padding-left: 0; }
+  .win, .mac, .and { width: 100%; margin-left: 0; }
+  .playhead { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .clip { transition: none; } }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <h1 class="name">ClipForge</h1>
+  <p class="lede">A free, simple video editor for family videos, podcast clips and sport clips. Trim, add titles, captions and music, then export.</p>
+  <p class="meta"><span class="beta">Beta</span><span id="version"></span></p>
+
+  <div class="timeline" aria-label="Downloads">
+    <div class="ruler" aria-hidden="true"><span>0:00</span><span>0:02</span><span>0:04</span><span>0:06</span><span>0:08</span><span>0:10</span></div>
+    <span class="playhead" aria-hidden="true"></span>
+    <div class="row" data-os="windows">
+      <span class="label">Windows</span>
+      <div class="lane"><a class="clip win" href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-windows.zip">
+        <span class="top"><span>ClipForge-windows.zip</span><span>Windows 10 and 11</span></span>
+        <span class="act">Download for Windows</span></a></div>
+    </div>
+    <div class="row" data-os="mac">
+      <span class="label">Mac</span>
+      <div class="lane"><a class="clip mac" href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-macos.zip">
+        <span class="top"><span>ClipForge-macos.zip</span><span>macOS 12 or newer</span></span>
+        <span class="act">Download for Mac</span></a></div>
+    </div>
+    <div class="row" data-os="android">
+      <span class="label">Android</span>
+      <div class="lane"><a class="clip and" href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-android.apk">
+        <span class="top"><span>ClipForge-android.apk</span><span>Phones and tablets</span></span>
+        <span class="act">Download for Android</span></a></div>
+    </div>
+  </div>
+  <p class="small">Very old Android phone? If the app does not install, use the <a href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-android-old-32bit-phones.apk">version for old 32-bit phones</a>. All files and past versions: <a href="https://github.com/ekharam-png/clipforge/releases">releases page</a>.</p>
+
+  <figure class="shot">
+    <img src="editor.png" width="2560" height="1600" alt="The ClipForge editor: a video preview, a panel with Add media, Music, Overlay, Title, Captions and Split, and a timeline with video, music and title tracks.">
+    <figcaption>The editor on a computer. The phone version has the same tools.</figcaption>
+  </figure>
+</header>
+
+<main class="wrap">
+  <section aria-labelledby="install">
+    <h2 id="install">Install</h2>
+    <p class="small" style="margin:0 0 20px">ClipForge is not signed by Microsoft or Apple, so your device shows a warning the first time. That is expected.</p>
+    <div class="steps">
+      <div style="--c: var(--clip-win)">
+        <h3>Windows</h3>
+        <ol>
+          <li>Right-click the downloaded zip and choose Extract All.</li>
+          <li>Open the ClipForge folder and double-click <b>clipforge.exe</b>.</li>
+          <li>If you see "Windows protected your PC", click More info, then Run anyway.</li>
+        </ol>
+      </div>
+      <div style="--c: var(--clip-mac)">
+        <h3>Mac</h3>
+        <ol>
+          <li>Double-click the downloaded zip to unzip it.</li>
+          <li>Drag <b>ClipForge</b> into your Applications folder.</li>
+          <li>The first time, right-click ClipForge and choose Open, then Open again.</li>
+        </ol>
+      </div>
+      <div style="--c: var(--clip-and)">
+        <h3>Android</h3>
+        <ol>
+          <li>Open the downloaded file from your notifications or the Files app.</li>
+          <li>If asked, allow "Install unknown apps" for your browser or file manager.</li>
+          <li>Tap Install. New versions install over the old one and keep your projects.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="claude">
+    <h2 id="claude">Use it with Claude (optional)</h2>
+    <div class="extra">
+      <p>Claude can edit your ClipForge projects for you: cut silences, add titles, captions and music, and export. You do not need this to use ClipForge.</p>
+      <ul>
+        <li>Claude Desktop extension: <a href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-claude-windows.mcpb">Windows</a> or <a href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-claude-macos.mcpb">Mac</a></li>
+        <li>The ClipForge skill for Claude: <a href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-claude-skill.zip">ClipForge-claude-skill.zip</a></li>
+      </ul>
+      <p><a href="claude-setup.html">How to connect Claude to ClipForge</a></p>
+    </div>
+  </section>
+
+  <section aria-labelledby="help">
+    <h2 id="help">Help</h2>
+    <div class="extra">
+      <p>Every screen in ClipForge has a Help button with short articles and a tour. You can also <a href="https://github.com/ekharam-png/clipforge/blob/main/video-editor/assets/help/help_en.md">read the help online</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>ClipForge is free software under the <a href="https://github.com/ekharam-png/clipforge/blob/main/LICENSE">GNU GPL version 3</a>. <a href="https://github.com/ekharam-png/clipforge">The source code is on GitHub</a>.</p>
+  <p>It is a beta made for personal use and comes with no warranty. Keep copies of videos you care about.</p>
+</footer>
+
+<script>
+(function () {
+  // Put a mark on this device's download.
+  var ua = navigator.userAgent || "";
+  var os = /Android/i.test(ua) ? "android" : /Mac/i.test(ua) && !/iPhone|iPad/i.test(ua) ? "mac" : /Windows/i.test(ua) ? "windows" : "";
+  if (os) {
+    var row = document.querySelector('.row[data-os="' + os + '"]');
+    if (row) row.classList.add("mine");
+  }
+  // Current version from the newest release (GitHub's API allows this from
+  // a web page; the latest.json download does not). Show nothing if it fails.
+  fetch("https://api.github.com/repos/ekharam-png/clipforge/releases/latest")
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (j) {
+      var v = j && j.tag_name ? String(j.tag_name).replace(/^v/, "") : "";
+      if (/^[0-9][0-9.]*$/.test(v)) document.getElementById("version").textContent = "Version " + v;
+    })
+    .catch(function () {});
+})();
+</script>
+</body>
+</html>

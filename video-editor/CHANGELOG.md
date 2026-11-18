@@ -1,0 +1,112 @@
+# What's new in ClipForge
+
+Newest first. The version you have is in Help > About ClipForge (and at the
+bottom of the project list). This file is also the "What's new" page in the
+app's Help.
+
+## 1.10.0 – 17 November 2026
+
+- **Voice recorded separately.** A voice that was recorded on its own file while the camera filmed (a separate microphone, a recorder, or Zoom's sound file per person) can now be put under the picture and kept there:
+  - When you add a sound file (dropped on the window, **Music** > **My files**, or picked with **Add media**), ClipForge asks what it is: **Voice for the video**, **Music** or **Sound effect**. It guesses from the file's name and length.
+  - A voice is lined up with the picture by itself: ClipForge compares it with the sound the camera recorded. It gets its own track, named after the speaker when the file name says who it is, and the camera's own sound is muted (you are asked).
+  - The voice then follows its clip: trimming, splitting, speed, **Remove silences** and deleting keep it in sync, in the same Undo step. Several speakers: one file each, each on its own track.
+  - **Remove silences** listens to the voice (all of them, with several speakers) instead of the muted camera.
+  - If it cannot be lined up (the camera has no sound, or the sounds are too different), ClipForge says so and you nudge the voice by hand: 1 frame, 10 ms or 100 ms earlier or later. **Line up with the video again** retries; **Unlink** lets the voice stay where it is.
+  - A sound that is already in a project as music can be turned into a lined-up voice: **This is a voice: line up with the video** (on a computer also Edit > Sound).
+- Claude control: two new tools, to add a separately recorded voice lined up with the video and to line up, nudge or unlink a sound that is already there. Listings say whether a sound is a voice, music or an effect.
+- New help page "Voice recorded separately (microphone, Zoom)".
+
+## 1.9.0 – 17 November 2026
+
+- While a project is open in ClipForge, Claude can no longer change it by mistake: Claude is told to ask you to close it first (it can still look at it and export it). A mark left behind by a crash is cleaned up by itself.
+- Claude control, from a long test with Claude Code:
+  - Long exports no longer fail with "Request timed out": an export runs on its own in the background, Claude follows its progress and gets the time left, and it keeps going even if Claude restarts. Claude can also stop it. The file only appears under its name when it is complete.
+  - Shorter answers after each change (the length, what changed, warnings) instead of the whole timeline, so big projects (100+ pieces) work; Claude reads a long timeline page by page.
+  - Warnings when music now runs past the end of the video (with the one-step fix, **Fit music to video**), when captions became very short after speeding up, and why the video has its size ("464x824 because the first clip is small").
+  - Claude can try big changes first (remove silences, change all clips) and tell you what they would do without changing anything, can keep sped-up captions on screen long enough, and can save subtitles with the times of the original recording so they still fit after re-cutting.
+  - The export result says what **Small** changed and, when music is lowered under speech, where and by roughly how much.
+
+## 1.8.0 – 17 November 2026
+
+- Android: fixed videos showing as **Missing** after a while. ClipForge now really keeps its own copy of every video, photo and song you add (the same file is stored only once), and copies files of older projects the next time you open them, if they are still there.
+- **Find file** on Android can **Search the gallery** for the missing file by its name.
+- New versions now install over the old one and keep your projects. Once only, from 1.7 to 1.8: save your projects with **Share project file**, uninstall the old app, install 1.8 and open them again (Help: "Android: installing and updating").
+- **Fit music to video**: the music ends exactly with the video, with a fade-out. Music that is too short can **Loop**: it repeats with a soft cross-fade at each repeat.
+- **Find free music**: search free music (Openverse) inside **Add music**, listen, and add it. Only music you may use in shared videos is shown; ClipForge keeps the credit, which you can copy (**Copy credits**) or put at the end of the video (**Add credits at the end**).
+- Smoother editing on phones: the editor redraws much less while playing, and **Smooth preview** (in **More**) lightens video decoding while you edit.
+- Titles that pop, slide or fade are made in a simpler way when exporting, which avoids a crash seen with some FFmpeg versions.
+- Claude control: a new tool to fit music to the video (and loop it).
+- A feature log, docs/FEATURES.md in the project's files, lists everything ClipForge can do and the version it came in. New help on free music, music credits, fitting music and smooth preview.
+
+## 1.7.0 – 17 November 2026
+
+- **Fade in from black** and **Fade out to black**: for the whole video (with nothing selected; phones: **More** > **Fade in and out**) and for each clip, picture and sound together (**Transition and fades**). The first clip can now start from black.
+- **Duplicate** a clip or title (Ctrl/Cmd+D), and **Copy settings** / **Paste settings** to give another clip the same look, speed, sound, crop and fit (Ctrl/Cmd+Shift+C and V).
+- Snapping: dragging on the timeline lines things up with the playhead and the edges of clips, titles, sounds and overlays, with a yellow line. Hold Alt (Option on a Mac) to place freely; **Snap to playhead and edges** in the Playback menu turns it off.
+- Text: four fonts with English, Russian and Hebrew letters, **Outline**, **Shadow**, quick positions (top, middle, lower third, bottom), left / centre / right, ready-made styles, and animations to **Appear** and **Disappear** (fade, slide up, pop).
+- **Filter** (Warm, Cool, Black & white, Vintage, Vivid) and **Warmth** in the Look panel.
+- Export the sound only, as M4A or MP3, and choose the **Frames per second** (as the clips, 24, 25, 30 or 60).
+- Keyboard: J / K / L to play backwards, stop and play forwards; I / O to start or end the selected clip at the playhead; + and - to zoom the timeline; the arrow keys now step exactly one frame of the clip being shown.
+- Menu bar on computers: almost every editor command is in it now, with its shortcut; Help > **Keyboard shortcuts**. Sound tracks can be moved up and down (track menu).
+- History: clearer names (pasting, duplicating, Reset look, Apply to all clips, splitting a photo), and reading a file's sound tracks is no longer an undo step.
+- Claude control: fades, filters, warmth, text styles, sound-only export and frame rate, and new tools to duplicate a clip, copy clip settings, apply settings to all clips, freeze a frame, move a sound track, and undo or redo Claude's own edits.
+
+## 1.6.0 – 17 November 2026
+
+- **Crop**: crop any clip or photo by dragging the corners of a frame on the picture, free or held to 16:9, 9:16, 1:1 or 4:5.
+- **Rotate left**, **Rotate right**, **Flip sideways** and **Flip upside down** for videos filmed the wrong way round.
+- **Position**: choose which part of the picture stays in the frame with Fill or zoom, for example to keep a person in shot when a wide video becomes upright.
+- **Overlay**: a second video row above your clips for picture-in-picture, side by side, top and bottom, or a full-screen cut-away to another camera. Drag it on the picture to place it and drag its corner to resize it; it has its own trim, speed, volume and fades.
+- Menu bar on computers: **Crop and position…**, **Rotate right** and **Add overlay video or photo…** in the Edit menu.
+- Claude control: crop, rotation, flips and position in set_clip_properties, and tools for overlays.
+
+## 1.5.0 – 17 November 2026
+
+- Sound tracks: up to three rows of sound under the video (for example Voice, Music and Effects) that play together, each with its own volume, mute and solo. Drag a sound up or down to move it to another track.
+- **Separate sound to track…**: moves a clip's own sound to the Voice track and mutes the clip. The sound follows its clip until you drag it, so it can start before or after the picture.
+- The sound of the video clips can be muted or turned down in one place: tap **Video** left of the timeline.
+- Lower music under speech now works per track, and a Voice track counts as speech.
+- Remove silences measures the background noise first, so it also finds the gaps in noisy phone recordings; **Sensitivity** gives fewer or more cuts.
+- **Video size**: export at 720p, 1080p or 4K instead of the size of the first clip (in the Export window and the Shape menu).
+- Claude control: tools for sound tracks, separating sound and the video size.
+
+## 1.4.0 – 16 November 2026
+
+- Help in the app: a quick tour the first time ClipForge opens, a searchable help screen that copes with typos, and small "?" buttons next to the trickier settings.
+- Windows and Linux: a menu bar along the top of the window (File, Edit, Playback, Help).
+- Instant sound: Clean up sound and Voice focus are prepared in the background, so you hear the result in the preview without exporting first.
+- **History**: a list of your changes by name; click one to go back to that point.
+- Long videos (up to 40 minutes and more): smooth timeline, faster clip pictures, a progress bar and Cancel for Remove silences, an estimated file size and a free space check before exporting, and phones keep exporting with the screen off.
+- Version numbers: Help > **About ClipForge** shows exactly which build you have, and **Copy version info** copies it for bug reports.
+
+## 1.3.0 – 16 November 2026
+
+- **Voice focus**: makes speech clearer and background sound quieter.
+- Choose which sound to use: another sound track, or only the left or right side.
+- Hear a sample: listen to 15 seconds with and without your sound settings.
+- Fixed a crash when quitting on a Mac; quitting now saves first and asks only when something would be lost.
+- Drag and drop videos, photos and music from a folder onto ClipForge (computers).
+- Exports can use the graphics card, and fall back to the processor if that fails.
+
+## 1.2.0 – 15 November 2026
+
+- Fixes from a full review: titles and captions now follow their clip when you edit, text fits on vertical videos, and the picture shape no longer changes when clips are reordered.
+- Clearer saving: a "Not saved — retry" bar instead of silent failures, and a "Find file…" button when a video has moved.
+- Keyboard shortcuts, a 1.25× speed button, 60 fps export, and a clean-up of unused copies.
+- Claude control: Claude Desktop or Claude Code can edit and export your projects on a computer.
+- Long edits with many cuts export with far less memory.
+
+## 1.1.0 – 15 November 2026
+
+- Transitions between clips: crossfade, fade through black, slide.
+- Speed from 0.25× to 4×, with the voice pitch kept.
+- Brightness, contrast, saturation, zoom and freeze frame.
+- Clean up sound, lower music under speech, and remove silences.
+- Captions, with subtitle (.srt) import and export.
+- Duplicate a project, and move projects between phone and computer.
+- Android: exported videos go straight to the gallery.
+- No more black gap in the preview between two videos.
+
+## 1.0.0 – 15 November 2026
+
+- The first editor: add videos and photos, trim, split, delete and reorder clips, live preview, music with volume and fades, titles, picture shapes (9:16, 16:9, 1:1, 4:5), export in full or small size, undo and redo, saving by itself, and a project list.

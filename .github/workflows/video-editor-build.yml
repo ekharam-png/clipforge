@@ -1,0 +1,543 @@
+# Builds the ClipForge video editor (video-editor/) for Android, Windows and
+# macOS and attaches the installers to the workflow run as artifacts.
+#
+# The Windows and macOS downloads also contain clipforge-mcp, the small
+# command-line server that lets Claude edit ClipForge projects (README,
+# "Claude control"). It is built by bin/build_mcp.dart, which wraps
+# `dart compile exe` (see the comment in that file for why a wrapper).
+#
+# Connecting Claude without editing a config file (docs/claude-setup.html):
+# the Windows and macOS jobs also upload the Claude Desktop extension
+# ClipForge-<version>-build<n>-claude-{windows,macos}.mcpb (manifest.json +
+# clipforge-mcp + title fonts, built by docs/tools/build_claude_bundles.py),
+# and the check job uploads the skill ClipForge-<version>-claude-skill.zip
+# (claude/skill/clipforge-editing).
+#
+# Version numbers (lib/core/build_info.dart): the version comes from
+# pubspec.yaml, the build number is this workflow's run number, and the
+# "check" job records the build time (UTC) and commit once for the whole
+# run. Every build (app and clipforge-mcp, on every platform) gets the same
+# values, so Help > About ClipForge shows the same line everywhere, e.g.
+# "ClipForge 1.4.0 (build 21) · 16 Nov 2026, 07:20 UTC · 877e482", and the
+# downloads are named ClipForge-1.4.0-build21-<platform>.
+#
+# Build number = run number + 100. ClipForge moved to this repository after
+# build 38 of the old one, and Android only installs an update whose
+# version code (Flutter: 2000 + build for 64-bit) is higher, so the
+# numbers continue above the old ones.
+#
+# Releases: pushing a tag v<version> (it must match pubspec.yaml) builds
+# Android, Windows and macOS and the "release" job publishes them as a
+# GitHub Release, with fixed-name copies (ClipForge-windows.zip, ...) so
+# releases/latest/download/<name> always gives the newest version, and
+# latest.json for the app's future "Update" button.
+name: ClipForge builds
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "video-editor/**"
+      - ".github/workflows/video-editor-build.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: video-editor-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.50.0"
+
+defaults:
+  run:
+    working-directory: video-editor
+
+jobs:
+  check:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build_time: ${{ steps.version.outputs.build_time }}
+      commit: ${{ steps.version.outputs.commit }}
+      display: ${{ steps.version.outputs.display }}
+      build: ${{ steps.version.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+      # One version line for the whole run (see the top of this file).
+      - name: Version for this run
+        id: version
+        run: |
+          version="$(sed -n 's/^version:[[:space:]]*\([^+[:space:]]*\).*/\1/p' pubspec.yaml)"
+          if [ -z "$version" ]; then echo "::error::no version in pubspec.yaml"; exit 1; fi
+          build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          commit="${GITHUB_SHA::7}"
+          build=$(( GITHUB_RUN_NUMBER + 100 ))
+          if [[ "$GITHUB_REF" == refs/tags/v* && "${GITHUB_REF#refs/tags/v}" != "$version" ]]; then
+            echo "::error::tag ${GITHUB_REF#refs/tags/} does not match version $version in pubspec.yaml"; exit 1
+          fi
+          display="ClipForge $version (build $build) · $(LC_ALL=C date -u -d "$build_time" '+%-d %b %Y, %H:%M UTC') · $commit"
+          {
+            echo "version=$version"
+            echo "build_time=$build_time"
+            echo "commit=$commit"
+            echo "display=$display"
+            echo "build=$build"
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::$display"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # The export integration tests drive the system ffmpeg; without it they
+      # are skipped.
+      - name: Install ffmpeg for the export tests
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+          # Which FFmpeg the export tests ran with (ubuntu-latest changes).
+          ffmpeg -hide_banner -version | head -1
+      - run: flutter pub get
+      # Errors fail the build; lint infos and warnings are only reported.
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - run: flutter test
+      # Compile smoke test of the Claude control server (test/mcp/e2e_test.dart
+      # above already drives a full editing session through it): the
+      # single-file executable must build and answer the MCP handshake.
+      - name: Build clipforge-mcp and check that it answers
+        run: |
+          mkdir -p build
+          printf '{"CLIPFORGE_BUILD_TIME":"%s","CLIPFORGE_COMMIT":"%s","CLIPFORGE_CHANNEL":"ci"}\n' \
+            "${{ steps.version.outputs.build_time }}" "${{ steps.version.outputs.commit }}" > build/clipforge_build.json
+          dart run bin/build_mcp.dart -o build/mcp/clipforge-mcp \
+            --build-name=${{ steps.version.outputs.version }} --build-number=${{ steps.version.outputs.build }} \
+            --dart-define-from-file=build/clipforge_build.json
+          build/mcp/clipforge-mcp --version
+          # The Dart version line must be exactly the one this workflow
+          # computed (it names the downloads and the release notes).
+          build/mcp/clipforge-mcp --version | grep -qF "${{ steps.version.outputs.display }}" || {
+            echo "::error::clipforge-mcp --version does not show: ${{ steps.version.outputs.display }}"; exit 1; }
+          reply="$(printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | build/mcp/clipforge-mcp --projects-dir "$RUNNER_TEMP/projects")"
+          grep -q '"protocolVersion":"2025-11-25"' <<<"$reply"
+          grep -q '"name":"export_video"' <<<"$reply"
+      # The skill that teaches Claude how to edit with ClipForge
+      # (Claude > Customize > Skills > Upload a skill). The zip holds the
+      # folder clipforge-editing/, as the upload expects. The extension is
+      # also assembled here from the Linux program, only to check the
+      # script and the manifest on every push (the real ones are built in
+      # the Windows and macOS jobs).
+      - name: Build the Claude skill zip and check the extension script
+        run: |
+          python3 docs/tools/build_claude_bundles.py skill \
+            --version "${{ steps.version.outputs.version }}" --out dist
+          python3 docs/tools/build_claude_bundles.py mcpb --binary build/mcp/clipforge-mcp --platform linux \
+            --version "${{ steps.version.outputs.version }}" --build ${{ steps.version.outputs.build }} \
+            --display "${{ steps.version.outputs.display }}" --out "$RUNNER_TEMP/mcpb-check"
+      - uses: actions/upload-artifact@v7
+        with:
+          path: video-editor/dist/ClipForge-${{ steps.version.outputs.version }}-claude-skill.zip
+          archive: false
+          if-no-files-found: error
+
+  android:
+    name: Android APK
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CF_VERSION: ${{ needs.check.outputs.version }}
+      CF_BUILD_TIME: ${{ needs.check.outputs.build_time }}
+      CF_COMMIT: ${{ needs.check.outputs.commit }}
+      CF_DISPLAY: ${{ needs.check.outputs.display }}
+      # Start of every download's name: ClipForge-1.4.0-build21
+      CF_NAME: ClipForge-${{ needs.check.outputs.version }}-build${{ needs.check.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      # Signing: the ClipForge release key from the four ANDROID_* repository
+      # secrets, so every build installs over the previous one. Without the
+      # secrets (forks) the APK is signed with the debug key.
+      - name: Configure release signing (if secrets are set)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::No signing secrets: the APK is signed with the debug key, not for release."
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/clipforge.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/clipforge.jks"
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_KEY_PASSWORD"
+          } > android/key.properties
+      # One APK per CPU type: a single universal APK is about 260 MB, the
+      # 64-bit ARM one (every phone from roughly 2017 on) is about 72 MB.
+      # The build time, commit and channel for the app's About box
+      # (--dart-define-from-file), and the release notes for this version
+      # (its section of CHANGELOG.md) for the download.
+      - name: Write the build details and release notes
+        shell: bash
+        run: |
+          mkdir -p build dist
+          printf '{"CLIPFORGE_BUILD_TIME":"%s","CLIPFORGE_COMMIT":"%s","CLIPFORGE_CHANNEL":"ci"}\n' \
+            "$CF_BUILD_TIME" "$CF_COMMIT" > build/clipforge_build.json
+          cat build/clipforge_build.json
+          {
+            echo "$CF_DISPLAY"
+            echo
+            awk -v v="$CF_VERSION" '/^## /{p = ($2 == v)} p' CHANGELOG.md
+            echo "All versions: Help > What's new in the app."
+          } > "dist/$CF_NAME-release-notes.txt"
+          cat "dist/$CF_NAME-release-notes.txt"
+          grep -q "^## $CF_VERSION" "dist/$CF_NAME-release-notes.txt" || {
+            echo "::error::CHANGELOG.md has no section for $CF_VERSION"; exit 1; }
+      # versionName = the version; versionCode = the run number plus
+      # Flutter's per-CPU offset (2000 + run for 64-bit, 1000 + run for
+      # 32-bit), so each new run installs over the previous one.
+      - run: >-
+          flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+          --build-name=${{ env.CF_VERSION }} --build-number=${{ needs.check.outputs.build }}
+          --dart-define-from-file=build/clipforge_build.json
+      - name: Check the APK signature
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$apksigner" verify --print-certs build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | tee signer.txt
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            grep -qi "2f36dbd0dae67cde38d2bb7cea0c04d850fd4433693d209609f797df4f23655b" signer.txt || {
+              echo "::error::The APK is not signed with the ClipForge release key"; exit 1; }
+          else
+            echo "::warning::No signing secrets: the APK is signed with the debug key, not for release."
+          fi
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      - name: Name the APKs
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "dist/$CF_NAME-android.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "dist/$CF_NAME-android-old-32bit-phones.apk"
+      - uses: actions/upload-artifact@v7
+        with:
+          path: video-editor/dist/${{ env.CF_NAME }}-android.apk
+          archive: false
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          path: video-editor/dist/${{ env.CF_NAME }}-android-old-32bit-phones.apk
+          archive: false
+          if-no-files-found: error
+
+  windows:
+    name: Windows app
+    needs: check
+    # Windows and macOS runners use up build minutes quickly, so these only
+    # run when the workflow is started by hand or for a release tag.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      CF_VERSION: ${{ needs.check.outputs.version }}
+      CF_BUILD_TIME: ${{ needs.check.outputs.build_time }}
+      CF_COMMIT: ${{ needs.check.outputs.commit }}
+      CF_DISPLAY: ${{ needs.check.outputs.display }}
+      # Start of every download's name: ClipForge-1.4.0-build21
+      CF_NAME: ClipForge-${{ needs.check.outputs.version }}-build${{ needs.check.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      # FFmpeg comes with the ffmpeg_kit_flutter_new plugin: its DLLs and their
+      # licence notices are downloaded and placed next to clipforge.exe by the
+      # build, so no separate ffmpeg.exe is needed.
+      # The build time, commit and channel for the app's About box
+      # (--dart-define-from-file), and the release notes for this version
+      # (its section of CHANGELOG.md) for the download.
+      - name: Write the build details and release notes
+        shell: bash
+        run: |
+          mkdir -p build dist
+          printf '{"CLIPFORGE_BUILD_TIME":"%s","CLIPFORGE_COMMIT":"%s","CLIPFORGE_CHANNEL":"ci"}\n' \
+            "$CF_BUILD_TIME" "$CF_COMMIT" > build/clipforge_build.json
+          cat build/clipforge_build.json
+          {
+            echo "$CF_DISPLAY"
+            echo
+            awk -v v="$CF_VERSION" '/^## /{p = ($2 == v)} p' CHANGELOG.md
+            echo "All versions: Help > What's new in the app."
+          } > "dist/$CF_NAME-release-notes.txt"
+          cat "dist/$CF_NAME-release-notes.txt"
+          grep -q "^## $CF_VERSION" "dist/$CF_NAME-release-notes.txt" || {
+            echo "::error::CHANGELOG.md has no section for $CF_VERSION"; exit 1; }
+      # File and product version of clipforge.exe: 1.4.0.<run number>.
+      - run: >-
+          flutter build windows --release
+          --build-name=${{ env.CF_VERSION }} --build-number=${{ needs.check.outputs.build }}
+          --dart-define-from-file=build/clipforge_build.json
+      # The Claude control server goes next to clipforge.exe. It finds the
+      # title fonts in the app's own data\flutter_assets\assets\fonts folder,
+      # so nothing else has to be copied. Unlike the app it needs a separately
+      # installed ffmpeg.exe / ffprobe.exe on the user's PC (README).
+      # The build script is run from a copy outside the package so that Dart
+      # does not run the Flutter plugins' build hooks for it.
+      - name: Build clipforge-mcp.exe and check that it answers
+        shell: pwsh
+        run: |
+          $release = "build\windows\x64\runner\Release"
+          Copy-Item bin\build_mcp.dart "$env:RUNNER_TEMP\build_mcp.dart"
+          dart "$env:RUNNER_TEMP\build_mcp.dart" -o "$release\clipforge-mcp.exe" `
+            "--build-name=$env:CF_VERSION" "--build-number=${{ needs.check.outputs.build }}" `
+            "--dart-define-from-file=build\clipforge_build.json"
+          if ($LASTEXITCODE -ne 0) { throw "building clipforge-mcp.exe failed" }
+          $version = (& "$release\clipforge-mcp.exe" --version) -join "`n"
+          Write-Host $version
+          if (-not $version.Contains("$env:CF_VERSION (build ${{ needs.check.outputs.build }})")) { throw "clipforge-mcp.exe reports the wrong version" }
+          foreach ($font in "DejaVuSans.ttf", "DejaVuSans-Bold.ttf") {
+            if (-not (Test-Path "$release\data\flutter_assets\assets\fonts\$font")) {
+              throw "$font is missing from the app bundle; clipforge-mcp.exe needs it for titles"
+            }
+          }
+          $messages = @(
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}',
+            '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_status","arguments":{}}}'
+          )
+          $reply = ($messages | & "$release\clipforge-mcp.exe" --projects-dir "$env:RUNNER_TEMP\projects") -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "clipforge-mcp.exe exited with $LASTEXITCODE" }
+          Write-Host $reply
+          if ($reply -notmatch '"protocolVersion":"2025-11-25"') { throw "no MCP handshake from clipforge-mcp.exe" }
+          if ($reply -notmatch '"fontsDir":"[^"]') { throw "clipforge-mcp.exe did not find the title fonts" }
+          # Guide that tells Claude how to work with ClipForge (README, Claude control).
+          Copy-Item claude\CLAUDE.md "$release\CLAUDE.md"
+          Copy-Item docs\claude-setup.html "$release\Connect Claude to ClipForge.html"
+      # One-click install for Claude Desktop: a .mcpb file (a zip with
+      # manifest.json, clipforge-mcp.exe and the title fonts in server\fonts).
+      # The script starts the program from the assembled bundle and fails
+      # when it does not find the bundle's fonts or lists other tools than
+      # lib/mcp/tools.dart.
+      - name: Build the Claude Desktop extension (.mcpb)
+        shell: pwsh
+        run: |
+          python docs\tools\build_claude_bundles.py mcpb `
+            --binary "build\windows\x64\runner\Release\clipforge-mcp.exe" --platform windows `
+            --version "$env:CF_VERSION" --build ${{ needs.check.outputs.build }} `
+            --display "$env:CF_DISPLAY" --out dist
+          if ($LASTEXITCODE -ne 0) { throw "building the .mcpb failed" }
+      - name: Add the Visual C++ runtime and zip
+        shell: pwsh
+        run: |
+          $release = "build\windows\x64\runner\Release"
+          # PCs without the Visual C++ redistributable need these next to the exe.
+          foreach ($dll in "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll") {
+            $src = Join-Path $env:SystemRoot "System32\$dll"
+            if (Test-Path $src) { Copy-Item $src $release } else { Write-Warning "$dll not found on the runner" }
+          }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item $release dist\ClipForge -Recurse
+          Copy-Item "dist\$env:CF_NAME-release-notes.txt" "dist\ClipForge\Release notes.txt"
+          Compress-Archive -Path dist\ClipForge -DestinationPath "dist\$env:CF_NAME-windows.zip"
+      - uses: actions/upload-artifact@v7
+        with:
+          path: video-editor/dist/${{ env.CF_NAME }}-windows.zip
+          archive: false
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          path: video-editor/dist/${{ env.CF_NAME }}-claude-windows.mcpb
+          archive: false
+          if-no-files-found: error
+
+  macos:
+    name: macOS app
+    needs: check
+    # Windows and macOS runners use up build minutes quickly, so these only
+    # run when the workflow is started by hand or for a release tag.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      CF_VERSION: ${{ needs.check.outputs.version }}
+      CF_BUILD_TIME: ${{ needs.check.outputs.build_time }}
+      CF_COMMIT: ${{ needs.check.outputs.commit }}
+      CF_DISPLAY: ${{ needs.check.outputs.display }}
+      # Start of every download's name: ClipForge-1.4.0-build21
+      CF_NAME: ClipForge-${{ needs.check.outputs.version }}-build${{ needs.check.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      # The build time, commit and channel for the app's About box
+      # (--dart-define-from-file), and the release notes for this version
+      # (its section of CHANGELOG.md) for the download.
+      - name: Write the build details and release notes
+        shell: bash
+        run: |
+          mkdir -p build dist
+          printf '{"CLIPFORGE_BUILD_TIME":"%s","CLIPFORGE_COMMIT":"%s","CLIPFORGE_CHANNEL":"ci"}\n' \
+            "$CF_BUILD_TIME" "$CF_COMMIT" > build/clipforge_build.json
+          cat build/clipforge_build.json
+          {
+            echo "$CF_DISPLAY"
+            echo
+            awk -v v="$CF_VERSION" '/^## /{p = ($2 == v)} p' CHANGELOG.md
+            echo "All versions: Help > What's new in the app."
+          } > "dist/$CF_NAME-release-notes.txt"
+          cat "dist/$CF_NAME-release-notes.txt"
+          grep -q "^## $CF_VERSION" "dist/$CF_NAME-release-notes.txt" || {
+            echo "::error::CHANGELOG.md has no section for $CF_VERSION"; exit 1; }
+      # CFBundleShortVersionString = the version, CFBundleVersion = the run
+      # number (Finder > Get Info shows "1.4.0 (21)").
+      - run: >-
+          flutter build macos --release
+          --build-name=${{ env.CF_VERSION }} --build-number=${{ needs.check.outputs.build }}
+          --dart-define-from-file=build/clipforge_build.json
+      # The Claude control server is shipped BESIDE the app, in its own
+      # folder with the title fonts, not inside ClipForge.app: adding a
+      # file to the bundle after the build would break the bundle's ad-hoc
+      # signature (its sealed resources), and the app could then refuse to
+      # start. The executable itself gets an ad-hoc signature (Apple Silicon
+      # does not run unsigned code). It is built for the runner's CPU only
+      # (macos-latest = Apple Silicon); unlike the app it is not universal.
+      # The build script is run from a copy outside the package so that Dart
+      # does not run the Flutter plugins' build hooks for it.
+      - name: Build clipforge-mcp and check that it answers
+        run: |
+          out="dist/stage/ClipForge-Claude"
+          mkdir -p "$out/fonts"
+          cp bin/build_mcp.dart "$RUNNER_TEMP/build_mcp.dart"
+          dart "$RUNNER_TEMP/build_mcp.dart" -o "$out/clipforge-mcp" \
+            --build-name="$CF_VERSION" --build-number=${{ needs.check.outputs.build }} \
+            --dart-define-from-file=build/clipforge_build.json
+          cp assets/fonts/*.ttf assets/fonts/*LICENSE*.txt assets/fonts/*-OFL.txt "$out/fonts/"
+          cp claude/CLAUDE.md "$out/CLAUDE.md"
+          cp docs/claude-setup.html "dist/stage/Connect Claude to ClipForge.html"
+          codesign --verify "$out/clipforge-mcp" 2>/dev/null || codesign --force --sign - "$out/clipforge-mcp"
+          codesign --verify --verbose "$out/clipforge-mcp"
+          file "$out/clipforge-mcp"
+          "$out/clipforge-mcp" --version | grep -qF "$CF_DISPLAY" || {
+            echo "::error::clipforge-mcp --version does not show: $CF_DISPLAY"; exit 1; }
+          reply="$(printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_status","arguments":{}}}' \
+            | "$out/clipforge-mcp" --projects-dir "$RUNNER_TEMP/projects")"
+          echo "$reply"
+          grep -q '"protocolVersion":"2025-11-25"' <<<"$reply"
+          grep -q '"fontsDir":"[^"]' <<<"$reply"
+      # One-click install for Claude Desktop: a .mcpb file (a zip with
+      # manifest.json, the ad-hoc signed clipforge-mcp and the title fonts
+      # in server/fonts). Apple Silicon only, like the program. The program
+      # is unpacked again and checked: still executable, signature intact.
+      # Not notarized: if macOS blocks it after installing, see
+      # docs/claude-setup.html ("If the Mac blocks it").
+      - name: Build the Claude Desktop extension (.mcpb)
+        run: |
+          python3 docs/tools/build_claude_bundles.py mcpb \
+            --binary dist/stage/ClipForge-Claude/clipforge-mcp --platform macos \
+            --version "$CF_VERSION" --build ${{ needs.check.outputs.build }} \
+            --display "$CF_DISPLAY" --out dist
+          check="$RUNNER_TEMP/mcpb-unpacked"
+          mkdir -p "$check"
+          unzip -q "dist/$CF_NAME-claude-macos.mcpb" -d "$check"
+          test -x "$check/server/clipforge-mcp"
+          codesign --verify --verbose "$check/server/clipforge-mcp"
+          "$check/server/clipforge-mcp" --version | grep -qF "$CF_DISPLAY"
+      # Not signed with an Apple developer certificate (ad-hoc signature only),
+      # so macOS asks for confirmation on first launch. ditto keeps the
+      # symlinks inside the .app intact, which a plain zip would break.
+      # The zip holds ClipForge.app, the ClipForge-Claude folder and the
+      # release notes side by side.
+      - name: Zip the app
+        run: |
+          app="$(ls -d build/macos/Build/Products/Release/*.app | head -n 1)"
+          ditto "$app" "dist/stage/$(basename "$app")"
+          cp "dist/$CF_NAME-release-notes.txt" "dist/stage/Release notes.txt"
+          ditto -c -k --sequesterRsrc dist/stage "dist/$CF_NAME-macos.zip"
+      - uses: actions/upload-artifact@v7
+        with:
+          path: video-editor/dist/${{ env.CF_NAME }}-macos.zip
+          archive: false
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          path: video-editor/dist/${{ env.CF_NAME }}-claude-macos.mcpb
+          archive: false
+          if-no-files-found: error
+
+  # Publishes a GitHub Release for a tag v<version>: the versioned files,
+  # copies with fixed names (one link always gives the newest version) and
+  # latest.json. Only this job may write to the repository.
+  release:
+    name: GitHub Release
+    needs: [check, android, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CF_VERSION: ${{ needs.check.outputs.version }}
+      CF_BUILD: ${{ needs.check.outputs.build }}
+      CF_NAME: ClipForge-${{ needs.check.outputs.version }}-build${{ needs.check.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Download this run's files
+        run: |
+          gh run download "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" -D "$RUNNER_TEMP/artifacts"
+          mkdir -p "$RUNNER_TEMP/release"
+          find "$RUNNER_TEMP/artifacts" -type f -exec cp {} "$RUNNER_TEMP/release/" \;
+          ls -l "$RUNNER_TEMP/release"
+      - name: Fixed-name copies, latest.json and release notes
+        working-directory: ${{ runner.temp }}/release
+        run: |
+          need() { test -f "$1" || { echo "::error::$1 is missing"; exit 1; }; }
+          copy() { need "$1"; cp "$1" "$2"; }
+          copy "$CF_NAME-windows.zip"             ClipForge-windows.zip
+          copy "$CF_NAME-macos.zip"               ClipForge-macos.zip
+          copy "$CF_NAME-android.apk"             ClipForge-android.apk
+          copy "$CF_NAME-android-old-32bit-phones.apk" ClipForge-android-old-32bit-phones.apk
+          copy "$CF_NAME-claude-windows.mcpb"     ClipForge-claude-windows.mcpb
+          copy "$CF_NAME-claude-macos.mcpb"       ClipForge-claude-macos.mcpb
+          copy "ClipForge-$CF_VERSION-claude-skill.zip" ClipForge-claude-skill.zip
+          tag="${GITHUB_REF#refs/tags/}"
+          printf '{"version":"%s","build":%s,"date":"%s","notes_url":"%s"}\n' \
+            "$CF_VERSION" "$CF_BUILD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$tag" > latest.json
+          cat latest.json
+          awk -v v="$CF_VERSION" '/^## /{p = ($2 == v)} p' "$GITHUB_WORKSPACE/video-editor/CHANGELOG.md" > "$RUNNER_TEMP/notes.md"
+          test -s "$RUNNER_TEMP/notes.md" || { echo "::error::CHANGELOG.md has no section for $CF_VERSION"; exit 1; }
+      - name: Create the release
+        working-directory: ${{ runner.temp }}/release
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          gh release create "$tag" -R "$GITHUB_REPOSITORY" \
+            --title "ClipForge $CF_VERSION" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag \
+            ./*.zip ./*.apk ./*.mcpb latest.json
