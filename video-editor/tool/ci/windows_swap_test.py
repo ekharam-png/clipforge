@@ -192,13 +192,11 @@ def main():
     done = subprocess.run(command, cwd=tempfile.gettempdir(), capture_output=True, text=True, timeout=180)
     check(done.returncode == 0, "the script ends with 0 (%s)" % done.stderr.strip())
     time.sleep(2)
-    listed = subprocess.run(["wmic", "process", "where", "name='clipforge.exe'", "get", "ExecutablePath"],
-                            capture_output=True, text=True).stdout
-    if not listed.strip():
-        listed = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-Command",
-             "Get-Process clipforge -ErrorAction SilentlyContinue | ForEach-Object { $_.Path }"],
-            capture_output=True, text=True).stdout
+    # (wmic is no longer part of Windows; PowerShell lists the processes.)
+    listed = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-Command",
+         "Get-Process clipforge -ErrorAction SilentlyContinue | ForEach-Object { $_.Path }"],
+        capture_output=True, text=True).stdout
     print("  started:", listed.strip().replace("\n", " | "))
     # Started without input the stand-in may already have ended; the result
     # file and the swap are what count. Leftover processes are ended.
