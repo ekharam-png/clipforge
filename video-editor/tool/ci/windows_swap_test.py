@@ -52,6 +52,14 @@ import sys
 import tempfile
 import time
 
+# The runner's console is cp1252: log lines with other letters (scenario 6
+# uses them in the path) must not stop the test.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.normpath(os.path.join(HERE, "..", "..", "assets", "update"))
 INSTALL_DART = os.path.normpath(os.path.join(HERE, "..", "..", "lib", "core", "update", "update_install.dart"))
