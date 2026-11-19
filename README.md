@@ -59,7 +59,9 @@ not planned for now.
 ## Download
 
 **[Download ClipForge](https://ekharam-png.github.io/clipforge/)** (Windows,
-Mac and Android, with install steps). All versions are on the
+Mac and Android, with install steps). The Windows and Mac downloads come
+with a short guide, **Read me first**, next to the app: how to install,
+first steps, updates and what is new. All versions are on the
 [Releases](https://github.com/ekharam-png/clipforge/releases) page.
 
 From version 1.12 on the app updates itself: it shows "Version … is

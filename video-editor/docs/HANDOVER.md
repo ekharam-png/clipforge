@@ -2547,7 +2547,8 @@ tester, and must say exactly which build they ran).
   differs from the computed line (Linux, macOS) or version (Windows).
   Artifacts: `ClipForge-<version>-build<run>-{android.apk,
   android-old-32bit-phones.apk, windows.zip, macos.zip}`; the zips hold
-  `Release notes.txt` (the version's CHANGELOG section). Android versionCode
+  `Read me first.html` (1.14.1, instead of `Release notes.txt`; see
+  "Read me first.html in the downloads" below). Android versionCode
   keeps Flutter's per-CPU offset (2000+run arm64, 1000+run armv7, so a new
   run always installs over an older one); macOS CFBundleVersion and the
   Windows file version (1.4.0.<run>) are the run number.
@@ -2570,7 +2571,9 @@ tester, and must say exactly which build they ran).
    few plain-language bullets (bold only for the app's own labels).
    `flutter test` fails if the two disagree.
 3. Commit and start the workflow (workflow_dispatch). CI does the rest:
-   build number, time, commit, artifact names, release notes.
+   build number, time, commit, artifact names, release notes, and
+   "Read me first.html" for the Windows and Mac downloads (from the
+   CHANGELOG section: keep it plain Markdown - lists, bold, code, links).
 4. Generate the test checklists with the build line:
    `python3 docs/testing/gen_checklist.py docs/testing/ClipForge-Test-Round-4.html --round 4 --build "ClipForge X.Y.Z (build N) · ..."`
    and the same with `ClipForge-Test-Round-4-Phone.html --round 4-phone`.
@@ -2590,10 +2593,68 @@ tester, and must say exactly which build they ran).
    `ClipForge-<version>-claude-skill.zip`; the owner's guide is
    `docs/claude-setup.html`.
 
-History so far: 1.14.1 Windows update by replacing the folder's contents (the rename never happened on a real PC), helper must report in, cmd fallback, update-log.txt, tidy-up, Inno Setup installer; 1.14 publishing kit (destinations, export several, publishing notes, chapters, share / upload pages), shorts in the app, good-moment markers, suggest_shorts / export_kit for Claude, Connect to Claude buttons, update leftovers and apply-at-start; 1.13 Text window, sound waves, who is speaking; 1.12 self-update (banner, Windows / Mac swap, Android installer), Claude helper installed by the app + hand-over, Connect to Claude page, get_guide, self_test, Windows jobs survive Claude Code, old -> new answers, media table; 1.11 speech to text on computers (transcribe, captions from speech, gentle filler removal with put back, Transcript column, shorts for Claude, right-to-left text), unique project names, app lock fix; 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
+History so far: 1.14.1 "Read me first.html" in the Windows and Mac downloads (instead of Release notes.txt), Windows update by replacing the folder's contents (the rename never happened on a real PC), helper must report in, cmd fallback, update-log.txt, tidy-up, Inno Setup installer; 1.14 publishing kit (destinations, export several, publishing notes, chapters, share / upload pages), shorts in the app, good-moment markers, suggest_shorts / export_kit for Claude, Connect to Claude buttons, update leftovers and apply-at-start; 1.13 Text window, sound waves, who is speaking; 1.12 self-update (banner, Windows / Mac swap, Android installer), Claude helper installed by the app + hand-over, Connect to Claude page, get_guide, self_test, Windows jobs survive Claude Code, old -> new answers, media table; 1.11 speech to text on computers (transcribe, captions from speech, gentle filler removal with put back, Transcript column, shorts for Claude, right-to-left text), unique project names, app lock fix; 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
 Claude control; 1.3 Voice focus, quit crash fix, drag and drop, graphics
 card; 1.4 help and tour, Windows menu bar, instant sound, History, long
 videos, version numbers.
+
+### Read me first.html in the downloads (1.14.1)
+
+Owner: "we also need a guide for when someone downloads and reads; notes
+should be in HTML format." The readers are non-technical friends on
+Windows and Mac.
+
+- **Script** `tool/ci/make_readme_html.py` (Python standard library):
+  `--platform windows|macos --version --build --date --changelog --out`.
+  One self-contained page (no web fonts, images or scripts; light / dark
+  from the system; about 23 KB, limit 40 KB - earlier versions are dropped
+  first when a changelog is long): title and one sentence, "Install on
+  <system>" for that system only, First steps, Where your projects are,
+  Updates, Use it with Claude, "What is new in <version>" (the version's
+  CHANGELOG section through a small Markdown converter: headings, lists,
+  bold, inline code, https links; everything else escaped) and the three
+  sections before it folded in `<details>`, footer. It exits 1 when
+  CHANGELOG.md has no section for the version (this replaces the old
+  grep in the Windows and macOS jobs).
+- **The words live once**, in the script (`PLATFORMS`, `FIRST_STEPS`, …).
+  The install steps are the same sentences as on `site/index.html`; the
+  test fails when they differ, so change both together. The Mac steps now
+  lead with the macOS 15+ route (open once, System Settings > Privacy &
+  Security > Open Anyway), then right-click > Open for older macOS.
+- **Test** `tool/ci/make_readme_html_test.py` (unittest, run in "Analyze
+  and test", which also writes the real page for both systems): steps per
+  system, version, sections, balanced tags, nothing a browser would fetch
+  (no script / img / link tags, no url() in the style), Markdown injection
+  escaped, the size limit, a missing version, and site/index.html
+  agreement.
+- **Where it lands**:
+  - Windows zip: `ClipForge/Read me first.html`, next to `clipforge.exe`
+    (the job checks the zip for it and that `Release notes.txt` is gone).
+  - Windows installer: the same folder, so `{app}\Read me first.html`;
+    Start-menu entry "ClipForge read me"; last installer page "Show the
+    read-me" (ticked; `postinstall shellexec skipifsilent`). The installer
+    test checks the file and the entry after install and update, and that
+    both go on uninstall.
+  - macOS zip: at the top of the zip, beside `ClipForge.app` and "Connect
+    Claude to ClipForge.html". **The macOS zip has no "ClipForge" folder
+    around the app and must not get one**: `unpackMacUpdate` looks for the
+    `.app` directly at the top of the unpacked zip. Double-clicking the zip
+    in Finder makes a folder named after the zip with the three items.
+  - Release: `ClipForge-readme-windows.html` / `ClipForge-readme-macos.html`
+    (fixed names only; latest.json unchanged). The download page links to
+    them as "Full guide"; GitHub serves release files as downloads, so the
+    link saves the page and the reader opens it.
+  - Android: no bundle, nothing added; the download page's Android steps
+    were completed instead.
+- **Updates**: the Windows update mirrors the new folder into the install
+  folder, so a 1.14.0 install loses `Release notes.txt` and gains the
+  read-me by itself (the Start-menu entry only exists after an install
+  with the 1.14.1+ installer). The Mac update swaps only the `.app`; the
+  read-me is not inside it.
+- Not verified: everything in the workflow (zip checks, installer entry,
+  the artifact / release steps) has not run yet; the pages were looked at
+  in headless Chromium at 900 and 400 px only, not in Edge / Safari on
+  real machines.
 
 ## Verified vs. not verified
 

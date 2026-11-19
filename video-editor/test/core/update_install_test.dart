@@ -180,7 +180,7 @@ void main() {
       final zip = await zipOf({
         'ClipForge/clipforge.exe': 'new',
         'ClipForge/data/app.so': 'code',
-        'ClipForge/Release notes.txt': 'notes',
+        'ClipForge/Read me first.html': 'guide',
       });
       final staged = await stageWindowsUpdate(zip, app.path);
       expect(staged, '${app.path}.update-new');
@@ -203,7 +203,7 @@ void main() {
       final app = Directory(p.join(tmp.path, 'ClipForge.app'))..createSync();
       final zip = await zipOf({
         'ClipForge.app/Contents/MacOS/clipforge': 'new',
-        'Release notes.txt': 'notes',
+        'Read me first.html': 'guide',
       });
       // ditto is macOS only; any unzip shows the same logic.
       Future<ProcessResult> unzip(String z, String d) async {

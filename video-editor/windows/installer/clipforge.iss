@@ -13,6 +13,11 @@
 ;            /DOutputDir=<...>\dist /DOutputName=ClipForge-1.14.1-build123-windows-setup ^
 ;            windows\installer\clipforge.iss
 ;
+; The folder holds "Read me first.html" (tool/ci/make_readme_html.py: the
+; guide for someone who has just downloaded ClipForge). It is installed with
+; everything else, gets its own Start-menu entry "ClipForge read me", and
+; the last page of the installer offers to show it (ticked).
+;
 ; Projects and media live in Documents\ClipForge and are never touched by
 ; the installer or the uninstaller.
 
@@ -59,6 +64,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; Installing over an older version: files the new one no longer has go
 ; (the app's own updater does the same by mirroring).
 Type: filesandordirs; Name: "{app}\data"
+Type: files; Name: "{app}\Release notes.txt"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -66,9 +72,14 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 [Icons]
 Name: "{autoprograms}\ClipForge"; Filename: "{app}\clipforge.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\ClipForge"; Filename: "{app}\clipforge.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\ClipForge read me"; Filename: "{app}\Read me first.html"
 
 [Run]
 Filename: "{app}\clipforge.exe"; Description: "{cm:LaunchProgram,ClipForge}"; Flags: nowait postinstall skipifsilent
+; Opens the guide in the user's browser. Ticked unless the user unticks it;
+; never in a silent install (CI, and the app's own updater does not use the
+; installer at all).
+Filename: "{app}\Read me first.html"; Description: "Show the read-me"; Flags: nowait postinstall shellexec skipifsilent
 
 [UninstallDelete]
 ; What the app's own updater put there after the install (the uninstaller
@@ -77,7 +88,9 @@ Filename: "{app}\clipforge.exe"; Description: "{cm:LaunchProgram,ClipForge}"; Fl
 Type: filesandordirs; Name: "{app}\data"
 Type: files; Name: "{app}\clipforge.exe"
 Type: files; Name: "{app}\*.dll"
+; "Release notes.txt": in the folder until 1.14.0, replaced by the read-me.
 Type: files; Name: "{app}\Release notes.txt"
+Type: files; Name: "{app}\Read me first.html"
 Type: files; Name: "{app}\Connect Claude to ClipForge.html"
 Type: files; Name: "{app}\.clipforge-update-marker"
 Type: dirifempty; Name: "{app}"

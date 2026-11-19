@@ -34,6 +34,15 @@
 # runner the installer steps are skipped with a warning and the release
 # has no ClipForge-Setup.exe (the download page links to it: check).
 #
+# "Read me first.html" (1.14.1): the Windows and macOS jobs write one
+# self-contained guide each (tool/ci/make_readme_html.py: install steps for
+# that system, first steps, updates, and what is new from CHANGELOG.md) and
+# put it next to the app: in the zip's "ClipForge" folder and in the
+# installer on Windows, beside ClipForge.app in the macOS zip. It replaces
+# "Release notes.txt". The release also carries the two files as
+# ClipForge-readme-windows.html and ClipForge-readme-macos.html (the
+# download page links to them). The check job runs the script's test.
+#
 # Version numbers (lib/core/build_info.dart): the version comes from
 # pubspec.yaml, the build number is this workflow's run number, and the
 # "check" job records the build time (UTC) and commit once for the whole
@@ -135,6 +144,19 @@ jobs:
       # The guide compiled into the Claude helper must match claude/guide/*.md.
       - run: dart run tool/gen_guide.dart --check
       - run: flutter test
+      # "Read me first.html" for the downloads: the script's own test (the
+      # steps per system, nothing fetched from the internet, Markdown from
+      # CHANGELOG.md escaped, the same install steps as site/index.html),
+      # and the real page for this version, written once as a check.
+      - name: Test the read-me generator
+        run: |
+          python3 tool/ci/make_readme_html_test.py
+          for platform in windows macos; do
+            python3 tool/ci/make_readme_html.py --platform "$platform" \
+              --version "${{ steps.version.outputs.version }}" --build "${{ steps.version.outputs.build }}" \
+              --date "${{ steps.version.outputs.build_time }}" \
+              --changelog CHANGELOG.md --out "$RUNNER_TEMP/readme-$platform.html"
+          done
       # Compile smoke test of the Claude control server (test/mcp/e2e_test.dart
       # above already drives a full editing session through it): the
       # single-file executable must build and answer the MCP handshake.
@@ -314,24 +336,22 @@ jobs:
           cache: true
       - run: flutter pub get
       # The build time, commit and channel for the app's About box
-      # (--dart-define-from-file), and the release notes for this version
-      # (its section of CHANGELOG.md) for the download.
-      - name: Write the build details and release notes
+      # (--dart-define-from-file), and "Read me first.html" for the
+      # download: the install steps for this system, first steps, and what
+      # is new (this version's section of CHANGELOG.md; the script fails
+      # when there is none).
+      - name: Write the build details and the read-me
         shell: bash
         run: |
           mkdir -p build dist
           printf '{"CLIPFORGE_BUILD_TIME":"%s","CLIPFORGE_COMMIT":"%s","CLIPFORGE_CHANNEL":"ci"}\n' \
             "$CF_BUILD_TIME" "$CF_COMMIT" > build/clipforge_build.json
           cat build/clipforge_build.json
-          {
-            echo "$CF_DISPLAY"
-            echo
-            awk -v v="$CF_VERSION" '/^## /{p = ($2 == v)} p' CHANGELOG.md
-            echo "All versions: Help > What's new in the app."
-          } > "dist/$CF_NAME-release-notes.txt"
-          cat "dist/$CF_NAME-release-notes.txt"
-          grep -q "^## $CF_VERSION" "dist/$CF_NAME-release-notes.txt" || {
-            echo "::error::CHANGELOG.md has no section for $CF_VERSION"; exit 1; }
+          python tool/ci/make_readme_html.py --platform windows \
+            --version "$CF_VERSION" --build "${{ needs.check.outputs.build }}" --date "$CF_BUILD_TIME" \
+            --changelog CHANGELOG.md --out "dist/$CF_NAME-readme-windows.html"
+          grep -q "What is new in $CF_VERSION" "dist/$CF_NAME-readme-windows.html" || {
+            echo "::error::the read-me does not show what is new in $CF_VERSION"; exit 1; }
       # The Claude helper is built FIRST (1.12): it goes into the app as part
       # of the extension file (assets/claude), not next to clipforge.exe any
       # more - a program running from the install folder would block the
@@ -442,15 +462,23 @@ jobs:
           }
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item $release dist\ClipForge -Recurse
-          Copy-Item "dist\$env:CF_NAME-release-notes.txt" "dist\ClipForge\Release notes.txt"
+          # The guide, next to clipforge.exe (the installer below takes the
+          # same folder, so it installs it too).
+          Copy-Item "dist\$env:CF_NAME-readme-windows.html" "dist\ClipForge\Read me first.html"
           Compress-Archive -Path dist\ClipForge -DestinationPath "dist\$env:CF_NAME-windows.zip"
           # The zip must unpack to ONE folder called "ClipForge" (no version
           # in the name: the app updates itself inside that folder).
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path "dist\$env:CF_NAME-windows.zip"))
-          $tops = @($zip.Entries | ForEach-Object { ($_.FullName -split '[\\/]')[0] } | Sort-Object -Unique)
+          $names = @($zip.Entries | ForEach-Object { $_.FullName -replace '\\', '/' })
+          $tops = @($names | ForEach-Object { ($_ -split '/')[0] } | Sort-Object -Unique)
           $zip.Dispose()
           if ($tops.Count -ne 1 -or $tops[0] -ne 'ClipForge') { throw "the Windows zip must hold one top folder 'ClipForge', found: $($tops -join ', ')" }
+          # The guide sits next to the app; the old text file is gone.
+          foreach ($file in 'ClipForge/clipforge.exe', 'ClipForge/Read me first.html') {
+            if ($names -notcontains $file) { throw "$file is missing from the Windows zip" }
+          }
+          if ($names -contains 'ClipForge/Release notes.txt') { throw "Release notes.txt must not be in the Windows zip any more" }
       # The installer (1.14.1): per user, no administrator rights, into
       # %LOCALAPPDATA%\Programs\ClipForge, from the same folder as the zip.
       # Inno Setup: the one on the runner, else from Chocolatey; when
@@ -496,13 +524,16 @@ jobs:
           $dir = "$env:RUNNER_TEMP\cf install\ClipForge"
           $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$dir`"", "/LOG=`"$env:RUNNER_TEMP\cf-setup.log`"" -Wait -PassThru
           if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\cf-setup.log" -Tail 40; throw "the installer ended with $($p.ExitCode)" }
-          foreach ($file in "clipforge.exe", "data\clipforge-version.json", "data\app.so", "unins000.exe") {
+          foreach ($file in "clipforge.exe", "data\clipforge-version.json", "data\app.so", "unins000.exe", "Read me first.html") {
             if (-not (Test-Path "$dir\$file")) { throw "$file is missing after the install" }
           }
           $installed = (Get-Content "$dir\data\clipforge-version.json" -Raw | ConvertFrom-Json).version
           if ($installed -ne "$env:CF_VERSION+${{ needs.check.outputs.build }}") { throw "the installed version file says $installed" }
           $shortcut = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\ClipForge.lnk"
           if (-not (Test-Path $shortcut)) { throw "no Start-menu shortcut after the install" }
+          # The guide's own Start-menu entry (a silent install does not open it).
+          $readme = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\ClipForge read me.lnk"
+          if (-not (Test-Path $readme)) { throw "no Start-menu entry for the read-me after the install" }
           Write-Host "installed: $dir ($installed), shortcut: $shortcut"
           # The app's own updater in the installed folder: the unpacked
           # "new version" is a copy with one more file.
@@ -520,6 +551,7 @@ jobs:
           if ($code -ne 0) { throw "the update script ended with $code in the installed folder" }
           if (-not (Test-Path "$dir\new-in-update.txt")) { throw "the update did not reach the installed folder" }
           if (-not (Test-Path "$dir\unins000.exe") -or -not (Test-Path "$dir\unins000.dat")) { throw "the update removed the uninstaller" }
+          if (-not (Test-Path "$dir\Read me first.html")) { throw "the update removed the read-me" }
           if ((Test-Path $new) -or (Test-Path "$dir.update-old")) { throw "the update left folders next to the installed app" }
           # Silent uninstall (the uninstaller works from a copy of itself,
           # so the folder may go a moment after it returns).
@@ -528,6 +560,8 @@ jobs:
           for ($i = 0; $i -lt 60 -and (Test-Path "$dir\clipforge.exe"); $i++) { Start-Sleep -Seconds 1 }
           if (Test-Path "$dir\clipforge.exe") { throw "clipforge.exe is still there after the uninstall" }
           if (Test-Path $shortcut) { throw "the Start-menu shortcut is still there after the uninstall" }
+          if (Test-Path $readme) { throw "the read-me's Start-menu entry is still there after the uninstall" }
+          if (Test-Path "$dir\Read me first.html") { throw "the read-me is still there after the uninstall" }
           if (Test-Path $dir) { Write-Host "left in the folder after the uninstall:"; Get-ChildItem $dir -Recurse | ForEach-Object { $_.FullName } }
           if (Test-Path "$dir\data") { throw "the app's data folder is still there after the uninstall" }
           Write-Host "OK: install, update in place and uninstall work"
@@ -545,6 +579,12 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           path: video-editor/dist/${{ env.CF_NAME }}-claude-windows.mcpb
+          archive: false
+          if-no-files-found: error
+      # The guide by itself, for the release (ClipForge-readme-windows.html).
+      - uses: actions/upload-artifact@v7
+        with:
+          path: video-editor/dist/${{ env.CF_NAME }}-readme-windows.html
           archive: false
           if-no-files-found: error
 
@@ -572,24 +612,22 @@ jobs:
           cache: true
       - run: flutter pub get
       # The build time, commit and channel for the app's About box
-      # (--dart-define-from-file), and the release notes for this version
-      # (its section of CHANGELOG.md) for the download.
-      - name: Write the build details and release notes
+      # (--dart-define-from-file), and "Read me first.html" for the
+      # download: the install steps for this system, first steps, and what
+      # is new (this version's section of CHANGELOG.md; the script fails
+      # when there is none).
+      - name: Write the build details and the read-me
         shell: bash
         run: |
           mkdir -p build dist
           printf '{"CLIPFORGE_BUILD_TIME":"%s","CLIPFORGE_COMMIT":"%s","CLIPFORGE_CHANNEL":"ci"}\n' \
             "$CF_BUILD_TIME" "$CF_COMMIT" > build/clipforge_build.json
           cat build/clipforge_build.json
-          {
-            echo "$CF_DISPLAY"
-            echo
-            awk -v v="$CF_VERSION" '/^## /{p = ($2 == v)} p' CHANGELOG.md
-            echo "All versions: Help > What's new in the app."
-          } > "dist/$CF_NAME-release-notes.txt"
-          cat "dist/$CF_NAME-release-notes.txt"
-          grep -q "^## $CF_VERSION" "dist/$CF_NAME-release-notes.txt" || {
-            echo "::error::CHANGELOG.md has no section for $CF_VERSION"; exit 1; }
+          python3 tool/ci/make_readme_html.py --platform macos \
+            --version "$CF_VERSION" --build "${{ needs.check.outputs.build }}" --date "$CF_BUILD_TIME" \
+            --changelog CHANGELOG.md --out "dist/$CF_NAME-readme-macos.html"
+          grep -q "What is new in $CF_VERSION" "dist/$CF_NAME-readme-macos.html" || {
+            echo "::error::the read-me does not show what is new in $CF_VERSION"; exit 1; }
       # The Claude helper is built FIRST (1.12) and travels inside the app
       # as part of the extension file (assets/claude): the app installs it
       # into ~/Library/Application Support/ClipForge/claude at start. A file
@@ -655,8 +693,14 @@ jobs:
       # Not signed with an Apple developer certificate (ad-hoc signature only),
       # so macOS asks for confirmation on first launch. ditto keeps the
       # symlinks inside the .app intact, which a plain zip would break.
-      # The zip holds ClipForge.app, the setup guide and the release notes
-      # side by side (the Claude helper is inside the app since 1.12).
+      # The zip holds ClipForge.app, "Read me first.html" and the Claude
+      # setup guide side by side at its top (the Claude helper is inside the
+      # app since 1.12). There is no "ClipForge" folder around them: the
+      # app's updater looks for the .app at the top of the zip
+      # (unpackMacUpdate in lib/core/update/update_install.dart) and takes
+      # nothing else, so files beside the app are fine, a folder around it
+      # is not. Nothing is added INSIDE the .app (that would break its
+      # signature).
       - name: Zip the app
         run: |
           app="$(ls -d build/macos/Build/Products/Release/*.app | head -n 1)"
@@ -666,8 +710,14 @@ jobs:
           codesign --verify --deep --verbose "$app" || echo "::warning::codesign --verify reported a problem for the app bundle"
           ditto "$app" "dist/stage/$(basename "$app")"
           cp docs/claude-setup.html "dist/stage/Connect Claude to ClipForge.html"
-          cp "dist/$CF_NAME-release-notes.txt" "dist/stage/Release notes.txt"
+          cp "dist/$CF_NAME-readme-macos.html" "dist/stage/Read me first.html"
           ditto -c -k --sequesterRsrc dist/stage "dist/$CF_NAME-macos.zip"
+          # What the zip holds at its top: the app (where the updater looks
+          # for it) and the guide; the old text file is gone.
+          names="$(zipinfo -1 "dist/$CF_NAME-macos.zip")"
+          grep -q "^$(basename "$app")/" <<<"$names" || { echo "::error::$(basename "$app") is not at the top of the macOS zip"; exit 1; }
+          grep -qx "Read me first.html" <<<"$names" || { echo "::error::Read me first.html is not at the top of the macOS zip"; exit 1; }
+          if grep -q "Release notes.txt" <<<"$names"; then echo "::error::Release notes.txt must not be in the macOS zip any more"; exit 1; fi
       - uses: actions/upload-artifact@v7
         with:
           path: video-editor/dist/${{ env.CF_NAME }}-macos.zip
@@ -676,6 +726,12 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           path: video-editor/dist/${{ env.CF_NAME }}-claude-macos.mcpb
+          archive: false
+          if-no-files-found: error
+      # The guide by itself, for the release (ClipForge-readme-macos.html).
+      - uses: actions/upload-artifact@v7
+        with:
+          path: video-editor/dist/${{ env.CF_NAME }}-readme-macos.html
           archive: false
           if-no-files-found: error
 
@@ -733,6 +789,10 @@ jobs:
           copy "$CF_NAME-claude-windows.mcpb"     ClipForge-claude-windows.mcpb
           copy "$CF_NAME-claude-macos.mcpb"       ClipForge-claude-macos.mcpb
           copy "ClipForge-$CF_VERSION-claude-skill.zip" ClipForge-claude-skill.zip
+          # "Read me first" by itself (1.14.1), linked from the download
+          # page as "Full guide". latest.json does not name these.
+          copy "$CF_NAME-readme-windows.html"     ClipForge-readme-windows.html
+          copy "$CF_NAME-readme-macos.html"       ClipForge-readme-macos.html
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then tag="${GITHUB_REF#refs/tags/}"; else tag="v$CF_VERSION"; fi
           # latest.json: version, build, date, notes_url as before, plus
           # (1.12) per system the address, size and SHA-256 of the
@@ -759,7 +819,7 @@ jobs:
               echo "::error::release $tag exists already: raise the version in pubspec.yaml first"; exit 1
             fi
           fi
-          files=(./*.zip ./*.apk ./*.mcpb latest.json)
+          files=(./*.zip ./*.apk ./*.mcpb latest.json ClipForge-readme-windows.html ClipForge-readme-macos.html)
           if compgen -G "./*.exe" >/dev/null; then files+=(./*.exe); fi
           gh release create "$tag" -R "$GITHUB_REPOSITORY" \
             --title "ClipForge $CF_VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${how[@]}" \

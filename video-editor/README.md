@@ -191,8 +191,15 @@ a test build that is not released yet:
 | `ClipForge-<version>-build<n>-macos.zip` | Mac (macOS 12 or newer) |
 
 For example `ClipForge-1.4.0-build21-macos.zip`: version 1.4.0, made by run 21.
-The Windows and Mac zips also hold `Release notes.txt` (what changed in that
-version). Downloads are kept for 90 days; after that, run the workflow again.
+The Windows and Mac downloads also hold `Read me first.html` (1.14.1; it
+replaces `Release notes.txt`): one page with the install steps for that
+system, first steps, where projects are, updates, Claude, and what changed
+in that version. It sits next to `clipforge.exe` (zip and installer; the
+installer adds a Start-menu entry "ClipForge read me") and next to
+`ClipForge.app` in the Mac zip. It is written by
+`tool/ci/make_readme_html.py` (test: `tool/ci/make_readme_html_test.py`),
+and a release carries the two pages as `ClipForge-readme-windows.html` and
+`ClipForge-readme-macos.html`. Downloads are kept for 90 days; after that, run the workflow again.
 
 ## Updates
 
