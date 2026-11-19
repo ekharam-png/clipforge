@@ -137,7 +137,23 @@ class EditorMenuExtra {
     this.wavesOn = true,
     this.previousSpeech,
     this.nextSpeech,
+    this.publishingNotes,
+    this.exportSeveral,
+    this.markMoment,
+    this.goodMoments,
+    this.shortFromHere,
+    this.shortsFromMarkers,
   });
+
+  /// 1.14: File > "Publishing notes…" and "Export several…"; Edit >
+  /// Shorts: "Mark a good moment" (M), "Good moments…", "Make a short
+  /// from here…", "Make shorts from markers…".
+  final VoidCallback? publishingNotes;
+  final VoidCallback? exportSeveral;
+  final VoidCallback? markMoment;
+  final VoidCallback? goodMoments;
+  final VoidCallback? shortFromHere;
+  final VoidCallback? shortsFromMarkers;
 
   /// Edit > "Text window" (1.13) and "Find in the text…".
   final VoidCallback? showText;
@@ -219,6 +235,8 @@ class EditorMenuExtra {
           previousFrame, nextFrame, zoomIn, zoomOut, toggleSnapping,
           showShortcuts, shape, videoSize,
           showText, findInText, toggleWaves, previousSpeech, nextSpeech,
+          publishingNotes, exportSeveral, markMoment, goodMoments,
+          shortFromHere, shortsFromMarkers,
         ])
           a != null,
         lowerMusicOn,
@@ -469,6 +487,8 @@ List<PlatformMenuItem> buildAppMenus(EditorMenuActions? editor,
           PlatformMenuItem(
               label: 'Rename project…', onSelected: x?.renameProject),
           PlatformMenuItem(
+              label: 'Publishing notes…', onSelected: x?.publishingNotes),
+          PlatformMenuItem(
             label: 'Back to projects',
             onSelected: e?.backToProjects,
           ),
@@ -477,6 +497,8 @@ List<PlatformMenuItem> buildAppMenus(EditorMenuActions? editor,
             shortcut: const SingleActivator(LogicalKeyboardKey.keyE, meta: true),
             onSelected: e != null && e.canExport ? e.export : null,
           ),
+          PlatformMenuItem(
+              label: 'Export several…', onSelected: x?.exportSeveral),
         ]),
       ],
     ),
@@ -501,6 +523,22 @@ List<PlatformMenuItem> buildAppMenus(EditorMenuActions? editor,
                 meta: true, shift: true),
             onSelected: e?.showHistory,
           ),
+        ]),
+        PlatformMenuItemGroup(members: [
+          PlatformMenu(label: 'Shorts', menus: [
+            PlatformMenuItem(
+                label: 'Mark a good moment',
+                shortcut: const SingleActivator(LogicalKeyboardKey.keyM),
+                onSelected: x?.markMoment),
+            PlatformMenuItem(
+                label: 'Good moments…', onSelected: x?.goodMoments),
+            PlatformMenuItem(
+                label: 'Make a short from here…',
+                onSelected: x?.shortFromHere),
+            PlatformMenuItem(
+                label: 'Make shorts from markers…',
+                onSelected: x?.shortsFromMarkers),
+          ]),
         ]),
         PlatformMenuItemGroup(members: [
           PlatformMenuItem(
@@ -1012,11 +1050,17 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
                         onPressed: x?.exportSubtitles),
                     divider,
                     item('Rename project…', onPressed: x?.renameProject),
+                    item('Publishing notes…',
+                        key: const ValueKey('menu-publishing-notes'),
+                        onPressed: x?.publishingNotes),
                     item('Back to projects', onPressed: e?.backToProjects),
                     item('Export…',
                         shortcut: const SingleActivator(LogicalKeyboardKey.keyE,
                             control: true),
                         onPressed: e != null && e.canExport ? e.export : null),
+                    item('Export several…',
+                        key: const ValueKey('menu-export-several'),
+                        onPressed: x?.exportSeveral),
                     divider,
                     item(windows ? 'Exit' : 'Quit',
                         shortcut: windows
@@ -1107,6 +1151,22 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
                             ? e.addOverlay
                             : null),
                     divider,
+                    submenu('Shorts', [
+                      item('Mark a good moment',
+                          key: const ValueKey('menu-mark-moment'),
+                          shortcut:
+                              const SingleActivator(LogicalKeyboardKey.keyM),
+                          onPressed: x?.markMoment),
+                      item('Good moments…',
+                          key: const ValueKey('menu-good-moments'),
+                          onPressed: x?.goodMoments),
+                      item('Make a short from here…',
+                          key: const ValueKey('menu-short-from-here'),
+                          onPressed: x?.shortFromHere),
+                      item('Make shorts from markers…',
+                          key: const ValueKey('menu-shorts-from-markers'),
+                          onPressed: x?.shortsFromMarkers),
+                    ]),
                     submenu('Sound', [
                       item('Add voice recording…',
                           key: const ValueKey('menu-add-voice'),

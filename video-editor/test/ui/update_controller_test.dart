@@ -43,6 +43,8 @@ void main() {
   var now = DateTime.utc(2026, 11, 18, 12);
   String? downloaded;
   Object? downloadError;
+  final swaps = <({String installDir, String newDir, String version})>[];
+  Object? swapError;
 
   UpdateController controller({BuildInfo build = ci139}) => UpdateController(
         prefs: prefs,
@@ -64,6 +66,19 @@ void main() {
                 : Future.value(downloaded ?? p.join(dir, 'b$build-${asset.fileName}')),
             steps: const [UpdateProgress(1, 3), UpdateProgress(3, 3, checking: true)]),
         now: () => now,
+        swap: ({
+          required String os,
+          required String scriptText,
+          required String workDir,
+          required String installDir,
+          required String newDir,
+          required String resultFile,
+          required String version,
+          String exeName = 'clipforge.exe',
+        }) async {
+          if (swapError != null) throw swapError!;
+          swaps.add((installDir: installDir, newDir: newDir, version: version));
+        },
       );
 
   setUp(() async {
@@ -75,6 +90,8 @@ void main() {
     now = DateTime.utc(2026, 11, 18, 12);
     downloaded = null;
     downloadError = null;
+    swaps.clear();
+    swapError = null;
   });
   tearDown(() => tmp.delete(recursive: true));
 
@@ -309,10 +326,141 @@ void main() {
       expect(File(p.join('${install.path}$kUpdateNewSuffix', 'clipforge.exe')).readAsStringSync(),
           'new');
       expect(File(p.join(install.path, 'clipforge.exe')).readAsStringSync(), 'old');
-      // "Not now", then the next start of the app tidies the unpacked copy.
+      expect(hasUpdateMarker('${install.path}$kUpdateNewSuffix', 'windows'), isTrue);
+      // It is remembered on disk.
+      final waiting = PendingUpdate.read(await platform.stateDir())!;
+      expect([waiting.version, waiting.build], ['1.12.0', 142]);
+      expect(waiting.swapStartedAt, isNull);
+    });
+
+    /// A Windows install with version 142 downloaded, checked and unpacked.
+    Future<({Directory install, UpdateController c})> staged() async {
+      final install = Directory(p.join(tmp.path, 'Apps', 'ClipForge-1.11.0'))
+        ..createSync(recursive: true);
+      File(p.join(install.path, 'clipforge.exe')).writeAsStringSync('old');
+      final zipPath = p.join(tmp.path, 'new.zip');
+      final encoder = ZipFileEncoder()..create(zipPath);
+      encoder.addArchiveFile(ArchiveFile.bytes('ClipForge/clipforge.exe', utf8.encode('new')));
+      await encoder.close();
+      downloaded = zipPath;
+      platform
+        ..os = 'windows'
+        ..key = 'windows'
+        ..installDir = install.path;
+      latest = release(142, files: {'windows': zip});
+      final c = controller();
+      await c.check(manual: true);
+      await c.startUpdate();
+      expect(c.stage, UpdateStage.readyToRestart, reason: '${c.message}');
+      return (install: install, c: c);
+    }
+
+    test('"Restart ClipForge to finish": asks what is open, starts the swap, '
+        'closes; not while something is busy', () async {
+      final s = await staged();
+      platform.allowQuit = false;
+      await s.c.restartToUpdate();
+      expect(swaps, isEmpty, reason: 'an export is running');
+      expect(platform.quits, 0);
+      expect(s.c.stage, UpdateStage.readyToRestart);
+      expect(s.c.message, contains('will be finished the next time ClipForge starts'));
+      platform.allowQuit = true;
+      await s.c.restartToUpdate();
+      expect(swaps.single.newDir, '${s.install.path}$kUpdateNewSuffix');
+      expect(swaps.single.version, '1.12.0');
+      expect(platform.quits, 1);
+      expect(PendingUpdate.read(await platform.stateDir())!.swapStartedAt, isNotNull);
+    });
+
+    test('"Later": the next start finishes the update by itself, once',
+        () async {
+      final s = await staged();
+      final newDir = '${s.install.path}$kUpdateNewSuffix';
+      // The app is closed without restarting. The next start:
       final next = controller();
       await next.onAppStart();
-      expect(Directory('${install.path}$kUpdateNewSuffix').existsSync(), isFalse);
+      expect(swaps.single.newDir, newDir);
+      expect(platform.quits, 1);
+      expect(next.finishingAtStart, isTrue);
+      expect(Directory(newDir).existsSync(), isTrue, reason: 'the script needs it');
+      expect(fetches, 1, reason: 'no update check while it closes');
+      // The script never ran (blocked): the start after that does NOT try
+      // again by itself; it says so and offers Try again.
+      final third = controller();
+      await third.onAppStart();
+      expect(swaps.length, 1);
+      expect(third.lastResult!.updated, isFalse);
+      expect(third.lastResult!.message, contains('did not run'));
+      expect(third.pending, isNotNull);
+      expect(Directory(newDir).existsSync(), isTrue, reason: 'kept for Try again');
+      expect(await third.finishPending(), isNull);
+      expect(swaps.length, 2);
+      // "Not now" instead: the download is removed.
+      final fourth = controller();
+      await fourth.onAppStart();
+      await fourth.dropPending();
+      expect(Directory(newDir).existsSync(), isFalse);
+      expect(PendingUpdate.read(await platform.stateDir()), isNull);
+    });
+
+    test('the swap could not be started at the start: a message, the app '
+        'stays open', () async {
+      await staged();
+      swapError = const ProcessException('powershell.exe', [], 'not found');
+      final next = controller();
+      await next.onAppStart();
+      expect(platform.quits, 0);
+      expect(next.finishingAtStart, isFalse);
+      expect(next.lastResult!.message, contains('could not be started'));
+    });
+
+    test('after the swap: "Updated", leftovers with the marker go, others '
+        'stay, and a folder named after an old version is mentioned', () async {
+      final s = await staged();
+      await s.c.restartToUpdate();
+      final state = await platform.stateDir();
+      // What the script leaves when it worked but could not delete the
+      // old folder: the new app in place, .update-old with its marker.
+      final old = Directory('${s.install.path}$kUpdateOldSuffix')..createSync();
+      writeUpdateMarker(old.path, 'windows');
+      Directory('${s.install.path}$kUpdateNewSuffix').deleteSync(recursive: true);
+      final foreign = Directory(p.join(tmp.path, 'Apps', 'Other.update-old'))..createSync();
+      File(p.join(state, kUpdateResultFile))
+          .writeAsStringSync('{"status":"updated","message":"","version":"1.12.0"}');
+      final c = controller(
+          build: const BuildInfo(version: '1.12.0', buildNumber: '142', channel: 'ci'));
+      await c.onAppStart();
+      expect(c.lastResult!.updated, isTrue);
+      expect(old.existsSync(), isFalse);
+      expect(foreign.existsSync(), isTrue);
+      expect(PendingUpdate.read(state), isNull);
+      expect(c.folderNote, contains('"ClipForge-1.11.0"'));
+      expect(c.folderNote, contains('the app inside is 1.12.0'));
+      expect(s.install.existsSync(), isTrue, reason: 'never renamed by the app');
+    });
+
+    test('a failed swap keeps the download for Try again; folders nobody '
+        'marked are never deleted', () async {
+      final s = await staged();
+      await s.c.restartToUpdate();
+      final state = await platform.stateDir();
+      File(p.join(state, kUpdateResultFile)).writeAsStringSync(
+          '{"status":"failed","message":"A file of ClipForge is still in use","version":"1.12.0"}');
+      final c = controller();
+      await c.onAppStart();
+      expect(c.lastResult!.message, contains('still in use'));
+      expect(c.pending, isNotNull);
+      expect(Directory('${s.install.path}$kUpdateNewSuffix').existsSync(), isTrue);
+      expect(swaps.length, 1);
+      // A start with nothing waiting: a marked leftover goes, an unmarked
+      // folder of that name stays.
+      PendingUpdate.clear(state);
+      final mine = Directory('${s.install.path}$kUpdateOldSuffix')..createSync();
+      File(p.join(mine.path, 'notes.txt')).writeAsStringSync('mine');
+      final plain = controller();
+      await plain.onAppStart();
+      expect(Directory('${s.install.path}$kUpdateNewSuffix').existsSync(), isFalse);
+      expect(File(p.join(mine.path, 'notes.txt')).existsSync(), isTrue);
     });
 
     test('after a restart the result of the swap is reported once', () async {

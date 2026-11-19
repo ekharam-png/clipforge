@@ -49,6 +49,13 @@ media_kit (mpv) and exports use FFmpeg.
 - **Music** with volume, fade in and fade out, and "lower music under speech"
   for the whole project. Music that runs past the end of the video fades out
   at the video's end; that part is greyed out on the timeline.
+- **Publishing kit and shorts** (1.14): in the Export window, "Where is it
+  going?" makes the right file for YouTube, Shorts / Reels / TikTok,
+  Instagram, WhatsApp or a podcast, and "Export several…" makes them all
+  into one folder with a text file to paste from (title, description,
+  hashtags, chapters: "Publishing notes"). "Make a short from this…" in the
+  Text window, 30 / 45 / 60 s from the playhead, or one short around every
+  good-moment marker (key M). ClipForge never uploads and has no logins.
 - **Text window** (1.13): everything said or written in the video as one
   readable page - the captions (whatever made them), the transcript, the
   titles - grouped by speaker, with search; click a sentence to go there,
@@ -254,9 +261,14 @@ file**. See "Keeping projects across updates" below.
 ### Windows
 
 1. Download `ClipForge-windows.zip`, right-click it and choose **Extract All**.
-2. Open the `ClipForge` folder and double-click `clipforge.exe`. Keep all the
+2. Inside is a folder called `ClipForge`. Move that folder to where you want
+   to keep it and leave its name as it is, without a version number: the
+   app updates itself inside this folder, so the name stays right. (A folder
+   that is already called "ClipForge-1.12.0" keeps working; it can be
+   renamed to "ClipForge" while the app is closed.)
+3. Open the `ClipForge` folder and double-click `clipforge.exe`. Keep all the
    other files in that folder next to it.
-3. Windows shows a blue "Windows protected your PC" box because the app is not
+4. Windows shows a blue "Windows protected your PC" box because the app is not
    signed: click **More info**, then **Run anyway**.
 
 ### macOS
@@ -354,15 +366,32 @@ of its own:
 | Mac | `~/Library/Application Support/ClipForge/claude/` |
 
 Claude is pointed at that folder once, and never again. In ClipForge open
-**Help > Connect to Claude…**. The page shows whether the helper is
-installed and has both ways:
+**Help > Connect to Claude…**. Since 1.14 the page does the set-up itself:
 
-- **Claude Desktop:** click **Save the Claude extension file…**, double-click
-  the saved `.mcpb` file, choose Install in Claude, then quit and reopen
-  Claude. (The same file is on the download page.)
-- **Claude Code:** click **Copy** next to the one line
-  (`claude mcp add --scope user clipforge -- "<the helper's path>"`), paste
-  it into a terminal and press Enter.
+- **Claude Desktop:** press **Connect**. ClipForge adds one entry called
+  `clipforge` to Claude's settings file (`claude_desktop_config.json`; it
+  also finds the Claude from the Microsoft Store), keeps everything else in
+  it, makes a dated backup next to it first, and refuses to change a file it
+  cannot read. Then quit Claude completely (also from the icon near the
+  clock) and open it again.
+- **Claude Code:** press **Connect**. ClipForge runs
+  `claude mcp add --scope user clipforge -- "<the helper's path>"` for you
+  (an older ClipForge connection is listed and replaced after asking). Then
+  start a new Claude Code session; `/mcp` shows the list.
+- A light per row shows the state (connected, connected to an old copy, not
+  connected, not found); **Disconnect** removes only the `clipforge` entry;
+  **Details** shows what was run and what came back.
+- "In use by Claude Desktop now · last action 2 min ago" appears while a
+  Claude session has the helper open. **Test** starts the helper by itself
+  and runs its quick self-test (PASS / FAIL), independent of Claude.
+- The other ways stay: **Save the Claude extension file…** (then in Claude:
+  Settings > Extensions > Advanced settings > Install Extension…;
+  double-clicking the `.mcpb` does not work with the Microsoft Store Claude)
+  and **Copy** for the Claude Code line.
+
+Why Claude has to be closed and opened once: it reads its list of tools when
+it starts, and then starts the helper itself whenever it needs it. ClipForge
+does not have to be running, and there is no server to switch on.
 
 That is all. When ClipForge is updated, the new helper goes into the same
 folder and Claude uses it the next time Claude starts: no new extension, no
@@ -458,6 +487,7 @@ either the extension or this entry, not both.
 | Text | titles, captions, import and export of `.srt` subtitles (also subtitles made for the uncut recording) |
 | Speech (1.11) | transcribe in the background, read and search what is said, captions from speech, remove filler words gently, list and put back automatic cuts, make a short from one part |
 | Text and speakers (1.13) | read all captions as compact text, find and replace over all captions (dry run first), who talks when from the sound (speaker turns), without a transcript |
+| Publishing and shorts (1.14) | candidate passages for shorts (whole sentences with times and signals, for Claude to judge), shorts with the Short caption look and a title, publishing notes and chapters, a publishing kit for several destinations as one background job, good-moment markers |
 | Music | add, move, trim, volume, fades, remove |
 | Voice | add a separately recorded voice lined up with the video; line up, nudge or unlink a sound that is already there |
 | Output | export an MP4 in full or small (720p) quality, with progress; the export keeps running when Claude is closed (1.12: also on Windows) |

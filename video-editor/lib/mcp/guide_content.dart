@@ -176,7 +176,14 @@ or `"mp3"`. Details in `get_guide` section "tools".
   about 6 a minute or less; do not run both hard on the same video without
   adding the two numbers up. `list_auto_cuts` shows what was cut so far.
 - `make_short` copies the project and keeps one part; the long project is
-  never cut.
+  never cut. `suggest_shorts` lists candidate passages (whole sentences
+  with times and simple signals) for YOU to judge; it does not judge.
+  Propose 3-5 with a reason each and make them only after the owner chose.
+- **Publishing**: ClipForge never uploads and has no logins. You prepare
+  a kit: `set_publishing_notes` (offer three titles, the owner picks),
+  `make_chapters`, then `export_kit` puts the files for YouTube, Shorts,
+  WhatsApp and a podcast in one folder with a text file to paste from.
+  Tell the owner where the folder is and what to paste where.
 - **Captions that are already there** (imported subtitles, often with
   "Name:" in front): read them with `get_captions`, not page by page with
   `get_project`. A wrong word in one caption: `update_title`. The same
@@ -228,6 +235,9 @@ or `"mp3"`. Details in `get_guide` section "tools".
   `add_voice`), stretching a voice that drifts, searching for music from
   here, recording a voice-over, anything on the phone (the tools work on
   the computer only).
+- Uploading or posting to YouTube, Instagram, TikTok or anywhere else,
+  and anything that needs their account: ClipForge makes the files and
+  the text, the owner posts them.
 - Seeing the picture (see above). "Find the funniest part" works from what
   is SAID; see "Find the best shorts in a long video" in
   `get_guide` section "recipes".
@@ -248,6 +258,7 @@ or `"mp3"`. Details in `get_guide` section "tools".
 | "add subtitles", "caption what I say" | Captions from speech |
 | "take out the ums" | Remove filler words, gently |
 | "just the sound / an MP3" | Sound only |
+| "get it ready for YouTube / to post", "make everything I need to publish" | From a long video to a publishing kit |
 | "make it look finished" | Finished look |
 ''',
   'recipes': r'''
@@ -475,8 +486,10 @@ see the picture: say so once.
    `get_transcript` with `format: "words"` around the spot for the exact
    times, and leave about 300 ms before the first word and after the last.
 4. **Wait for their choice.** They may change times or drop some.
+   `suggest_shorts` does the splitting into complete passages for you
+   (see "From a long video to a publishing kit").
 5. **For each approved moment**: `make_short` with `from_ms`, `to_ms` and a
-   `name`. It copies the project, keeps only that part (titles, captions
+   `name` (`caption_style: "short"` and a `title` make it look like a short). It copies the project, keeps only that part (titles, captions
    and linked voices follow), makes it upright 9:16 at 1080p and adds
    captions from the speech. The long project is not changed.
 6. Upright framing: `set_clip_properties` `"all"` on the short with
@@ -489,6 +502,60 @@ see the picture: say so once.
 No transcript possible (no speech program)? Then work from their times
 ("12:30–13:10") or from the long pauses `remove_silences` `dry_run: true`
 lists, and say that you are choosing blind.
+
+## From a long video to a publishing kit
+
+The whole road from a finished edit to "here is the folder, paste this".
+You do the picking where you can; the owner decides at every step marked
+ASK. ClipForge never uploads: the owner posts the files themselves.
+
+1. **Clean-up** first (the recipes above: silences, fillers, sound), on
+   the long video. Shorts are cut from the cleaned video.
+2. **Text**: `transcribe` (or, when the project already has captions,
+   skip it: `get_captions` reads them and `suggest_shorts` works from
+   them).
+3. **Chapters**: `make_chapters` with `dry_run: true`. Rewrite the names
+   from what each part is about (keep the times), show the list, then
+   save it with `set_publishing_notes` `chapters`.
+4. **Publishing notes**. Read the talk, then ASK: offer THREE titles and
+   let the owner pick. Write a description of two or three plain
+   sentences and 5-10 hashtags, show them, and save with
+   `set_publishing_notes`. A `short_title` only if the shorts need
+   another one.
+5. **Candidates**: `suggest_shorts` (page through it). If the owner
+   marked moments in the app, `list_markers` first: those are theirs.
+6. **Pick 3-5** by these rules, and say why in one line each:
+   - a HOOK in the first 3 seconds: a question, a surprising claim, a
+     number, the middle of a story - not "so, as I was saying";
+   - ONE idea, not three;
+   - a COMPLETE thought: it starts at the start of a sentence and ends
+     at the end of one (`suggest_shorts` only offers such passages);
+   - it ENDS ON A POINT: a punchline, an answer, a conclusion - not on a
+     trailing "and then…";
+   - NO inside references: nothing that needs what was said earlier
+     ("as I said", "that thing", a name never introduced);
+   - 20-45 seconds is the sweet spot; never over 60 for all three sites.
+   The signals are hints, not a score: "starts with a question" is a hook
+   only if the question is interesting. You cannot see the picture: say
+   so once.
+7. ASK: "Which of these should I make?" Wait. They may change or drop
+   some.
+8. **Make them**: for each chosen one `make_short` with `from_ms`,
+   `to_ms`, `caption_style: "short"`, `snap_to_speech: true`, a `name`,
+   and a `title` of a few words (the hook). Read the warnings in the
+   answer (too long, mid-sentence) and fix before going on. Upright
+   framing: `set_clip_properties` `"all"` with `fit: "blur"`, or `"fill"`
+   + `position_x` after asking where the person is.
+9. **Export the kit**: one `export_kit` with the long video
+   (`destinations`: `["youtube", "podcast"]`, plus `"whatsapp"` if they
+   send it to family) and `projects`: each short with `["shorts"]`.
+   Poll `get_export_status` to the end.
+10. **Hand over**: the folder, the files by name, and what to paste
+    where: "<Project> - text.txt has the title, description, hashtags
+    and chapters; the YouTube file goes to YouTube Studio > Create >
+    Upload; each Short goes to YouTube Shorts / Instagram Reels / TikTok
+    with its own title". Pass on any warning with "check the site". Ask
+    them to watch each file once before posting.
 
 ## Finished look
 
@@ -504,7 +571,7 @@ lists, and say that you are choosing blind.
   'tools': r'''
 # ClipForge tools
 
-All 62 tools of the `clipforge` MCP server (ClipForge 1.13). A test in the
+All 70 tools of the `clipforge` MCP server (ClipForge 1.14). A test in the
 ClipForge repository fails when a tool is missing from this file.
 
 General rules:
@@ -701,6 +768,53 @@ General rules:
   speech" report. It is worked out from the timeline, not measured.
 - Never export over an existing file unless they ask (`overwrite`).
 
+## Publishing: kits, notes, chapters (1.14)
+
+ClipForge never uploads and has no logins. It makes the files and the text;
+the owner posts them. Tell them where the folder is and what to paste where.
+
+| Tool | What it does | Arguments worth knowing |
+|---|---|---|
+| `export_kit` | Several files for several destinations into ONE kit folder, as one background job (follow it with `get_export_status`, stop it with `cancel_export`). Writes "<Project> - text.txt" with the notes and what to paste where. | `project_id` + `destinations`, `projects` (more projects for the same folder: `[{project_id, destinations}]`), `output_dir`, `overwrite`, `hardware`, `wait_seconds` |
+| `get_publishing_notes` | Title, description, hashtags, chapters, short-form title and description, music credits; as the text file shows them. | |
+| `set_publishing_notes` | Writes them (only the arguments given change; "" clears one). One undo step. | `title`, `description`, `hashtags`, `chapters` ("0:00 Title" lines), `short_title`, `short_description` |
+| `make_chapters` | A chapter list from the titles; without titles from the captions; without captions from who speaks when. Stored in the notes. | `dry_run`, `replace` |
+
+Destinations of `export_kit` (the same table as the app's Export window):
+
+| Destination | What is made | File |
+|---|---|---|
+| `youtube` | 16:9, 1080p, full quality | "<Project> - YouTube.mp4" |
+| `shorts` | 9:16, 1080p, for Shorts / Reels / TikTok; warns over 60 s | "<Project> - Short 9x16.mp4" |
+| `instagram` / `instagram:1x1` | 4:5 or square, 1080p; warns over 60 s | "<Project> - Instagram 4x5.mp4" |
+| `whatsapp` | small file (720p); warns over about 16 MB | "<Project> - WhatsApp.mp4" |
+| `podcast` / `podcast:m4a` | sound only, MP3 or M4A | "<Project> - audio.mp3" |
+
+- A destination whose shape differs from the project's gets a TEMPORARY
+  copy in that shape with a blurred background. Nothing is added to the
+  project list and the project is not changed. For a careful upright
+  version (the person in shot) make a real one first: `make_short`, or
+  `duplicate_project` + `set_project_settings` + `set_clip_properties`.
+- The limits (60 s, 16 MB) are conservative on purpose and the sites
+  change them: pass the warning on with "check the site".
+- Chapter rules (YouTube's): the first at 0:00, at least three, each at
+  least 10 seconds. `make_chapters` keeps them; the answer of
+  `set_publishing_notes` warns when a list breaks them. Chapters made
+  from captions are named by the first words said: rewrite the names.
+- Titles: offer the owner THREE options and let them pick; do not set a
+  title they have not seen.
+
+## Good-moment markers (1.14)
+
+| Tool | What it does | Arguments worth knowing |
+|---|---|---|
+| `add_marker` | A "good moment" marker at a timeline time (the owner drops them with M while watching). | `at_ms`, `label` |
+| `list_markers` | The markers with what is said there and the part a short around each would take (20 s before to 25 s after, moved outward to pauses). | |
+| `remove_marker` | Removes one, or "all". | `marker_id` |
+
+Markers follow their picture through cuts. When the owner has marked
+moments, start from `list_markers` instead of guessing.
+
 ## Speech: what is said (1.11, computer only)
 
 Needs a speech program on the computer (`get_status` lists what was found:
@@ -719,7 +833,8 @@ unless `download_pack` is true** — ask the owner first.
 | `remove_fillers` | Cuts "um", "uh", "э-э", "אה"… out, gently. **Dry run by default.** Reports found / cut / left because too close / left because the picture would jump, time saved, cuts per minute, the 5 riskiest cuts. | `strength` ("light" default, "normal", "strong"), `dry_run`, `include_word_fillers`, `fillers`, `language`, `allow_estimated_times`, `jump_check`; advanced: `min_cut_ms`, `min_distance_ms`, `max_cuts_per_minute`, `min_piece_ms`, `pad_ms` |
 | `list_auto_cuts` | The automatic cuts the project remembers (fillers, silences, and parts the owner cut out from the app's Text window, kind "text"): id, word, file and part removed, by whom, jump score, dissolve; totals. | `kind`, `sort` ("time", "risk"), `offset` / `limit` |
 | `restore_cut` | Puts a cut back (the two pieces become one clip again), or all of them. | `cut_id` (an id or "all"), `kind`, `dry_run` |
-| `make_short` | A NEW project with only one part of this one's timeline: upright 9:16 by default, 1080p, captions from the speech. The original is untouched. | `from_ms`, `to_ms`, `name`, `shape`, `captions` |
+| `suggest_shorts` | CANDIDATE passages for shorts, for you to judge (the tool has no AI): whole sentences between pauses or speaker turns, 15-60 s, each with times, speaker, text and signals (starts with a question, figures, stands by itself, louder than usual). From the transcript, else the captions. Paged. | `min_seconds`, `max_seconds`, `source`, `from_ms` / `to_ms`, `loudness`, `offset` / `limit` |
+| `make_short` | A NEW project with only one part of this one's timeline: upright 9:16 by default, 1080p, captions from the speech. The original is untouched. Warns when it is longer than 60 s or starts / ends mid-sentence. | `from_ms`, `to_ms`, `name`, `shape`, `captions`, `caption_style` ("short": bigger, lower middle, outlined, 1-2 lines), `title` (at the top), `snap_to_speech` |
 
 `remove_fillers` strengths (every one leaves no piece shorter than 0.6 s):
 
@@ -767,11 +882,24 @@ error text unless they ask.
 
 ClipForge is not connected to this Claude yet. Tell them:
 
-In ClipForge on the computer: **Help > Connect to Claude…**. That page
+In ClipForge on the computer: **Help > Connect to Claude…**. From 1.14
+that page does the set-up itself: a row for **Claude Desktop** and one for
+**Claude Code**, each with a light and a **Connect** button. After
+pressing it they must close Claude completely and open it again (Claude
+Desktop: also quit it from the icon near the clock; Claude Code: a new
+session, `/mcp` shows the list). The reason, if they ask: Claude reads its
+list of tools when it starts and then starts the helper itself; ClipForge
+does not need to be running and there is no server to switch on.
 
-- saves the ClipForge extension file for **Claude Desktop** (double-click
-  the saved file, choose Install, restart Claude), and
-- shows the one line for **Claude Code** with a Copy button.
+- The page's **Test** button runs the helper by itself: PASS there means
+  the helper is fine and the problem is on Claude's side (not restarted,
+  the entry was removed).
+- **Details** on that page shows what Connect did; ask them to read it to
+  you when Connect fails.
+- The other ways still exist: the extension file (Claude > Settings >
+  Extensions > Advanced settings > Install Extension…; double-clicking a
+  .mcpb does not work with the Claude from the Microsoft Store) and the
+  one line for a terminal with a Copy button.
 
 It needs doing only once: from ClipForge 1.12 on the app keeps the helper
 up to date by itself. The tools only work on the computer (Windows or
@@ -790,8 +918,9 @@ in one sentence; for a FAIL, the note in that row says what is wrong
 An old hand-made `clipforge` entry in `claude_desktop_config.json` is still
 there next to the extension. `get_status` shows which helper program is
 running, its version, and whether it is the one the app installed. Ask them
-to remove the old entry (Help > Connect to Claude… > More in Help shows
-which lines) and restart Claude. After an app update, Claude uses the new
+to press **Connect** on Help > Connect to Claude… (it replaces an old
+entry and says when the extension and an entry are both there: one of the
+two must go) and restart Claude. After an app update, Claude uses the new
 helper the next time Claude is started.
 
 ## "FFmpeg could not be found"

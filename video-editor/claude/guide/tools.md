@@ -1,6 +1,6 @@
 # ClipForge tools
 
-All 62 tools of the `clipforge` MCP server (ClipForge 1.13). A test in the
+All 70 tools of the `clipforge` MCP server (ClipForge 1.14). A test in the
 ClipForge repository fails when a tool is missing from this file.
 
 General rules:
@@ -197,6 +197,53 @@ General rules:
   speech" report. It is worked out from the timeline, not measured.
 - Never export over an existing file unless they ask (`overwrite`).
 
+## Publishing: kits, notes, chapters (1.14)
+
+ClipForge never uploads and has no logins. It makes the files and the text;
+the owner posts them. Tell them where the folder is and what to paste where.
+
+| Tool | What it does | Arguments worth knowing |
+|---|---|---|
+| `export_kit` | Several files for several destinations into ONE kit folder, as one background job (follow it with `get_export_status`, stop it with `cancel_export`). Writes "<Project> - text.txt" with the notes and what to paste where. | `project_id` + `destinations`, `projects` (more projects for the same folder: `[{project_id, destinations}]`), `output_dir`, `overwrite`, `hardware`, `wait_seconds` |
+| `get_publishing_notes` | Title, description, hashtags, chapters, short-form title and description, music credits; as the text file shows them. | |
+| `set_publishing_notes` | Writes them (only the arguments given change; "" clears one). One undo step. | `title`, `description`, `hashtags`, `chapters` ("0:00 Title" lines), `short_title`, `short_description` |
+| `make_chapters` | A chapter list from the titles; without titles from the captions; without captions from who speaks when. Stored in the notes. | `dry_run`, `replace` |
+
+Destinations of `export_kit` (the same table as the app's Export window):
+
+| Destination | What is made | File |
+|---|---|---|
+| `youtube` | 16:9, 1080p, full quality | "<Project> - YouTube.mp4" |
+| `shorts` | 9:16, 1080p, for Shorts / Reels / TikTok; warns over 60 s | "<Project> - Short 9x16.mp4" |
+| `instagram` / `instagram:1x1` | 4:5 or square, 1080p; warns over 60 s | "<Project> - Instagram 4x5.mp4" |
+| `whatsapp` | small file (720p); warns over about 16 MB | "<Project> - WhatsApp.mp4" |
+| `podcast` / `podcast:m4a` | sound only, MP3 or M4A | "<Project> - audio.mp3" |
+
+- A destination whose shape differs from the project's gets a TEMPORARY
+  copy in that shape with a blurred background. Nothing is added to the
+  project list and the project is not changed. For a careful upright
+  version (the person in shot) make a real one first: `make_short`, or
+  `duplicate_project` + `set_project_settings` + `set_clip_properties`.
+- The limits (60 s, 16 MB) are conservative on purpose and the sites
+  change them: pass the warning on with "check the site".
+- Chapter rules (YouTube's): the first at 0:00, at least three, each at
+  least 10 seconds. `make_chapters` keeps them; the answer of
+  `set_publishing_notes` warns when a list breaks them. Chapters made
+  from captions are named by the first words said: rewrite the names.
+- Titles: offer the owner THREE options and let them pick; do not set a
+  title they have not seen.
+
+## Good-moment markers (1.14)
+
+| Tool | What it does | Arguments worth knowing |
+|---|---|---|
+| `add_marker` | A "good moment" marker at a timeline time (the owner drops them with M while watching). | `at_ms`, `label` |
+| `list_markers` | The markers with what is said there and the part a short around each would take (20 s before to 25 s after, moved outward to pauses). | |
+| `remove_marker` | Removes one, or "all". | `marker_id` |
+
+Markers follow their picture through cuts. When the owner has marked
+moments, start from `list_markers` instead of guessing.
+
 ## Speech: what is said (1.11, computer only)
 
 Needs a speech program on the computer (`get_status` lists what was found:
@@ -215,7 +262,8 @@ unless `download_pack` is true** — ask the owner first.
 | `remove_fillers` | Cuts "um", "uh", "э-э", "אה"… out, gently. **Dry run by default.** Reports found / cut / left because too close / left because the picture would jump, time saved, cuts per minute, the 5 riskiest cuts. | `strength` ("light" default, "normal", "strong"), `dry_run`, `include_word_fillers`, `fillers`, `language`, `allow_estimated_times`, `jump_check`; advanced: `min_cut_ms`, `min_distance_ms`, `max_cuts_per_minute`, `min_piece_ms`, `pad_ms` |
 | `list_auto_cuts` | The automatic cuts the project remembers (fillers, silences, and parts the owner cut out from the app's Text window, kind "text"): id, word, file and part removed, by whom, jump score, dissolve; totals. | `kind`, `sort` ("time", "risk"), `offset` / `limit` |
 | `restore_cut` | Puts a cut back (the two pieces become one clip again), or all of them. | `cut_id` (an id or "all"), `kind`, `dry_run` |
-| `make_short` | A NEW project with only one part of this one's timeline: upright 9:16 by default, 1080p, captions from the speech. The original is untouched. | `from_ms`, `to_ms`, `name`, `shape`, `captions` |
+| `suggest_shorts` | CANDIDATE passages for shorts, for you to judge (the tool has no AI): whole sentences between pauses or speaker turns, 15-60 s, each with times, speaker, text and signals (starts with a question, figures, stands by itself, louder than usual). From the transcript, else the captions. Paged. | `min_seconds`, `max_seconds`, `source`, `from_ms` / `to_ms`, `loudness`, `offset` / `limit` |
+| `make_short` | A NEW project with only one part of this one's timeline: upright 9:16 by default, 1080p, captions from the speech. The original is untouched. Warns when it is longer than 60 s or starts / ends mid-sentence. | `from_ms`, `to_ms`, `name`, `shape`, `captions`, `caption_style` ("short": bigger, lower middle, outlined, 1-2 lines), `title` (at the top), `snap_to_speech` |
 
 `remove_fillers` strengths (every one leaves no piece shorter than 0.6 s):
 

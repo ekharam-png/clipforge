@@ -1,0 +1,9 @@
+clipforge:
+  Scope: User config (available in all your projects)
+  Status: ✗ Failed to connect
+  Type: stdio
+  Command: "D:\Apps\ClipForge-1.11.0\clipforge-mcp.exe"
+  Args: 
+  Environment:
+
+To remove this server, run: claude mcp remove "clipforge" -s user

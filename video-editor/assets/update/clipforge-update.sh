@@ -63,6 +63,11 @@ if [ ! -d "$new" ]; then
   start_app "$install" "$@"
   exit 2
 fi
+if [ -e "$old" ] && [ ! -e "$old.marker" ]; then
+  write_result failed "Something called $(basename "$old") that ClipForge did not make is in the way. Move or rename it, then try again."
+  start_app "$install" "$@"
+  exit 2
+fi
 if [ -e "$old" ] && ! rm -rf "$old"; then
   write_result failed "An older copy of ClipForge next to the app could not be removed."
   start_app "$install" "$@"
@@ -70,7 +75,11 @@ if [ -e "$old" ] && ! rm -rf "$old"; then
 fi
 
 # 3. The old app steps aside. If this fails nothing has changed.
+# The marker says "the updater made this" (kept next to the app, not in
+# it: a file added inside a signed app would break its seal).
+: > "$old.marker" 2>/dev/null || true
 if ! mv "$install" "$old" 2>/dev/null; then
+  rm -f "$old.marker" 2>/dev/null || true
   write_result failed "The ClipForge app could not be moved (no permission to change this folder?)."
   start_app "$install" "$@"
   exit 3
@@ -92,5 +101,6 @@ write_result updated ""
 start_app "$install" "$@"
 
 # 5. Tidy up (the app also removes a leftover on its next start).
-rm -rf "$old" 2>/dev/null || true
+rm -rf "$old" 2>/dev/null && rm -f "$old.marker" 2>/dev/null
+rm -f "$new.marker" 2>/dev/null || true
 exit 0

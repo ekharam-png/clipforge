@@ -304,6 +304,7 @@ void main() {
       fakes.engine.hardwareEncoder = true;
       await tester.tap(find.widgetWithText(FilledButton, 'Export'));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Use graphics card (faster)'));
       await tester.tap(find.text('Use graphics card (faster)'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Export').last);

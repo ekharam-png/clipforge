@@ -161,7 +161,14 @@ or `"mp3"`. Details in `get_guide` section "tools".
   about 6 a minute or less; do not run both hard on the same video without
   adding the two numbers up. `list_auto_cuts` shows what was cut so far.
 - `make_short` copies the project and keeps one part; the long project is
-  never cut.
+  never cut. `suggest_shorts` lists candidate passages (whole sentences
+  with times and simple signals) for YOU to judge; it does not judge.
+  Propose 3-5 with a reason each and make them only after the owner chose.
+- **Publishing**: ClipForge never uploads and has no logins. You prepare
+  a kit: `set_publishing_notes` (offer three titles, the owner picks),
+  `make_chapters`, then `export_kit` puts the files for YouTube, Shorts,
+  WhatsApp and a podcast in one folder with a text file to paste from.
+  Tell the owner where the folder is and what to paste where.
 - **Captions that are already there** (imported subtitles, often with
   "Name:" in front): read them with `get_captions`, not page by page with
   `get_project`. A wrong word in one caption: `update_title`. The same
@@ -213,6 +220,9 @@ or `"mp3"`. Details in `get_guide` section "tools".
   `add_voice`), stretching a voice that drifts, searching for music from
   here, recording a voice-over, anything on the phone (the tools work on
   the computer only).
+- Uploading or posting to YouTube, Instagram, TikTok or anywhere else,
+  and anything that needs their account: ClipForge makes the files and
+  the text, the owner posts them.
 - Seeing the picture (see above). "Find the funniest part" works from what
   is SAID; see "Find the best shorts in a long video" in
   `get_guide` section "recipes".
@@ -233,4 +243,5 @@ or `"mp3"`. Details in `get_guide` section "tools".
 | "add subtitles", "caption what I say" | Captions from speech |
 | "take out the ums" | Remove filler words, gently |
 | "just the sound / an MP3" | Sound only |
+| "get it ready for YouTube / to post", "make everything I need to publish" | From a long video to a publishing kit |
 | "make it look finished" | Finished look |

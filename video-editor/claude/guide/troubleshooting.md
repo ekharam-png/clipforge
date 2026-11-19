@@ -7,11 +7,24 @@ error text unless they ask.
 
 ClipForge is not connected to this Claude yet. Tell them:
 
-In ClipForge on the computer: **Help > Connect to Claude…**. That page
+In ClipForge on the computer: **Help > Connect to Claude…**. From 1.14
+that page does the set-up itself: a row for **Claude Desktop** and one for
+**Claude Code**, each with a light and a **Connect** button. After
+pressing it they must close Claude completely and open it again (Claude
+Desktop: also quit it from the icon near the clock; Claude Code: a new
+session, `/mcp` shows the list). The reason, if they ask: Claude reads its
+list of tools when it starts and then starts the helper itself; ClipForge
+does not need to be running and there is no server to switch on.
 
-- saves the ClipForge extension file for **Claude Desktop** (double-click
-  the saved file, choose Install, restart Claude), and
-- shows the one line for **Claude Code** with a Copy button.
+- The page's **Test** button runs the helper by itself: PASS there means
+  the helper is fine and the problem is on Claude's side (not restarted,
+  the entry was removed).
+- **Details** on that page shows what Connect did; ask them to read it to
+  you when Connect fails.
+- The other ways still exist: the extension file (Claude > Settings >
+  Extensions > Advanced settings > Install Extension…; double-clicking a
+  .mcpb does not work with the Claude from the Microsoft Store) and the
+  one line for a terminal with a Copy button.
 
 It needs doing only once: from ClipForge 1.12 on the app keeps the helper
 up to date by itself. The tools only work on the computer (Windows or
@@ -30,8 +43,9 @@ in one sentence; for a FAIL, the note in that row says what is wrong
 An old hand-made `clipforge` entry in `claude_desktop_config.json` is still
 there next to the extension. `get_status` shows which helper program is
 running, its version, and whether it is the one the app installed. Ask them
-to remove the old entry (Help > Connect to Claude… > More in Help shows
-which lines) and restart Claude. After an app update, Claude uses the new
+to press **Connect** on Help > Connect to Claude… (it replaces an old
+entry and says when the extension and an entry are both there: one of the
+two must go) and restart Claude. After an app update, Claude uses the new
 helper the next time Claude is started.
 
 ## "FFmpeg could not be found"

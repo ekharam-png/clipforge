@@ -320,3 +320,71 @@ List<int> speechEdges(List<SpeakerTrack> tracks) {
   }
   return out.toList()..sort();
 }
+
+final Expando<SpeechLevels> _levelsOf = Expando('speech levels');
+
+/// How much louder than usual the talk gets between [fromMs] and [toMs]
+/// of the timeline (1.14, a signal for picking shorts): the loudest
+/// second of the speech there, in dB above the usual loud speech level of
+/// that sound (its 95th percentile). About 0 = ordinary talk; +3 and more
+/// = somebody raises their voice, laughs or the room reacts. Null when no
+/// sound picture covers the part. Loudness only: it does not know what
+/// is said.
+double? emphasisDb(Project p, PeaksLookup lookup, int fromMs, int toMs) {
+  final speechIds = {
+    for (final t in p.soundTracks)
+      if (t.speech) t.id,
+  };
+  final parts = <({SoundPeaks peaks, int a, int b})>[];
+  void add(String path, int track, int startMs, int inMs, int outMs, double speed) {
+    final peaks = lookup(path, track);
+    if (peaks == null) return;
+    final s = speed <= 0 || speed.isNaN ? 1.0 : speed;
+    final endMs = startMs + ((outMs - inMs) / s).round();
+    final from = fromMs > startMs ? fromMs : startMs;
+    final to = toMs < endMs ? toMs : endMs;
+    if (to - from < 500) return;
+    parts.add((
+      peaks: peaks,
+      a: inMs + ((from - startMs) * s).round(),
+      b: inMs + ((to - startMs) * s).round(),
+    ));
+  }
+
+  for (final a in p.audio) {
+    if (!speechIds.contains(a.trackId) || a.looped) continue;
+    add(a.path, a.soundClip.audioTrackInUse, a.startMs, a.inMs, a.outMs, a.speed);
+  }
+  if (parts.isEmpty) {
+    for (var i = 0; i < p.clips.length; i++) {
+      final c = p.clips[i];
+      if (c.type != ClipType.video || !c.hasAudio || c.muted) continue;
+      add(c.path, c.audioTrackInUse, p.clipStartMs(i), c.inMs, c.outMs, c.speed);
+    }
+  }
+  double? best;
+  for (final part in parts) {
+    final peaks = part.peaks;
+    final levels = _levelsOf[peaks] ??= analyseSpeechLevels(peaks);
+    if (!levels.hasSpeech) continue;
+    var a = part.a ~/ peaks.hopMs, b = part.b ~/ peaks.hopMs;
+    if (a < 0) a = 0;
+    if (b > peaks.length) b = peaks.length;
+    final window = 1000 ~/ peaks.hopMs;
+    if (b - a < window) continue;
+    var sum = 0;
+    for (var i = a; i < a + window; i++) {
+      sum += peaks.levels[i];
+    }
+    var most = sum;
+    for (var i = a + window; i < b; i++) {
+      sum += peaks.levels[i] - peaks.levels[i - window];
+      if (sum > most) most = sum;
+    }
+    final db = SoundPeaks.dbOf(0) +
+        (most / window) * (-kPeakMinDb / 255) -
+        levels.loudDb;
+    if (best == null || db > best) best = db;
+  }
+  return best;
+}

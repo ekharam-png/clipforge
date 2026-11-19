@@ -39,6 +39,7 @@ import 'package:clipforge/ui/editor/sound_renders.dart';
 import 'package:clipforge/ui/playback/media_kit_backend.dart';
 import 'package:clipforge/ui/playback/playback_controller.dart';
 import 'package:clipforge/ui/playback/timeline_player.dart';
+import 'package:clipforge/ui/publish_service.dart';
 import 'package:clipforge/ui/services.dart';
 import 'package:clipforge/ui/speech/speech_service.dart';
 import 'package:flutter/rendering.dart';
@@ -70,6 +71,26 @@ class FixtureFileService implements FileService {
   Future<String> appExportPath(String fileName) async => savePath;
   @override
   Future<String?> saveCopy(String sourcePath, String fileName) async => null;
+}
+
+/// "Export several…" goes into [folder]; nothing else is offered.
+class KitFolder implements PublishService {
+  KitFolder(this.folder);
+  final String folder;
+  @override
+  bool get canShare => false;
+  @override
+  Future<String?> chooseFolder() async => folder;
+  @override
+  Future<String> appKitFolder(String name) async => folder;
+  @override
+  Future<String?> saveToAlbum(String path, String album) async => null;
+  @override
+  Future<void> showInFolder(String path) async {}
+  @override
+  Future<void> openUrl(String url) async {}
+  @override
+  Future<bool> share(List<String> paths, {String? text, String? subject}) async => false;
 }
 
 /// The real media_kit backend; it only remembers the players it made so the
@@ -152,6 +173,8 @@ void main() {
     final storeDir = Directory(p.join(out.path, 'store'));
     if (storeDir.existsSync()) storeDir.deleteSync(recursive: true);
     final shotKey = GlobalKey();
+    final kitDir = p.join(out.path, 'kit');
+    if (Directory(kitDir).existsSync()) Directory(kitDir).deleteSync(recursive: true);
 
     // Fixtures ------------------------------------------------------------
     final land = p.join(fx.path, 'land.mp4');
@@ -238,6 +261,7 @@ void main() {
         projectStoreProvider
             .overrideWith((ref) => ProjectStore.atPath(storeDir.path)),
         fileServiceProvider.overrideWithValue(files),
+        publishServiceProvider.overrideWithValue(KitFolder(kitDir)),
         playerBackendProvider.overrideWithValue(backend),
         // The first-launch tour question counts as answered.
         appPrefsProvider.overrideWithValue(MemoryAppPrefs(answered: true)),
@@ -730,6 +754,54 @@ void main() {
     expect((v['width'], v['height']), (640, 360));
     expect(streams.any((x) => x['codec_name'] == 'aac'), isTrue);
     expect(dur, closeTo(total2 / 1000, 0.25));
+
+    // 5b. Export several (1.14): one job, real engine, one folder ------------
+    await tester.tap(find.widgetWithText(FilledButton, 'Export'));
+    await waitFor(() => find.text('Where is it going?').evaluate().isNotEmpty,
+        'export dialog with destinations');
+    await tester.tap(find.byKey(const ValueKey('export-several')));
+    await wait(300);
+    await tester.ensureVisible(find.byKey(const ValueKey('export-tick-podcast')));
+    await tester.tap(find.byKey(const ValueKey('export-tick-podcast')));
+    await wait(300);
+    expect(find.text('Export 3 files'), findsOneWidget);
+    await shot('07b-export-several');
+    final kitClock = Stopwatch()..start();
+    await tester.tap(find.byKey(const ValueKey('export-go')));
+    await waitFor(
+        () =>
+            find.text('Files saved').evaluate().isNotEmpty ||
+            find.text('Export failed').evaluate().isNotEmpty,
+        'the kit to finish',
+        timeoutMs: 240000);
+    await shot('07c-export-several-done');
+    expect(find.text('Files saved'), findsOneWidget);
+    await tester.tap(find.text('Done'));
+    await wait(300);
+    final kitName = s.project.name;
+    final kitFiles = Directory(kitDir).listSync().map((e) => p.basename(e.path)).toList()
+      ..sort();
+    log('EXPORT SEVERAL took ${kitClock.elapsedMilliseconds} ms: $kitFiles');
+    expect(kitFiles, [
+      '$kitName - Short 9x16.mp4',
+      '$kitName - YouTube.mp4',
+      '$kitName - audio.mp3',
+      '$kitName - text.txt',
+    ]);
+    Future<(int, int)> sizeOf(String name) async {
+      final j = await tester.runAsync(() => ffprobe(p.join(kitDir, name)));
+      final v = (j!['streams'] as List)
+          .cast<Map<String, dynamic>>()
+          .firstWhere((x) => x['codec_type'] == 'video');
+      return (v['width'] as int, v['height'] as int);
+    }
+
+    expect(await sizeOf('$kitName - YouTube.mp4'), (1920, 1080));
+    expect(await sizeOf('$kitName - Short 9x16.mp4'), (1080, 1920));
+    expect(File(p.join(kitDir, '$kitName - text.txt')).readAsStringSync(),
+        contains('File: $kitName - Short 9x16.mp4'));
+    // The project was not changed and no project was added.
+    expect(s.project.aspect, CanvasAspect.original);
 
 
     // 6. Rougher handling -----------------------------------------------------

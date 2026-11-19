@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../model/project.dart';
 import 'edit_labels.dart';
 import 'sound_tracks.dart';
+import 'marker_follow.dart';
 import 'title_anchors.dart';
 
 /// Holds a project and applies every edit, with undo/redo. Pure Dart (no
@@ -1735,6 +1736,57 @@ class ProjectEditor {
         return p.copyWith(titles: [...p.titles]..[i] = next);
       });
 
+  // Publishing notes and markers (1.14) -------------------------------------
+
+  /// The text that goes with the video when it is posted
+  /// ([Project.publishing]). One undo step, named after what changed
+  /// ("Publishing title", "Chapters (6)", ...; see edit_labels.dart).
+  void setPublishingNotes(PublishingNotes notes) => _edit(
+      (p) => p.publishing == notes ? null : p.copyWith(publishing: notes));
+
+  /// Most markers a project keeps.
+  static const int maxMarkers = 200;
+
+  /// Drops a "good moment" marker at [timelineMs] (kept inside the video).
+  /// Returns its id; null when the project has no clips, a marker is
+  /// already within 200 ms of that time, or there are [maxMarkers].
+  String? addMarker(int timelineMs, {String label = ''}) {
+    final p = _project;
+    if (p.clips.isEmpty || p.markers.length >= maxMarkers) return null;
+    final ms = _clamp(timelineMs, 0, p.durationMs);
+    if (p.markers.any((m) => (m.ms - ms).abs() < 200)) return null;
+    final id = _freshIdNotIn({for (final m in p.markers) m.id});
+    _edit((p) => p.copyWith(
+        markers: List.unmodifiable([
+      ...p.markers,
+      Marker(id: id, ms: ms, label: label.trim()),
+    ]..sort((a, b) => a.ms.compareTo(b.ms)))));
+    return id;
+  }
+
+  /// Removes the marker [markerId]; false when there is none.
+  bool removeMarker(String markerId) {
+    if (!_project.markers.any((m) => m.id == markerId)) return false;
+    _edit((p) => p.copyWith(markers: [
+          for (final m in p.markers)
+            if (m.id != markerId) m,
+        ]));
+    return true;
+  }
+
+  /// Moves or renames the marker with [marker]'s id.
+  void updateMarker(Marker marker) => _edit((p) {
+        final i = p.markers.indexWhere((m) => m.id == marker.id);
+        if (i < 0) return null;
+        final next = marker.copyWith(
+            ms: _clamp(marker.ms, 0, p.durationMs), label: marker.label.trim());
+        if (next == p.markers[i]) return null;
+        return p.copyWith(
+            markers: List.unmodifiable(
+                ([...p.markers]..[i] = next)
+                  ..sort((a, b) => a.ms.compareTo(b.ms))));
+      });
+
   // Project ----------------------------------------------------------------
   void setAspect(CanvasAspect aspect) =>
       _edit((p) => p.aspect == aspect ? null : p.copyWith(aspect: aspect));
@@ -1923,6 +1975,11 @@ class ProjectEditor {
     }
     next = syncLinkedSound(before, next,
         maxTracks: maxSoundTracks, newId: _newId);
+    // "Good moment" markers stay on their picture (marker_follow.dart).
+    final markers = retimeMarkers(before, next);
+    if (!identical(markers, next.markers)) {
+      next = next.copyWith(markers: markers);
+    }
     if (!inTransaction) {
       _pushUndo(before, anchorsBefore, hint: hint, time: _clock());
       _redo.clear();

@@ -777,6 +777,29 @@ class _TimelineViewState extends State<TimelineView> {
               _s.playback.seek(_ms(d.localPosition.dx)),
         ),
       ),
+      // "Good moment" markers: small flags on the ruler (a tap goes there).
+      for (final m in project.markers)
+        if (_x(m.ms) >= winStart - 20 && _x(m.ms) <= winEnd + 20)
+          Positioned(
+            key: ValueKey('marker-${m.id}'),
+            left: _x(m.ms) - 9,
+            top: 0,
+            width: 18,
+            height: _rulerHeight,
+            child: Tooltip(
+              message: m.label.isEmpty
+                  ? 'Good moment at ${formatTime(m.ms)}'
+                  : '${m.label} (${formatTime(m.ms)})',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _s.playback.seek(m.ms),
+                child: const Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Icon(Icons.flag, size: 15, color: Color(0xFFFFC56B)),
+                ),
+              ),
+            ),
+          ),
       // The ruler is drawn for the window only.
       Positioned(
         left: winStart,

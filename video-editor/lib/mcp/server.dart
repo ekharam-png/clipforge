@@ -9,6 +9,7 @@ import '../core/build_info.dart';
 import 'delegate.dart';
 import 'environment.dart';
 import 'export_jobs.dart';
+import 'heartbeat.dart';
 import 'mcp_protocol.dart';
 import 'tools.dart';
 import 'transcribe_jobs.dart';
@@ -18,6 +19,7 @@ import 'transcribe_jobs.dart';
 Future<McpServer> createClipForgeServer(
   ServerOptions options, {
   required void Function(String message) log,
+  HelperHeartbeat? heartbeat,
 }) async {
   final projectsDir = await resolveProjectsDir(explicit: options.projectsDir);
   log('projects folder: ${projectsDir.path} (${projectsDir.source})');
@@ -67,6 +69,8 @@ Future<McpServer> createClipForgeServer(
     tools: tools.tools,
     resources: guideResources(),
     log: log,
+    onClient: heartbeat?.opened,
+    onToolCall: heartbeat?.used,
   );
 }
 
@@ -121,9 +125,11 @@ Future<int> runClipForgeMcp(List<String> args) async {
 
   log('${BuildInfo.current.describe()}, MCP ${kProtocolVersions.first}, '
       '${Platform.operatingSystem}');
+  // "In use by Claude now" on the app's Connect page.
+  final heartbeat = HelperHeartbeat.forThisUser(BuildInfo.current.version);
   final McpServer server;
   try {
-    server = await createClipForgeServer(options, log: log);
+    server = await createClipForgeServer(options, log: log, heartbeat: heartbeat);
   } on FileSystemException catch (e) {
     log('cannot start: ${e.message}');
     return 1;
@@ -136,6 +142,7 @@ Future<int> runClipForgeMcp(List<String> args) async {
   // and keep going.
   final signals = <StreamSubscription<ProcessSignal>>[];
   Future<void> stop(ProcessSignal _) async {
+    heartbeat.closed();
     await server.shutdown();
     await stdout.flush();
     exit(0);
@@ -154,6 +161,7 @@ Future<int> runClipForgeMcp(List<String> args) async {
   for (final s in signals) {
     await s.cancel();
   }
+  heartbeat.closed();
   await stdout.flush();
   log('input closed, stopping');
   return 0;

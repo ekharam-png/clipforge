@@ -78,6 +78,9 @@ extension _SelfTest on ClipForgeTools {
           properties: {
             'keep_files': _bool('true: leave the temporary folder in place '
                 '(its path is in the answer) to look at. Default false.'),
+            'quick': _bool('true: leave out the export and speech-to-text '
+                'checks (a few seconds; what the app\'s Test button runs). '
+                'Default false.'),
           },
           handler: _selfTest,
         ),
@@ -155,12 +158,19 @@ extension _SelfTest on ClipForgeTools {
       'Speech to text', 'Clean up',
     ];
     var step = 0;
+    // quick (the app's Test button, 1.14): everything but the two slow
+    // checks, which are listed as skipped.
+    final quick = a['quick'] == true;
+    const slow = {'Export as a background job', 'Speech to text'};
     Future<void> check(String name, Future<String> Function() body) async {
       call.progress(step.toDouble(),
           total: names.length.toDouble(), message: 'Self-test: $name');
       step++;
       final w = Stopwatch()..start();
       try {
+        if (quick && slow.contains(name)) {
+          throw _CheckSkipped('not part of the quick test');
+        }
         final note = await body();
         checks.add(_Check(name, 'PASS', w.elapsedMilliseconds, note));
       } on _CheckSkipped catch (e) {

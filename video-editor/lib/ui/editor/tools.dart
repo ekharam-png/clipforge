@@ -16,6 +16,8 @@ import 'import_actions.dart';
 import 'music_actions.dart';
 import 'history_panel.dart';
 import 'picture_tools.dart';
+import 'publishing_panel.dart';
+import 'shorts_actions.dart';
 import 'session.dart';
 import 'text_panel.dart';
 import 'sound_tracks_ui.dart';
@@ -182,6 +184,49 @@ Future<void> showEditorMoreSheet(BuildContext context, EditorSession s) {
           },
         ),
         _historyTile(context, sheet, s),
+        ListTile(
+          key: const ValueKey('more-mark-moment'),
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.flag_outlined),
+          title: const Text('Mark a good moment'),
+          subtitle: const Text('A marker here, to make a short around later'),
+          onTap: () {
+            Navigator.of(sheet).pop();
+            markGoodMoment(context, s);
+          },
+        ),
+        ListTile(
+          key: const ValueKey('more-shorts'),
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.smartphone),
+          title: const Text('Shorts and good moments'),
+          subtitle: Text(s.project.markers.isEmpty
+              ? 'Make a short from here, or from your markers'
+              : '${s.project.markers.length} '
+                  '${s.project.markers.length == 1 ? 'marker' : 'markers'}'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.of(sheet).pop();
+            _showSheet(context,
+                title: 'Shorts',
+                builder: (_) => ShortsPanel(session: s, host: context));
+          },
+        ),
+        ListTile(
+          key: const ValueKey('more-publishing-notes'),
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.notes),
+          title: const Text('Publishing notes'),
+          subtitle: const Text('Title, description, hashtags, chapters'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () {
+            Navigator.of(sheet).pop();
+            showPublishingNotes(context,
+                project: () => s.project,
+                onChanged: s.editor.setPublishingNotes,
+                turns: () => s.speakerTurnsNow);
+          },
+        ),
         ListenableBuilder(
           listenable: s.pictures,
           builder: (context, _) => s.pictures.speakers
@@ -841,6 +886,10 @@ class InspectorPanel extends StatelessWidget {
                   const Divider(height: 32),
                   DuckMusicSwitch(session: session),
                 ],
+                if (session.project.clips.isNotEmpty) ...[
+                  const Divider(height: 32),
+                  ShortsPanel(session: session, host: context, notes: true),
+                ],
               ] else if (clip != null)
                 ..._clipSections(clip)
               else if (overlay != null)
@@ -1491,6 +1540,86 @@ class _Swatch extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+
+/// "Shorts and publishing": the buttons for good-moment markers, shorts
+/// and (with [notes]) the publishing notes. In the Project panel on
+/// computers (nothing selected), in a sheet under More on phones.
+class ShortsPanel extends StatelessWidget {
+  const ShortsPanel(
+      {super.key, required this.session, required this.host, this.notes = false});
+  final EditorSession session;
+
+  /// The editor's context (the dialogs belong there, not to a sheet).
+  final BuildContext host;
+  final bool notes;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = session;
+    void run(VoidCallback action) {
+      // In a sheet: close it first.
+      if (!notes) Navigator.of(context).maybePop();
+      action();
+    }
+
+    return ListenableBuilder(
+      listenable: s.editor,
+      builder: (context, _) {
+        final n = s.project.markers.length;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (notes) const PanelLabel('Shorts and publishing'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (notes)
+                  OutlinedButton.icon(
+                    key: const ValueKey('panel-mark-moment'),
+                    onPressed: () => markGoodMoment(host, s),
+                    icon: const Icon(Icons.flag_outlined, size: 18),
+                    label: const Text('Mark a good moment (M)'),
+                  ),
+                OutlinedButton.icon(
+                  key: const ValueKey('panel-good-moments'),
+                  onPressed: () => run(() => showGoodMoments(host, s)),
+                  icon: const Icon(Icons.flag, size: 18),
+                  label: Text(n == 0 ? 'Good moments…' : 'Good moments ($n)…'),
+                ),
+                OutlinedButton.icon(
+                  key: const ValueKey('panel-short-from-here'),
+                  onPressed: () => run(() => makeShortFromHere(host, s)),
+                  icon: const Icon(Icons.smartphone, size: 18),
+                  label: const Text('Make a short from here…'),
+                ),
+                if (n > 0)
+                  OutlinedButton.icon(
+                    key: const ValueKey('panel-shorts-from-markers'),
+                    onPressed: () => run(() => makeShortsFromMarkers(host, s)),
+                    icon: const Icon(Icons.content_cut, size: 18),
+                    label: const Text('Make shorts from markers…'),
+                  ),
+                if (notes)
+                  OutlinedButton.icon(
+                    key: const ValueKey('panel-publishing-notes'),
+                    onPressed: () => showPublishingNotes(host,
+                        project: () => s.project,
+                        onChanged: s.editor.setPublishingNotes,
+                        turns: () => s.speakerTurnsNow),
+                    icon: const Icon(Icons.notes, size: 18),
+                    label: const Text('Publishing notes…'),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 }

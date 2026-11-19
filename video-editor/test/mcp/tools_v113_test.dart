@@ -348,6 +348,6 @@ void main() {
     expect(byName['replace_in_captions']!.properties.keys,
         containsAll(['find', 'replace', 'dry_run', 'whole_word', 'detail']));
     expect(byName['get_captions']!.properties.containsKey('detail'), isFalse);
-    expect(b.tools.tools.length, 62);
+    expect(b.tools.tools.length, 70);
   });
 }

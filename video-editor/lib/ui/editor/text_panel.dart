@@ -33,7 +33,9 @@ import '../speech/speech_service.dart' show Transcript;
 import '../theme.dart';
 import '../widgets.dart';
 import 'import_actions.dart';
+import '../../core/publish/shorts.dart' show kShortLengths;
 import 'session.dart';
+import 'shorts_actions.dart';
 import 'speech_actions.dart';
 
 const _uuid = Uuid();
@@ -624,6 +626,23 @@ class TextPanelState extends State<TextPanel> {
         undo: n > 0);
   }
 
+  /// "Make a short from this…": the selected lines as a new upright
+  /// project. With one line selected (phones select one at a time) the
+  /// dialog offers 30 / 45 / 60 s from there.
+  Future<void> makeShortFromSelection() async {
+    final range = _selectedRange;
+    if (range == null) return;
+    final host = widget.host ?? context;
+    // Phones: the sheet goes, the question belongs to the editor.
+    if (widget.sheet) widget.onClose?.call();
+    await showMakeShort(host, _s,
+        fromMs: range.fromMs,
+        toMs: range.toMs,
+        firstText: range.text,
+        lengths: kShortLengths,
+        offerSelection: true);
+  }
+
   void _say(String message, {bool undo = false}) {
     final host = widget.host ?? context;
     if (!host.mounted) return;
@@ -1184,6 +1203,16 @@ class TextPanelState extends State<TextPanel> {
       TextSource.titles => n == 1 ? 'title' : 'titles',
       TextSource.transcript => n == 1 ? 'phrase' : 'phrases',
     };
+    // Computers: low rows, so that the bar hides little of the text (a
+    // double click must still find its line). Phones keep finger size.
+    final compact = widget.sheet
+        ? const ButtonStyle()
+        : TextButton.styleFrom(
+            minimumSize: const Size(0, 32),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          );
     return Container(
       key: const ValueKey('text-selection-bar'),
       decoration: const BoxDecoration(
@@ -1206,6 +1235,7 @@ class TextPanelState extends State<TextPanel> {
           if (_editable && n == 1)
             TextButton.icon(
               key: const ValueKey('text-edit'),
+              style: compact,
               onPressed: () => startEditing(_selected.single),
               icon: const Icon(Icons.edit_outlined, size: 16),
               label: const Text('Edit'),
@@ -1213,6 +1243,7 @@ class TextPanelState extends State<TextPanel> {
           if (_editable)
             TextButton.icon(
               key: const ValueKey('text-delete'),
+              style: compact,
               onPressed: deleteSelected,
               icon: const Icon(Icons.delete_outline, size: 16),
               label: Text(n == 1 ? 'Delete caption' : 'Delete captions'),
@@ -1222,12 +1253,23 @@ class TextPanelState extends State<TextPanel> {
           if (!widget.sheet && _doc.source != TextSource.titles) ...[
             TextButton.icon(
               key: const ValueKey('text-cut'),
-              style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+              style: compact.copyWith(
+                  foregroundColor:
+                      const WidgetStatePropertyAll(AppColors.danger)),
               onPressed: cutSelectedOut,
               icon: const Icon(Icons.content_cut, size: 16),
               label: const Text('Cut this part out of the video…'),
             ),
           ],
+          // A short is a NEW project; this video is not changed.
+          if (_doc.source != TextSource.titles && _s.store != null)
+            TextButton.icon(
+              key: const ValueKey('text-make-short'),
+              style: compact,
+              onPressed: makeShortFromSelection,
+              icon: const Icon(Icons.smartphone, size: 16),
+              label: const Text('Make a short from this…'),
+            ),
           IconButton(
             key: const ValueKey('text-selection-clear'),
             tooltip: 'Clear the selection',

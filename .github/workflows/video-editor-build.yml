@@ -428,6 +428,13 @@ jobs:
           Copy-Item $release dist\ClipForge -Recurse
           Copy-Item "dist\$env:CF_NAME-release-notes.txt" "dist\ClipForge\Release notes.txt"
           Compress-Archive -Path dist\ClipForge -DestinationPath "dist\$env:CF_NAME-windows.zip"
+          # The zip must unpack to ONE folder called "ClipForge" (no version
+          # in the name: the app updates itself inside that folder).
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path "dist\$env:CF_NAME-windows.zip"))
+          $tops = @($zip.Entries | ForEach-Object { ($_.FullName -split '[\\/]')[0] } | Sort-Object -Unique)
+          $zip.Dispose()
+          if ($tops.Count -ne 1 -or $tops[0] -ne 'ClipForge') { throw "the Windows zip must hold one top folder 'ClipForge', found: $($tops -join ', ')" }
       - uses: actions/upload-artifact@v7
         with:
           path: video-editor/dist/${{ env.CF_NAME }}-windows.zip

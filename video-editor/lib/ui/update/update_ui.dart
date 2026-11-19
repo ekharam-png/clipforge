@@ -235,15 +235,35 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
             ));
           }
         } else if (stage == UpdateStage.readyToRestart) {
-          content = Text('Version ${info.version} is ready. ClipForge now '
-              'closes and opens again as the new version. This takes a few '
-              'seconds.');
+          content = Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Version ${info.version} is downloaded and checked. One '
+                  'step is left: ClipForge closes, the old version is '
+                  'swapped for the new one, and ClipForge opens again. This '
+                  'takes a few seconds. Your projects are not touched.',
+                  key: const ValueKey('update-ready')),
+              const SizedBox(height: 10),
+              Text(
+                  c.message ??
+                      'If you choose Later, the update is finished by itself '
+                          'the next time you start ClipForge. Until then a '
+                          'folder ending in ".update-new" sits next to the '
+                          'ClipForge folder: leave it there.',
+                  key: const ValueKey('update-later-note'),
+                  style: const TextStyle(color: AppColors.textDim, fontSize: 13)),
+            ],
+          );
           actions
-            ..add(TextButton(onPressed: close, child: const Text('Not now')))
+            ..add(TextButton(
+                key: const ValueKey('update-later'),
+                onPressed: close,
+                child: const Text('Later')))
             ..add(FilledButton(
               key: const ValueKey('update-restart'),
               onPressed: c.restartToUpdate,
-              child: const Text('Restart ClipForge'),
+              child: const Text('Restart ClipForge to finish'),
             ));
         } else if (stage == UpdateStage.handedToSystem) {
           content = const Text('Android is now asking you to confirm the '
@@ -302,4 +322,78 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
       },
     );
   }
+}
+
+
+/// Shown once after a start that followed an update: one quiet line when
+/// it worked ("Updated to 1.14.0", with What's new), a plain message with
+/// the reason and "Try again" / "Open the download page" when it did not.
+/// [whatsNew] opens the release notes inside the app.
+Future<void> showUpdateOutcome(BuildContext context, UpdateController c,
+    {VoidCallback? whatsNew}) async {
+  final result = c.lastResult;
+  if (result == null) return;
+  final note = c.folderNote;
+  final canRetry = c.pending != null;
+  c.clearLastResult();
+  if (result.updated) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        key: const ValueKey('update-done-line'),
+        duration: Duration(seconds: note == null ? 6 : 14),
+        persist: false,
+        content: Text(
+            'Updated to ${result.version.isEmpty ? 'the new version' : result.version}.'
+            '${note == null ? '' : ' $note'}'),
+        action: whatsNew == null
+            ? null
+            : SnackBarAction(label: "What's new", onPressed: whatsNew),
+      ));
+    return;
+  }
+  final broken = result.status == 'broken';
+  await showDialog<void>(
+    context: context,
+    builder: (d) => AlertDialog(
+      key: const ValueKey('update-failed-dialog'),
+      title: const Text('The update was not installed'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Text(
+            '${result.message.isEmpty ? 'The new version could not be put in place' : result.message.replaceFirst(RegExp(r'\.$'), '')}. '
+            '${broken ? '' : 'ClipForge is unchanged and works as before. '}'
+            '${canRetry ? 'The download is still here: Try again closes ClipForge and swaps the versions once more. Close other windows that show the ClipForge folder first.' : 'You can get the new version from the download page.'}'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            Navigator.of(d).pop();
+            await c.dropPending();
+            final problem = await c.openDownloadPage();
+            if (problem != null && context.mounted) _say(context, problem);
+          },
+          child: const Text('Open the download page'),
+        ),
+        TextButton(
+          key: const ValueKey('update-failed-later'),
+          onPressed: () {
+            Navigator.of(d).pop();
+            c.dropPending();
+          },
+          child: const Text('Not now'),
+        ),
+        if (canRetry)
+          FilledButton(
+            key: const ValueKey('update-try-again'),
+            onPressed: () async {
+              Navigator.of(d).pop();
+              final problem = await c.finishPending();
+              if (problem != null && context.mounted) _say(context, problem);
+            },
+            child: const Text('Try again'),
+          ),
+      ],
+    ),
+  );
 }

@@ -1,0 +1,9 @@
+{
+    "mcpServers": {
+        "clipforge": {
+            "command": "D:\\Apps\\ClipForge-1.11.0\\clipforge-mcp.exe",
+            "args": ["--projects-dir", "D:\\Videos"]
+        },
+        "notes": { "command": "npx", "args": ["-y", "@example/notes-mcp"] }
+    }
+}

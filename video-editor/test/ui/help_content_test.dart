@@ -58,7 +58,7 @@ void main() {
 
   group('help file', () {
     test('every article parses and has what it needs', () {
-      expect(library.articles.length, inInclusiveRange(25, 64));
+      expect(library.articles.length, inInclusiveRange(25, 72));
       for (final a in library.articles) {
         expect(a.title, isNotEmpty, reason: a.id);
         expect(a.keywords, isNotEmpty, reason: a.id);
@@ -175,7 +175,8 @@ Last.''');
     test('as you type: the start of a word is enough', () {
       expect(top('expo'), 'export');
       expect(top('freez'), 'freeze-frame');
-      expect(search.search('m').length, 0, reason: 'one letter: no guess');
+      // (Not "m": M is a key since 1.14, and the help says so.)
+      expect(search.search('x').length, 0, reason: 'one letter: no guess');
     });
 
     test('a word that exists is not read as a typo of another', () {

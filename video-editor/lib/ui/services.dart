@@ -319,7 +319,11 @@ class PlatformFileService implements FileService {
     );
     if (uri == null || uri.scheme != 'file') return null;
     var path = uri.toFilePath();
-    if (p.extension(path).toLowerCase() != '.mp4') path = '$path.mp4';
+    // The kind of file asked for (a video, or the sound only as .m4a /
+    // .mp3) keeps its ending whatever was typed.
+    final ext = p.extension(fileName).toLowerCase();
+    final want = ext.isEmpty ? '.mp4' : ext;
+    if (p.extension(path).toLowerCase() != want) path = '$path$want';
     return path;
   }
 
@@ -334,6 +338,7 @@ class PlatformFileService implements FileService {
     base ??= await getApplicationDocumentsDirectory();
     final dir = Directory(p.join(base.path, 'exports'));
     await dir.create(recursive: true);
+    await removeOldExports(dir.path);
     return p.join(dir.path, fileName);
   }
 
@@ -351,12 +356,41 @@ class PlatformFileService implements FileService {
     }
     if (!await Gal.requestAccess()) return null;
     await Gal.putVideo(sourcePath);
-    // The gallery now has its own copy; the app's one would only take space.
-    try {
-      await File(sourcePath).delete();
-    } catch (_) {}
+    // The app's own copy stays for now, so that Share (1.14) can hand it
+    // to another app; [appExportPath] removes exports older than two days.
     return 'your gallery (Movies)';
   }
+}
+
+/// Phones keep a finished export in the app's own "exports" folder after
+/// copying it to the gallery (so that it can still be shared). This
+/// removes what is older than [olderThan] there, kit folders included;
+/// called before each new export. Returns how many files went.
+Future<int> removeOldExports(String dir,
+    {Duration olderThan = const Duration(days: 2), DateTime? now}) async {
+  final limit = (now ?? DateTime.now()).subtract(olderThan);
+  var removed = 0;
+  try {
+    await for (final e in Directory(dir).list(recursive: true)) {
+      if (e is! File) continue;
+      try {
+        if ((await e.lastModified()).isBefore(limit)) {
+          await e.delete();
+          removed++;
+        }
+      } catch (_) {}
+    }
+    await for (final e in Directory(dir).list()) {
+      if (e is Directory && await e.list().isEmpty) {
+        try {
+          await e.delete();
+        } catch (_) {}
+      }
+    }
+  } on FileSystemException {
+    // Nothing to tidy.
+  }
+  return removed;
 }
 
 /// Files that are not media: subtitles and project bundles.

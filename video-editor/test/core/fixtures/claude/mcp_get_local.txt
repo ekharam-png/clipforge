@@ -1,0 +1,7 @@
+clipforge:
+  Scope: Local config (private to you in this project)
+  Status: ✓ Connected
+  Type: stdio
+  Command: /Users/sam/old/clipforge-mcp
+  Args: 
+  Environment:

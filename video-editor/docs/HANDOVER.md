@@ -2,7 +2,9 @@
 
 Read this first in a new session. It records what was built, why, how it fits
 together, how to build and test it, and what is still open. Last updated
-18 November 2026 (1.13.0: the Text window, sound waves and who is speaking;
+19 November 2026 (1.14.0: publishing kit, publishing notes, shorts and
+markers, Connect to Claude done by the app, clearer updates; before that
+1.13.0: the Text window, sound waves and who is speaking;
 before that 1.12.0: the app updates itself, the Claude helper follows the
 app, get_guide and self_test; 1.11.0: speech to text).
 
@@ -73,7 +75,13 @@ shared with a few friends later.
   `lib/ui/speaker_colors.dart` — 1.13 sound waves and who is speaking.
   `lib/mcp/tools_text.dart` — get_captions, replace_in_captions,
   get_speech_map.
-- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1690 tests (1.13.0; 1611 at 1.12.0, 1516 at 1.11.0).
+- 1.14: `lib/core/model/publishing.dart` (notes, chapters, markers),
+  `lib/core/publish/` (chapters + kit text, shorts), `lib/media/destinations.dart`
+  (THE presets table), `lib/media/export_kit.dart`, `lib/ui/publish_service.dart`,
+  `lib/ui/editor/publishing_panel.dart`, `shorts_actions.dart`,
+  `lib/mcp/tools_publish.dart`, `lib/core/claude/connect.dart` +
+  `lib/ui/claude/claude_connect.dart`, `lib/mcp/heartbeat.dart`.
+- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1796 tests (1.14.0; 1690 at 1.13.0, 1611 at 1.12.0, 1516 at 1.11.0).
   `integration_test/real_app_test.dart` — drives the real app on Linux.
 
 ## What was built, and why
@@ -1783,6 +1791,291 @@ and of the waveforms by eye on a real screen; the speaker colours and the
 bleed rule on a real Zoom recording (tuned on synthetic two-microphone
 fixtures only); Cmd+F / Cmd+Shift+T through the real macOS menu bar.
 
+## Publishing kit, notes, shorts, markers (1.14.0, 19 Nov 2026)
+
+Owner (non-technical; podcasts, family videos, sport clips; Windows, Mac,
+Android): after editing, get a ready "publishing kit" - a few videos in the
+right formats plus the text to paste - and better help making good short
+clips, with Claude doing the picking where it can and a simple manual way
+in the app.
+
+**Owner decisions (do not reopen without asking):**
+- **NO uploading** to YouTube / Instagram / TikTok from the app, and **no
+  logins**. ClipForge makes files and text; the owner posts them. The only
+  network use added is opening a site's own upload page in the user's own
+  browser (plain https links from the table, the same open-URL mechanism
+  as updates; no embedded browser, no account).
+- **On hold, recorded as a future idea: a personal "Publisher".** A
+  SEPARATE tool (not part of ClipForge, not shipped to friends) that
+  drives the owner's own browser profile to fill in the upload forms from
+  the kit folder (files + "… - text.txt"). Rules if it is ever built: it
+  never stores passwords (it uses the browser profile the owner is already
+  signed in to), it STOPS BEFORE "Publish" so the owner presses the last
+  button, and it reads only the kit folder. Nothing of it exists.
+
+### Destinations are data (`lib/media/destinations.dart`)
+`kDestinations` is the one table (order = order in the Export window):
+youtube (16:9, 1080p, full), shorts (9:16, 1080p, `maxSeconds` =
+`kShortMaxSeconds` 60, three upload pages), instagram (4:5 and 1:1, 60 s),
+whatsapp (quality small, `maxMegabytes` 16), podcast (mp3, m4a), custom.
+To add a row, add it there: the Export window, "Export several…", the
+warnings, the file names, the upload links and Claude's export_kit all
+read it. **The limits are conservative guesses from November 2026 and were
+not checked against the sites** (no network to them here): every warning
+carries `limitNote`, which says whose limit it is, that it changes, and
+"check the site". The 16 MB for WhatsApp is the old limit and will warn on
+most videos over ~50 s; raise it in the table if the owner finds it noisy.
+`KitChoice` = destination + shape + file kind (`key`: "shorts",
+"instagram:1x1", "podcast:m4a"). File names: `kitFileName` ("<Project> -
+YouTube.mp4", "- Short 9x16.mp4", "- Instagram 4x5.mp4", "- WhatsApp.mp4",
+"- audio.mp3"), `kitTextFileName` ("- text.txt").
+
+### A destination never changes the project
+`shapeDiffers` (more than 2 % apart, so 1920x1080 is 16:9).
+`applyDestinationShape` (one undo step "Shape 9:16 with blurred
+background"): aspect + video size, and clips set to Fit whose own picture
+has another shape get FitMode.blur (a clip the user set to Fill keeps it;
+nothing is cropped - the dialog reminds of Crop and position).
+`destinationVariant` returns the project as a destination needs it IN
+MEMORY. Single export with another shape asks: **Make a copy in this
+shape** (the variant is saved as a new project "<name> - 9x16" through
+`onKeepCopy` = store.duplicate + save, and exported from it; the finished
+screen says the copy is in the project list) or **Export as it is**.
+"Export several…" uses variants in memory only (nothing in the project
+list) unless "Keep the shape copies as projects" is ticked.
+
+### Export several (`lib/media/export_kit.dart`)
+`planKit` -> `runExportKit(engine, plan, folder)`: one after another,
+each rendered as `<name>.part.<ext>` and renamed (replacing an older file
+of that name), progress weighted by megapixel-seconds, cancel throws the
+current file away and keeps finished ones, then the text file. Computers:
+`PublishService.chooseFolder` once, files go straight into it. Phones: the
+app's `exports/<project>/` folder + each video into a gallery album named
+after the project (`Gal.putVideo(album:)`); sound and text stay in the
+app folder and go out through Share. The runner uses blocking file calls
+on purpose (widget tests cannot await real file IO).
+**Phones keep the exported file now**: `saveCopy` no longer deletes the
+app's copy after the gallery copy (Share needs it); `removeOldExports`
+deletes exports older than two days before each new export.
+Fixed on the way: `chooseSavePath` appended ".mp4" to a sound-only export's
+name on computers.
+
+### Publishing notes (`Project.publishing`, `core/publish/chapters.dart`)
+`PublishingNotes` (title, description, hashtags, chapters, shortTitle,
+shortDescription) under the additive JSON key `publishing` (written only
+when not empty; schema stays 2; older versions ignore it and drop it on
+save). `ProjectEditor.setPublishingNotes` = one undo step; History names
+from `publishingChange` ("Publishing title", "Hashtags", "Chapters (6)",
+several at once = "Publishing notes"). The panel
+(`publishing_panel.dart`: dialog on computers, full screen on phones;
+Export window, File menu, Project panel, phones More) stores a field when
+it loses the focus, so each field is one step.
+**Chapter rules in one place: `kChapterRules`** (first at 0:00, at least
+10 s each, at least 3, at most 12 automatic ones, titles to 60
+characters). `buildChapters`: titles -> else caption paragraphs (speaker
+change / 2 s pause, named by the first words) -> else speaker turns
+("Part n - Name"). `chapterProblems` names what a typed list breaks.
+`kitText` builds the text file (TITLE, DESCRIPTION, HASHTAGS, TAGS,
+CHAPTERS, MUSIC CREDITS, short-form title, a section per file with what
+to paste there); a single export on a computer writes it next to the file
+only when there are notes or music credits.
+
+### After export
+Phones: **Share** (`PublishService.share`: share_plus with files + text +
+subject), with "Copy title and description" kept visible (many apps
+ignore shared text) and "Saved to your gallery" as before. Computers:
+**Show in folder** (`explorer /select,` / `open -R` / `xdg-open`), Copy
+buttons, **Open … upload page** per destination.
+
+### Shorts
+- `core/publish/shorts.dart` is shared by the app and Claude: the "Short"
+  look defined once (`ShortLook`, `shortCaptionStyle`: 0.075 of the short
+  side, y 0.68, outline, Rubik; `shortTopTitle` at y 0.13);
+  `applyShortCaptionLook` divides a caption that would need more than two
+  lines into several, time shared by length; `buildShort` (keep the range,
+  9:16, 1080p, optional blur, captions from words when the part has none);
+  `snapShortRange` (outward to a pause, at most 4 s, 150 ms of the quiet
+  kept, then never inside a word / caption); `shortCandidates`.
+- App: Text window selection -> **Make a short from this…** (computers:
+  Shift-click a range; phones select one line, so the dialog offers 30 /
+  45 / 60 s from there). **Timeline: there is no range concept** (I / O
+  trim the clip), so the light action was built: **Make a short from
+  here…** (30 / 45 / 60 s from the playhead; Edit > Shorts, Project panel,
+  phones More > Shorts and good moments). The short is a new project
+  (store.duplicate -> buildShort -> save; notes and markers are not
+  copied); then "Open it" (`EditorSession.openProject` = save, release the
+  lock, pushReplacement) or "Stay here". Warning over `kShortMaxSeconds`,
+  never a refusal.
+- **Markers** (`Project.markers`, key `markers`, additive): M on
+  computers (also while playing), More > Mark a good moment on phones;
+  flags on the ruler (tap = go there); "Good moments…" list; "Make shorts
+  from markers…" = `markerRange` (20 s before to 25 s after) snapped with
+  the 1.13 speech map when its picture is ready (`pausesIn`), else the
+  gaps between captions / transcript words. **Markers follow their
+  picture** (`core/editor/marker_follow.dart`, run in
+  `ProjectEditor._edit`): found again by clip id + source position, also
+  in pieces a cut made; a marker whose moment was cut away stays at the
+  cut. Lighter than title anchors and stateless.
+
+### Claude (70 tools; `lib/mcp/tools_publish.dart`)
+`suggest_shorts` (CANDIDATES only, the helper has no AI: whole sentences
+between pauses / speaker turns in a length window, from the transcript's
+words or else the captions; signals starts-with-a-question, figures,
+pause before / after, `emphasisDb` from the sound picture; for each start
+the shortest and the longest natural passage; paged), `make_short` gained
+`caption_style: "short"`, `title`, `snap_to_speech` and warnings (longer
+than 60 s, starts / ends mid-sentence), `get_publishing_notes` /
+`set_publishing_notes`, `make_chapters` (dry_run, replace), `export_kit`
+(project_id + destinations, `projects` for the shorts; ONE job in the 1.9
+job store with `format: "kit"` and a `<id>.kit.json` plan; the worker
+runs `runKitJob`; **get_export_status and cancel_export cover it**, no
+sibling tools), `add_marker` / `list_markers` / `remove_marker`.
+`self_test` gained `quick`. Guide: recipe "From a long video to a
+publishing kit" (how to pick: hook in 3 s, one idea, complete thought,
+ends on a point, no inside references; three title options; ask before
+making), tools section, start section; regenerate with
+`dart run tool/gen_guide.dart`.
+
+### Tests (1796 in all)
+`test/core/publishing_test.dart`, `test/media/destinations_test.dart`
+(pretend engine + one real FFmpeg kit: 3 files with the right sizes and
+the text file), `test/mcp/tools_v114_test.dart`,
+`test/ui/v114_ui_test.dart` (phone + desktop; screenshots `export_*_
+destination`, `_several`, `_several_done`, `_finished`,
+`publishing_notes_*`, `short_dialog_*`, `short_made_*`, `markers_*`).
+Linux e2e step 5b: Export several through the real window with the real
+engine (YouTube 1920x1080, Short 1080x1920, MP3, text file).
+
+### Not built / not verified (1.14 publishing and shorts)
+Not built: remembering the last destination; per-destination notes beyond
+the short title / description; a thumbnail image for YouTube; markers with
+labels typed in the app (Claude can label them); dragging a marker; a
+range selection on the timeline; auto-reframing (the person in shot is
+still Crop and position by hand). Not verified: everything on real
+devices - the Android share sheet with a video + text, the gallery album
+(`Gal.requestAccess(toAlbum: true)` asks for more permission than before),
+that the kept app copy of an export is really removed after two days,
+FilePicker's folder dialog on Windows / macOS, `explorer /select,` with
+odd paths, the upload URLs (not opened from here), the site limits, the
+Short caption look by eye on real footage, Claude using the new tools in
+a real session, the kit job's worker process on Windows.
+
+## Connect to Claude done by the app; clearer updates (1.14.0, 19 Nov 2026)
+
+Two pieces of feedback from the owner's first real in-app update on
+Windows (1.12.0 build 114 -> 1.13.0 build 118; **it worked end to end**,
+About shows 1.13.0) and from connecting Claude.
+
+### Updates
+What was seen: next to the install folder "ClipForge-1.12.0" (the owner's
+own folder name) a folder "ClipForge-1.12.0.update-new" appeared. Every
+path that leaves `<install>.update-new` / `.update-old` behind:
+1. download + unpack done, the user has not pressed Restart yet
+   (transient; this is almost certainly what was seen);
+2. the swap script still waiting for the app's process (up to 60 s);
+3. a failed rename (Explorer or a terminal open in the folder, antivirus
+   scanning): `.update-new` stays, result "failed";
+4. the script never ran (PowerShell blocked): no result file at all -
+   1.13 then silently deleted the download at the next start;
+5. the new app is in place but `.update-old` could not be deleted;
+6. 1.13's start-up clean-up deleted ANY folder of those names.
+Changes:
+- **Marker**: only folders the updater made are ever removed.
+  Windows: `.clipforge-update-marker` inside the folder (written into the
+  unpacked update, and by the script into the folder that steps aside);
+  macOS: a file NEXT TO the bundle (`<bundle>.update-new.marker`),
+  because a file added inside a signed .app would break its seal. Both
+  scripts refuse (exit 2, "a folder ClipForge did not make is in the
+  way") instead of deleting an unmarked `.update-old`.
+- **`update-pending.json`** in the state folder remembers an unpacked
+  update. `decideUpdateAtStart` (pure, tested as a table): result
+  "updated" -> one quiet line "Updated to X" with What's new; "failed" /
+  "broken" -> a window with the reason, **Try again** (re-runs the swap,
+  no new download) and **Open the download page**; pending + swap started
+  + no result -> "the step that swaps the versions did not run"; pending,
+  swap never started ("Later", or the app closed another way) ->
+  **applied at the next START** (decision: at start nothing is open and
+  nothing runs; applying on close would restart an app the user just
+  closed). It is tried once by itself; after that only by Try again.
+- The dialog after a checked download says what is left and offers
+  **Restart ClipForge to finish** / **Later** (with the sentence about
+  the ".update-new" folder).
+- **Never while busy**: `UpdatePlatform.mayQuit` =
+  `ServicesBinding.handleRequestAppExit()`, so an open editor saves first
+  and a running export says no; the update then waits for the next start.
+  (Before, `exitApplication(required)` skipped that question.) Claude's
+  export / transcribe jobs run from the helper folder, not the install
+  folder, and are not touched by the swap.
+- **Folder names**: the Windows zip already unpacks to one folder called
+  "ClipForge" (the workflow now checks that); "Extract All" wraps it in a
+  folder named after the zip, which is where versioned names come from.
+  Install steps (site/index.html, README, help "Updates") say: keep it
+  in a folder called "ClipForge", no version in the name. When the app
+  runs from a folder whose name holds another version, the "Updated" line
+  adds one sentence (`folderNameNote`); the folder is NEVER renamed by
+  the app (shortcuts).
+- `tool/ci/windows_swap_test.py` gained scenarios 7-9 (marker / no
+  marker, the old folder left with a marker, apply at the next start).
+- **Long-term answer (not built): a proper Windows installer** - a
+  per-user install (no admin rights, e.g. under %LOCALAPPDATA%\Programs)
+  with a Start-menu shortcut, so that there is no folder for the user to
+  name, move or keep open, and the updater always knows where it is.
+- Not verified: everything on real Windows / macOS (the new script lines
+  have only run in the sh form here; scenarios 7-9 run first in the next
+  Windows job), `handleRequestAppExit` on the desktop embedders, the
+  restart flicker of "apply at the next start".
+
+### Connect to Claude (`lib/core/claude/connect.dart`, the page in
+`lib/ui/claude/connect_claude.dart`)
+Problems: the Microsoft Store build of Claude Desktop is not registered
+for `.mcpb` (double-click opens "Select an app…"), and the Claude Code
+set-up felt confusing ("why restart, why can't I choose it in Claude,
+start it from the app like Blender, see if it is running").
+- Per target a status light and ONE button. **Claude Code**:
+  `findClaudeCode` (PATH, ~/.local/bin, ~/.claude/local, npm's folder,
+  WinGet links; .exe / .cmd), status from `claude mcp get clipforge`
+  (`parseMcpGet`, defensive) and from `~/.claude.json` (read only, also
+  when the program is absent); Connect runs `claude mcp remove clipforge
+  -s user`, removes project-folder entries that start an OLD
+  clipforge-mcp (listed first, asked once; somebody's own tool that
+  happens to be called clipforge is left alone), then `claude mcp add
+  --scope user clipforge -- <stable helper path>`. ClipForge never writes
+  Claude Code's own file. **Claude Desktop**: `findClaudeDesktop` -
+  `%APPDATA%\Claude`, the Store build under `%LOCALAPPDATA%\Packages\
+  <a package with "claude" in its name>\LocalCache\Roaming\Claude`,
+  macOS `~/Library/Application Support/Claude`; Connect =
+  `editDesktopConfig`: only `mcpServers.clipforge` changes, by splicing
+  the text (every other byte kept, the file's indent and line ends used;
+  falls back to re-encoding when the result would not mean exactly what is
+  wanted), a dated backup first, **a file that is not plain JSON is
+  refused**, a missing file becomes a minimal one only when Claude's
+  folder exists. An installed extension next to an entry is pointed out
+  ("one of the two is enough"). **Disconnect** removes only the entry.
+- **"Is it running?"**: the helper writes `<stable>/in-use/<pid>.json`
+  at the MCP handshake (client name from `clientInfo`), refreshes it at
+  most every 5 s on tool calls, removes it on exit
+  (`lib/mcp/heartbeat.dart`; not under `CLIPFORGE_MCP_NO_HANDOVER`); the
+  page deletes files whose process is gone.
+- **Test**: starts the stable helper itself, handshake, `self_test
+  quick: true`, PASS / FAIL with Details.
+- **No HTTP / "start server" mode (decision).** Claude Desktop and Claude
+  Code both START a local helper from their own config; a server inside
+  the app would still need the same one-time entry in Claude and would
+  only work while the app is open - more to explain, not less. The page
+  says so in one sentence ("Claude starts the helper itself; ClipForge
+  does not have to be running"). Can be revisited if Claude gains a way to
+  pick a running local server from its own interface.
+- **NOT VERIFIED - there is no Claude install in the build container:**
+  the wording of `claude mcp get / list / add / remove` (fixtures in
+  `test/core/fixtures/claude/` are written from memory), the scope flags,
+  the `.cmd` shim through `runInShell`, where `~/.claude.json` keeps
+  project entries, the Store package's folder name and that Claude reads
+  the config from there, the folder name of an installed extension
+  ("Claude Extensions"), that Claude Desktop accepts an entry without
+  "args" problems, and the Settings path for installing an extension by
+  hand. The page's **Details** shows exactly what was run and answered:
+  ask the owner for it when a light is wrong.
+
 ## One-click Claude install, the skill, test documents (17 Nov 2026, no app change)
 
 (1.12 changed this: the extension is installed once and hands over to the
@@ -2116,7 +2409,7 @@ tester, and must say exactly which build they ran).
    `ClipForge-<version>-claude-skill.zip`; the owner's guide is
    `docs/claude-setup.html`.
 
-History so far: 1.12 self-update (banner, Windows / Mac swap, Android installer), Claude helper installed by the app + hand-over, Connect to Claude page, get_guide, self_test, Windows jobs survive Claude Code, old -> new answers, media table; 1.11 speech to text on computers (transcribe, captions from speech, gentle filler removal with put back, Transcript column, shorts for Claude, right-to-left text), unique project names, app lock fix; 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
+History so far: 1.14 publishing kit (destinations, export several, publishing notes, chapters, share / upload pages), shorts in the app, good-moment markers, suggest_shorts / export_kit for Claude, Connect to Claude buttons, update leftovers and apply-at-start; 1.13 Text window, sound waves, who is speaking; 1.12 self-update (banner, Windows / Mac swap, Android installer), Claude helper installed by the app + hand-over, Connect to Claude page, get_guide, self_test, Windows jobs survive Claude Code, old -> new answers, media table; 1.11 speech to text on computers (transcribe, captions from speech, gentle filler removal with put back, Transcript column, shorts for Claude, right-to-left text), unique project names, app lock fix; 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
 Claude control; 1.3 Voice focus, quit crash fix, drag and drop, graphics
 card; 1.4 help and tour, Windows menu bar, instant sound, History, long
 videos, version numbers.
@@ -2188,7 +2481,7 @@ building** until they report results. Read the checklist marks first.
 export PATH=/opt/sdk/flutter/bin:$PATH ANDROID_HOME=/opt/sdk/android
 cd video-editor
 flutter analyze
-flutter test                                   # all tests (1690)
+flutter test                                   # all tests (1796)
 flutter build apk --release --split-per-abi --target-platform android-arm64
 dart run bin/build_mcp.dart -o build/clipforge-mcp
 # real app on Linux:

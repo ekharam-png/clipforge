@@ -71,15 +71,26 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;paddi
 <li>Mac: <code>~/Library/Application Support/ClipForge/claude</code></li>
 </ul>
 <p>Claude is pointed at that folder once, in step 2. That is why later updates need nothing from you.</p>
+<p><b>From ClipForge 1.14 the page does the connecting for you.</b> For <b>Claude Desktop</b> and for <b>Claude Code</b> it shows a small light (green: connected) and one button, <b>Connect</b>. Press it, then close Claude and open it again. That is all; steps 2a and 2b below are the other ways, if you prefer them or the button cannot be used.</p>
+<ul>
+<li><b>Why close and reopen Claude?</b> Claude reads its list of tools when it starts. It then starts the ClipForge helper itself whenever it needs it. ClipForge does not have to be running, and there is nothing to switch on.</li>
+<li><b>Claude Desktop:</b> Connect adds one entry called <code>clipforge</code> to Claude's settings file (also for the Claude from the Microsoft Store). It keeps everything else in that file, makes a dated backup next to it first, and refuses to touch a file it cannot read. Quit Claude from the icon near the clock too, then start it again.</li>
+<li><b>Claude Code:</b> Connect runs the <code>claude mcp add</code> line for you. If an older ClipForge connection is there, it lists what it will replace and asks once. Then start a new Claude Code session (<code>/mcp</code> shows the list).</li>
+<li><b>Is it running?</b> The page says "In use by Claude Desktop now" while a Claude session has the helper open, and "Not in use right now" otherwise. That is normal: Claude starts it when needed.</li>
+<li><b>Test</b> starts the helper by itself and runs its quick self-test. PASS means the helper works, whatever Claude does.</li>
+<li><b>Disconnect</b> removes only the <code>clipforge</code> entry again.</li>
+</ul>
+<p class="muted">Written without a real Claude installation at hand (November 2026): if a light is wrong or Connect does not work on your computer, open <b>Details</b> on the page and tell Claude what it says.</p>
 </section>
 
 <section class="card" id="desktop">
 <h2><span class="letter">2a</span>Claude Desktop: install the extension</h2>
+<p class="muted">Only if you did not use the Connect button in step 1. Use <b>either</b> the button <b>or</b> the extension, not both (the page tells you when both are there).</p>
 <ol>
 <li>On the Connect to Claude page, click <b>Save the Claude extension file…</b> and save it, for example on the desktop. Leave it as it is (do not unzip or rename it).</li>
 <li><b>Double-click</b> the saved file. Claude opens and shows <b>ClipForge</b> with an <b>Install</b> button. Click <b>Install</b>.
- <details><summary>Nothing happens when I double-click</summary>
- <p>Open Claude, then <b>Settings</b> &rarr; <b>Extensions</b>. (In the newer layout: <b>Settings</b> &rarr; <b>Desktop app</b> &rarr; <b>Manage</b> next to Extensions.) Click <b>Advanced settings</b>, find <b>Extension Developer</b>, click <b>Install Extension…</b> and choose the saved file.</p>
+ <details open><summary>Double-clicking does not open Claude (Windows asks "Select an app to open this .mcpb file")</summary>
+ <p>That happens with the Claude from the Microsoft Store: it is not registered for this kind of file. Close that window and do this instead (you can also drag the file onto the Extensions page). Open Claude, then <b>Settings</b> &rarr; <b>Extensions</b>. (In the newer layout: <b>Settings</b> &rarr; <b>Desktop app</b> &rarr; <b>Manage</b> next to Extensions.) Click <b>Advanced settings</b>, find <b>Extension Developer</b>, click <b>Install Extension…</b> and choose the saved file.</p>
  <p class="muted">Names checked against Claude's help pages on 17 Nov 2026; the wording may differ a little in your version.</p>
  </details></li>
 <li><b>Restart Claude completely.</b> Windows: right-click the Claude icon near the clock &rarr; <b>Quit</b>, then start it again. Mac: <kbd>Cmd</kbd>+<kbd>Q</kbd>, then start it again.</li>
@@ -94,6 +105,7 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;paddi
 
 <section class="card" id="code">
 <h2><span class="letter">2b</span>Claude Code: one line</h2>
+<p class="muted">Only if you did not use the Connect button in step 1.</p>
 <p>On the Connect to Claude page, click <b>Copy</b> next to the line that starts with <code>claude mcp add</code>, paste it into a terminal and press Enter. It is this line with your own folder filled in:</p>
 <p><b>Windows</b></p>
 <div class="cmd"><pre id="c-cc-win">claude mcp add --scope user clipforge -- "%LOCALAPPDATA%\ClipForge\claude\clipforge-mcp.exe"</pre><button class="copy" data-copy="c-cc-win" type="button">Copy</button></div>

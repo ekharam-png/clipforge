@@ -1,0 +1,5 @@
+Checking MCP server health...
+
+notes: npx -y @example/notes-mcp - ✓ Connected
+clipforge: C:\Users\sam\AppData\Local\ClipForge\claude\clipforge-mcp.exe  - ✓ Connected
+weather: https://mcp.example.org/weather (HTTP) - ✗ Failed to connect

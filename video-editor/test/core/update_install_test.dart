@@ -51,13 +51,43 @@ void main() {
           reason: 'the write test leaves nothing behind');
     });
 
-    test('leftovers of an earlier update are removed; the result is read once', () {
+    test('leftovers are removed only when the updater made them (marker); '
+        'the result is read once', () {
       final app = p.join(tmp.path, 'ClipForge');
       for (final d in [app, '$app.update-old', '$app.update-new']) {
         File(p.join(d, 'x.txt')).createSync(recursive: true);
       }
-      cleanUpdateLeftovers(app);
+      // No marker: somebody's own folders. Nothing is touched.
+      var report = cleanUpdateLeftovers(app, 'windows');
+      expect(report.removed, isEmpty);
+      expect(report.foreign, ['$app.update-new', '$app.update-old']);
+      expect(tmp.listSync().length, 3);
+      // With the marker they are the updater's.
+      writeUpdateMarker('$app.update-old', 'windows', version: '1.13.0');
+      writeUpdateMarker('$app.update-new', 'windows');
+      expect(hasUpdateMarker('$app.update-new', 'windows'), isTrue);
+      // An update that is still waiting is kept.
+      report = cleanUpdateLeftovers(app, 'windows', keep: {'$app.update-new'});
+      expect(report.removed, ['$app.update-old']);
+      expect(report.kept, ['$app.update-new']);
+      report = cleanUpdateLeftovers(app, 'windows');
+      expect(report.removed, ['$app.update-new']);
       expect(tmp.listSync().map((e) => p.basename(e.path)), ['ClipForge']);
+      expect(File(p.join(app, 'x.txt')).existsSync(), isTrue);
+
+      // macOS: the marker is NEXT TO the bundle (nothing is added inside
+      // a signed app), and goes with it.
+      final bundle = p.join(tmp.path, 'ClipForge.app');
+      Directory('$bundle.update-old').createSync(recursive: true);
+      expect(cleanUpdateLeftovers(bundle, 'macos').foreign, ['$bundle.update-old']);
+      writeUpdateMarker('$bundle.update-old', 'macos');
+      expect(File('$bundle.update-old.marker').existsSync(), isTrue);
+      expect(cleanUpdateLeftovers(bundle, 'macos').removed, ['$bundle.update-old']);
+      expect(File('$bundle.update-old.marker').existsSync(), isFalse);
+      // A marker whose folder is gone is tidied too.
+      File('$bundle.update-new.marker').writeAsStringSync('{}');
+      cleanUpdateLeftovers(bundle, 'macos');
+      expect(File('$bundle.update-new.marker').existsSync(), isFalse);
 
       // Written by Windows PowerShell 5.1 with a byte order mark.
       File(p.join(tmp.path, kUpdateResultFile)).writeAsStringSync(
@@ -65,6 +95,69 @@ void main() {
       final r = takeUpdateResult(tmp.path)!;
       expect([r.status, r.updated, r.version], ['updated', true, '1.13.0']);
       expect(takeUpdateResult(tmp.path), isNull, reason: 'shown once');
+    });
+
+    test('an update that is waiting is remembered on disk', () {
+      final state = p.join(tmp.path, 'state');
+      expect(PendingUpdate.read(state), isNull);
+      const waiting = PendingUpdate(
+          version: '1.14.0', build: 150, installDir: r'C:\Apps\ClipForge', newDir: r'C:\Apps\ClipForge.update-new');
+      waiting.write(state);
+      var back = PendingUpdate.read(state)!;
+      expect([back.version, back.build, back.installDir, back.newDir, back.attempts],
+          ['1.14.0', 150, r'C:\Apps\ClipForge', r'C:\Apps\ClipForge.update-new', 0]);
+      expect(back.swapStartedAt, isNull);
+      back.started(DateTime.utc(2026, 11, 19, 8)).write(state);
+      back = PendingUpdate.read(state)!;
+      expect(back.swapStartedAt, DateTime.utc(2026, 11, 19, 8));
+      expect(back.attempts, 1);
+      File(p.join(state, PendingUpdate.fileName)).writeAsStringSync('not json');
+      expect(PendingUpdate.read(state), isNull);
+      PendingUpdate.clear(state);
+      expect(File(p.join(state, PendingUpdate.fileName)).existsSync(), isFalse);
+    });
+
+    test('what the app does at its start', () {
+      const waiting = PendingUpdate(version: '1.14.0', build: 150, installDir: 'i', newDir: 'n');
+      final started = waiting.started(DateTime.utc(2026));
+      UpdateStartAction at(
+              {UpdateResult? result,
+              PendingUpdate? pending,
+              int? build = 142,
+              bool same = true,
+              bool staged = true}) =>
+          decideUpdateAtStart(
+              result: result,
+              pending: pending,
+              currentBuild: build,
+              sameInstall: same,
+              stagedReady: staged);
+      expect(at(), UpdateStartAction.tidy);
+      expect(at(result: const UpdateResult('updated', '', '1.14.0'), pending: started),
+          UpdateStartAction.reportUpdated);
+      expect(at(result: const UpdateResult('failed', 'in use', '1.14.0'), pending: started),
+          UpdateStartAction.reportFailed);
+      // "Later", or the app was closed another way: finish it now.
+      expect(at(pending: waiting), UpdateStartAction.applyNow);
+      // The swap was started and nothing came back.
+      expect(at(pending: started), UpdateStartAction.reportUnfinished);
+      // It is the new version already (the result file was not written).
+      expect(at(pending: started, build: 150), UpdateStartAction.reportUpdated);
+      // The unpacked update is gone, or this is another copy of the app.
+      expect(at(pending: waiting, staged: false), UpdateStartAction.tidy);
+      expect(at(pending: waiting, same: false), UpdateStartAction.tidy);
+    });
+
+    test('a folder named after an older version gets one sentence', () {
+      expect(folderNameNote(r'C:\Apps\ClipForge', '1.13.0', 'windows'), isNull);
+      expect(folderNameNote(r'C:\Apps\ClipForge-1.13.0', '1.13.0', 'windows'), isNull);
+      final note = folderNameNote(r'C:\Users\sam\ClipForge-1.12.0', '1.13.0', 'windows')!;
+      expect(note, contains('"ClipForge-1.12.0"'));
+      expect(note, contains('the app inside is 1.13.0'));
+      expect(note, contains('rename it to "ClipForge" while ClipForge is closed'));
+      expect(folderNameNote('/Applications/ClipForge.app', '1.13.0', 'macos'), isNull);
+      expect(folderNameNote('/Users/sam/ClipForge 1.12.0/ClipForge.app', '1.13.0', 'macos'),
+          contains('"ClipForge 1.12.0"'));
     });
   });
 
@@ -244,8 +337,41 @@ void main() {
       expect(await started(), old, reason: 'and it is the one that is started');
     });
 
-    test('an older leftover next to the app is cleared first', () async {
+    test('something called .update-old that the updater did not make is '
+        'never removed: nothing changes', () async {
+      File(p.join('$install.update-old', 'my-notes.txt')).createSync(recursive: true);
+      final r = await swap();
+      expect(r.exitCode, 2);
+      expect(versionIn(install), 'old');
+      expect(versionIn(fresh), 'new');
+      expect(File(p.join('$install.update-old', 'my-notes.txt')).existsSync(), isTrue);
+      expect(readResult()['status'], 'failed');
+      expect(readResult()['message'], contains('did not make'));
+      expect(await started(), install);
+    });
+
+    test('the markers: the old app is marked while it steps aside, and '
+        'nothing is left when it worked', () async {
+      writeUpdateMarker(fresh, 'macos');
+      // The roll-back that fails leaves the old app, WITH its marker.
+      var r = await swap(mvWrapper: failingMv([2, 3]));
+      expect(r.exitCode, 5);
+      expect(hasUpdateMarker('$install.update-old', 'macos'), isTrue);
+      // Put things back and let it work.
+      Directory('$install.update-old').renameSync(install);
+      File('$install.update-old.marker').deleteSync();
+      File(p.join(tmp.path, 'mv-count')).deleteSync();
+      File(result).deleteSync();
+      r = await swap();
+      expect(r.exitCode, 0, reason: '${r.stderr}');
+      expect(versionIn(install), 'new');
+      final left = Directory(p.dirname(install)).listSync().map((e) => p.basename(e.path));
+      expect(left, ['ClipForge.app'], reason: 'no folder and no marker is left');
+    });
+
+    test('an older leftover of the updater next to the app is cleared first', () async {
       File(p.join('$install.update-old', 'junk.txt')).createSync(recursive: true);
+      writeUpdateMarker('$install.update-old', 'macos');
       final r = await swap();
       expect(r.exitCode, 0);
       expect(versionIn(install), 'new');

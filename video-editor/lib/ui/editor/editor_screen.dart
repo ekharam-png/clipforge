@@ -37,6 +37,9 @@ import 'import_actions.dart';
 import 'leave_flow.dart';
 import 'music_actions.dart';
 import 'preview_view.dart';
+import 'publishing_panel.dart';
+import 'shorts_actions.dart';
+import '../publish_service.dart';
 import 'save_status.dart';
 import 'session.dart';
 import 'sound_tracks_ui.dart' show addSoundTrack, separateSound;
@@ -228,9 +231,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           gallery: ref.read(gallerySearchProvider),
           music: ref.read(musicSearchProvider),
           speech: ref.read(speechServiceProvider),
+          store: store,
+          publish: ref.read(publishServiceProvider),
         );
         _autosaver = Autosaver(editor, store);
       });
+      _session!
+        ..saveNow = (() async => _autosaver?.flush())
+        ..openProject = _openOther;
       _liveMedia = () => editor.editor.mediaPathsInHistory;
       _liveRegistry = ref.read(liveMediaProvider);
       _liveRegistry!.add(_liveMedia!);
@@ -420,6 +428,13 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       importSubtitles: f(has, () => importSubtitles(context, s)),
       exportSubtitles: f(hasCaptions(p), () => exportSubtitles(context, s)),
       renameProject: _inFront(() => _rename(s)),
+      publishingNotes: _inFront(() => _openNotes(s)),
+      exportSeveral: f(has, () => _export(s, several: true)),
+      markMoment: f(has, () => markGoodMoment(context, s)),
+      goodMoments: f(has, () => showGoodMoments(context, s)),
+      shortFromHere: f(has, () => makeShortFromHere(context, s)),
+      shortsFromMarkers:
+          f(p.markers.isNotEmpty, () => makeShortsFromMarkers(context, s)),
       split: f(has, () => splitAtPlayhead(context, s)),
       freezeFrame: f(videoUnder, () => freezeFrame(context, s)),
       removeSilences: f(
@@ -726,6 +741,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       playback.seek(playback.durationMs);
       return KeyEventResult.handled;
     }
+    // M: a "good moment" marker at the playhead, also while playing.
+    if (key == LogicalKeyboardKey.keyM && !shift) {
+      markGoodMoment(context, s);
+      return KeyEventResult.handled;
+    }
     if (key == LogicalKeyboardKey.keyS && !shift) {
       if (s.project.clips.isNotEmpty) splitAtPlayhead(context, s);
       return KeyEventResult.handled;
@@ -871,6 +891,31 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
+  /// Opens another project (a short that was just made) in place of this
+  /// one: saves, lets go of this project, and replaces the page.
+  Future<void> _openOther(String projectId) async {
+    if (_closing || _askingToQuit || !mounted) return;
+    _closing = true;
+    try {
+      final ok = await _readyToLeave(LeaveReason.backToProjects);
+      if (!ok || !mounted) return;
+      _lock?.release();
+      await Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
+          builder: (_) => EditorScreen(projectId: projectId)));
+    } finally {
+      _closing = false;
+    }
+  }
+
+  /// "Publishing notes" (File menu, More on phones, the Project panel).
+  void _openNotes(EditorSession s) {
+    s.playback.pause();
+    showPublishingNotes(context,
+        project: () => s.project,
+        onChanged: s.editor.setPublishingNotes,
+        turns: () => s.speakerTurnsNow);
+  }
+
   /// Shows or hides the Text window; in a narrow window (and on phones)
   /// it opens as a full-screen sheet instead.
   void _toggleText(EditorSession s) {
@@ -927,7 +972,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
-  Future<void> _export(EditorSession s) async {
+  Future<void> _export(EditorSession s, {bool several = false}) async {
     s.playback.pause();
     await _autosaver?.flush();
     if (!mounted) return;
@@ -960,6 +1005,27 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       processedSound: () => s.sounds.readyFiles(s.project),
       onVideoSize: s.editor.setVideoSize,
       documents: s.documents,
+      publish: s.publish,
+      onNotes: s.editor.setPublishingNotes,
+      turns: () => s.speakerTurnsNow,
+      several: several,
+      onKeepCopy: s.store == null
+          ? null
+          : (variant, name) async {
+              // A new project in the list, in the destination's shape.
+              final store = s.store!;
+              final copy = await store.duplicate(s.project.id,
+                  name: await freeProjectName(store, name));
+              final saved = Project.fromJson({
+                ...variant.toJson(),
+                'id': copy.id,
+                'name': copy.name,
+                'createdAt': copy.createdAt.toUtc().toIso8601String(),
+                'updatedAt': copy.updatedAt.toUtc().toIso8601String(),
+              });
+              await store.save(saved);
+              return saved;
+            },
     );
   }
 

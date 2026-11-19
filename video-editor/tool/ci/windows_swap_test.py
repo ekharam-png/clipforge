@@ -20,7 +20,11 @@
 #   4. the new folder cannot be moved in (a file in it is locked) -> the old
 #      app is put back: "failed", old app whole;
 #   5. paths with spaces and non-ASCII letters work;
-#   6. a folder standing in for Documents\ClipForge is never touched.
+#   6. a folder standing in for Documents\ClipForge is never touched;
+#   7. (1.14) an .update-old folder WITHOUT the updater's marker is never
+#      removed (the script refuses); with the marker it is cleared;
+#   8. an old folder that cannot be deleted keeps a marker for the app;
+#   9. an update left unpacked by "Later" is swapped at the next start.
 import json
 import os
 import shutil
@@ -204,6 +208,69 @@ def main():
     check(read(os.path.join(install, "version.txt")) == "new", "swapped")
 
     shutil.rmtree(root, ignore_errors=True)
+    MARKER = ".clipforge-update-marker"
+
+    print("7. markers: only folders the updater made are ever removed (1.14)")
+    install, new, result, documents = scenario(root, exe, "seven")
+    with open(os.path.join(new, MARKER), "w", encoding="utf-8") as f:
+        f.write('{"by":"ClipForge updater"}')
+    # Somebody's own folder that happens to have the name: no marker.
+    theirs = install + ".update-old"
+    os.makedirs(theirs)
+    with open(os.path.join(theirs, "my notes.txt"), "w", encoding="utf-8") as f:
+        f.write("mine")
+    r = run_script(install, new, result)
+    check(r.returncode == 2, "the script refuses (exit 2), got %s" % r.returncode)
+    check(result_of(result)["status"] == "failed", 'the result says "failed"')
+    check("did not make" in result_of(result)["message"], "and says a folder ClipForge did not make is in the way")
+    check(read(os.path.join(theirs, "my notes.txt")) == "mine", "their folder is untouched")
+    check(read(os.path.join(install, "version.txt")) == "old", "the app is unchanged")
+    check(read(os.path.join(new, "version.txt")) == "new", "the unpacked update is kept for another try")
+    # The same with a leftover of the updater (it has the marker): cleared.
+    os.remove(result)
+    with open(os.path.join(theirs, MARKER), "w", encoding="utf-8") as f:
+        f.write("{}")
+    r = run_script(install, new, result)
+    check(r.returncode == 0, "with the marker the leftover is cleared and the swap runs (%s)" % r.stderr.strip())
+    check(read(os.path.join(install, "version.txt")) == "new", "the new version is in place")
+    check(os.path.isfile(os.path.join(install, MARKER)), "the marker travelled into the install folder with the update")
+    check(not os.path.exists(theirs), "no .update-old folder is left")
+
+    print("8. the old folder that cannot be deleted is left WITH a marker (the app removes it at its next start)")
+    install, new, result, documents = scenario(root, exe, "eight")
+    # A program started from the old folder AFTER the rename would hold it;
+    # the simple way to keep it from being deleted: a file kept open.
+    keep = os.path.join(install, "data", "held.bin")
+    with open(keep, "w", encoding="utf-8") as f:
+        f.write("x")
+    holder = subprocess.Popen(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+         "Start-Sleep -Seconds 3; $f = [System.IO.File]::Open('%s', 'Open', 'Read', 'None'); Start-Sleep -Seconds 25"
+         % (install + ".update-old\\data\\held.bin")],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    r = run_script(install, new, result)
+    old = install + ".update-old"
+    check(result_of(result)["status"] == "updated", 'the swap itself worked: "updated"')
+    if os.path.exists(old):
+        check(os.path.isfile(os.path.join(old, MARKER)), "the folder that stayed carries the marker")
+    else:
+        print("  note  the old folder could be deleted after all (the file was not held in time)")
+    holder.kill()
+
+    print("9. apply at the next start: an unpacked update left by 'Later' is swapped with no app running")
+    install, new, result, documents = scenario(root, exe, "nine")
+    with open(os.path.join(new, MARKER), "w", encoding="utf-8") as f:
+        f.write('{"by":"ClipForge updater"}')
+    # The app starts, sees the waiting update and runs the script with its
+    # own process id, then exits at once: here a process that is gone.
+    gone = subprocess.Popen(["cmd.exe", "/c", "exit"])
+    gone.wait()
+    r = run_script(install, new, result, wait_pid=gone.pid)
+    check(r.returncode == 0, "exit 0 (%s)" % r.stderr.strip())
+    check(read(os.path.join(install, "version.txt")) == "new", "the new version is in place")
+    check(result_of(result)["status"] == "updated", 'the result the app reads at its next start says "updated"')
+    check(not os.path.exists(new) and not os.path.exists(install + ".update-old"), "nothing is left next to the app")
+
     print("OK: the Windows update script swaps, refuses and rolls back as designed")
 
 

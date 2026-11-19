@@ -12,6 +12,7 @@ import '../file_drop.dart';
 import '../format.dart';
 import '../help/help_screen.dart';
 import '../help/tour.dart';
+import '../help/whats_new.dart' show kWhatsNewId;
 import '../help/tour_sample.dart';
 import '../services.dart';
 import '../theme.dart';
@@ -80,17 +81,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final claude = ref.read(claudeHelperProvider);
     try {
       await updates.onAppStart();
-      final result = updates.lastResult;
-      if (result != null && mounted) {
-        updates.clearLastResult();
-        _say(result.updated
-            ? 'ClipForge was updated${result.version.isEmpty ? '' : ' to version ${result.version}'}. '
-                'What is new: Help > What\'s new.'
-            : 'The update could not be installed'
-                '${result.message.isEmpty ? '' : ' (${result.message})'}. '
-                '${result.status == 'broken' ? '' : 'ClipForge is unchanged. '}'
-                'You can get the new version from the download page '
-                '(Help > Check for updates).');
+      if (updates.lastResult != null && mounted) {
+        await showUpdateOutcome(context, updates,
+            whatsNew: () {
+          if (mounted) openHelp(context, articleId: kWhatsNewId);
+        });
       }
     } catch (_) {
       // Updates are never in the way of using the app.

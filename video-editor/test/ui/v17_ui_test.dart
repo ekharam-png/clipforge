@@ -146,6 +146,8 @@ void main() {
       await tester.tap(find.text('Export'));
       await tester.pumpAndSettle();
       expect(find.text('Export video'), findsOneWidget);
+      // (The window scrolls: "Where is it going?" is above since 1.14.)
+      await tester.ensureVisible(find.text('25'));
       await tester.tap(find.text('25'));
       await tester.pumpAndSettle();
       await fakes.screenshot(tester, 'export_${label}_frame_rate');

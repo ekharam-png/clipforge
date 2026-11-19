@@ -328,6 +328,14 @@ class EditorController extends ChangeNotifier {
   // Project ----------------------------------------------------------------
   void setAspect(CanvasAspect aspect) => editor.setAspect(aspect);
 
+  /// Publishing notes and "good moment" markers (1.14).
+  void setPublishingNotes(PublishingNotes notes) =>
+      editor.setPublishingNotes(notes);
+  String? addMarker(int timelineMs, {String label = ''}) =>
+      editor.addMarker(timelineMs, label: label);
+  bool removeMarker(String markerId) => editor.removeMarker(markerId);
+  void updateMarker(Marker marker) => editor.updateMarker(marker);
+
   /// Renames the project. The name is trimmed; an empty name is ignored.
   /// Not an undo step: undo/redo never change the name back.
   void rename(String name) => editor.rename(name);

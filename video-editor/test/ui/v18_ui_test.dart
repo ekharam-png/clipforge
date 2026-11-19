@@ -253,6 +253,7 @@ void main() {
     expect(sw, findsOneWidget);
     await fakes.screenshot(tester, 'editor_phone_more_smooth');
     final before = tester.widget<SwitchListTile>(sw).value;
+    await tester.ensureVisible(sw);
     await tester.tap(sw);
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(sw).value, !before);

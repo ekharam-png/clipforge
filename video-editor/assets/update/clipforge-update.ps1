@@ -16,7 +16,9 @@
 # ({"status":"updated"|"failed"|"broken","message":"...","version":"..."}),
 # which the app reads on its next start.
 #
-# It only ever touches <InstallDir>, <InstallDir>.update-old and <NewDir>.
+# It only ever touches <InstallDir>, <InstallDir>.update-old and <NewDir>,
+# and it removes an .update-old folder only when that folder carries the
+# updater's marker file (.clipforge-update-marker).
 # Projects and media (Documents\ClipForge) are somewhere else and are never
 # touched.
 #
@@ -39,6 +41,15 @@ $ErrorActionPreference = 'Stop'
 $InstallDir = $InstallDir.TrimEnd('\', '/')
 $NewDir = $NewDir.TrimEnd('\', '/')
 $OldDir = "$InstallDir.update-old"
+# The file that says "the updater made this folder" (the app writes it into
+# the unpacked update; see lib/core/update/update_install.dart).
+$Marker = '.clipforge-update-marker'
+
+function Write-Marker([string]$Dir) {
+  try {
+    [System.IO.File]::WriteAllText((Join-Path $Dir $Marker), '{"by":"ClipForge updater"}', (New-Object System.Text.UTF8Encoding($false)))
+  } catch { }
+}
 
 function Write-Result([string]$Status, [string]$Message) {
   if (-not $ResultFile) { return }
@@ -93,6 +104,12 @@ if (-not (Test-Path -LiteralPath (Join-Path $NewDir $ExeName) -PathType Leaf)) {
   exit 2
 }
 if (Test-Path -LiteralPath $OldDir) {
+  # Only a folder this updater made (it carries the marker) is removed.
+  if (-not (Test-Path -LiteralPath (Join-Path $OldDir $Marker) -PathType Leaf)) {
+    Write-Result 'failed' "A folder called '$(Split-Path -Leaf $OldDir)' that ClipForge did not make is in the way. Move or rename it, then try again."
+    Start-App $InstallDir
+    exit 2
+  }
   try {
     Remove-Item -LiteralPath $OldDir -Recurse -Force
   } catch {
@@ -108,6 +125,9 @@ if (-not (Move-Folder $InstallDir $OldDir $Retries)) {
   Start-App $InstallDir
   exit 3
 }
+
+# The folder that stepped aside is ours to remove later.
+Write-Marker $OldDir
 
 # 4. The new app takes its place; on failure the old one comes back.
 if (-not (Move-Folder $NewDir $InstallDir 6)) {

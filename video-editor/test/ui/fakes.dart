@@ -27,12 +27,16 @@ import 'package:clipforge/ui/music_search.dart';
 import 'package:clipforge/ui/services.dart';
 import 'package:clipforge/ui/speech/speech_service.dart';
 import 'package:clipforge/ui/theme.dart';
+import 'package:clipforge/core/claude/connect.dart';
+import 'package:clipforge/ui/claude/claude_connect.dart';
+import 'package:clipforge/ui/publish_service.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../core/connect_support.dart';
 import 'fake_player.dart';
 
 class FakeProjectStore implements ProjectStore {
@@ -141,6 +145,10 @@ class FakeMediaEngine implements MediaEngine {
   String? lastExportPath;
   ExportOptions? lastOptions;
 
+  /// The project of the latest export, and of every export so far.
+  Project? lastProject;
+  final List<({Project project, String path, ExportOptions options})> exports = [];
+
   /// What [detectSilence] answers, per file.
   final Map<String, List<({int startMs, int endMs})>> silences = {};
 
@@ -210,6 +218,8 @@ class FakeMediaEngine implements MediaEngine {
       {ExportOptions options = const ExportOptions()}) {
     lastExportPath = outputPath;
     lastOptions = options;
+    lastProject = project;
+    exports.add((project: project, path: outputPath, options: options));
     final job = FakeExportJob();
     jobs.add(job);
     return job;
@@ -246,6 +256,52 @@ class FakeFileService implements FileService {
     if (!galleryAllowed) return null;
     copiedTo = sourcePath;
     return 'your gallery (Movies)';
+  }
+}
+
+/// The kit folder, gallery album, share sheet and browser, recorded.
+class FakePublishService implements PublishService {
+  FakePublishService(this.files);
+  final FakeFileService files;
+
+  /// What the folder picker answers (null = cancelled).
+  String? folder = '/out/kit';
+  final List<({String path, String album})> albumSaves = [];
+  final List<String> shown = [];
+  final List<String> opened = [];
+  final List<({List<String> paths, String? text, String? subject})> shares = [];
+
+  @override
+  bool get canShare => !files.desktop;
+
+  @override
+  Future<String?> chooseFolder() async => folder;
+
+  /// Where a phone's kit goes inside the app (tests give a real folder).
+  String? appFolder;
+
+  @override
+  Future<String> appKitFolder(String name) async =>
+      appFolder ?? '/app/exports/$name';
+
+  @override
+  Future<String?> saveToAlbum(String path, String album) async {
+    if (!files.galleryAllowed) return null;
+    albumSaves.add((path: path, album: album));
+    return 'your gallery, album "$album"';
+  }
+
+  @override
+  Future<void> showInFolder(String path) async => shown.add(path);
+
+  @override
+  Future<void> openUrl(String url) async => opened.add(url);
+
+  @override
+  Future<bool> share(List<String> paths,
+      {String? text, String? subject}) async {
+    shares.add((paths: paths, text: text, subject: subject));
+    return true;
   }
 }
 
@@ -381,6 +437,15 @@ class Fakes {
   final FakeMediaEngine engine = FakeMediaEngine();
   final FakeFileService files = FakeFileService();
   final FakeDocumentService documents = FakeDocumentService();
+  late final FakePublishService publish = FakePublishService(files);
+
+  /// "Connect to Claude": a pretend computer (nothing of Claude on it
+  /// unless a test puts it there), and what the Test button finds.
+  final FakeConnectHost connectHost = FakeConnectHost();
+  final List<String> helperTests = [];
+  HelperTestResult helperTestResult = const HelperTestResult(
+      true, 'PASS: the helper works by itself (ClipForge 1.14.0).',
+      'ClipForge self-test: PASS');
   final FakeProjectBundles bundles = FakeProjectBundles();
   final FakeBackend backend = FakeBackend();
   final FakeFileDropService drops = FakeFileDropService();
@@ -475,6 +540,13 @@ class Fakes {
           mediaEngineProvider.overrideWithValue(engine),
           playerBackendProvider.overrideWithValue(backend),
           fileServiceProvider.overrideWithValue(files),
+          publishServiceProvider.overrideWithValue(publish),
+          connectHostProvider.overrideWithValue(connectHost),
+          helperFilesProvider.overrideWithValue(connectHost.listFiles),
+          helperTesterProvider.overrideWithValue((launcher) async {
+            helperTests.add(launcher);
+            return helperTestResult;
+          }),
           documentServiceProvider.overrideWithValue(documents),
           projectBundlesProvider.overrideWithValue(bundles),
           fileDropServiceProvider.overrideWithValue(drops),
@@ -564,6 +636,16 @@ class Fakes {
 
 /// What the app would ask the system for an update; records it instead.
 class FakeUpdatePlatform implements UpdatePlatform {
+  /// What everything that is open answers to "may the app close now?".
+  bool allowQuit = true;
+  int quitQuestions = 0;
+
+  @override
+  Future<bool> mayQuit() async {
+    quitQuestions++;
+    return allowQuit;
+  }
+
   @override
   String os = 'linux';
   String? key;

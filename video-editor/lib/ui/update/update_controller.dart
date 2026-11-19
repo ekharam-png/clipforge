@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show AppExitType;
+import 'dart:ui' show AppExitResponse, AppExitType;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -59,6 +59,11 @@ abstract class UpdatePlatform {
 
   /// Closes the app (the swap script is waiting for that).
   Future<void> quit();
+
+  /// Asks everything that is open whether the app may close now (an open
+  /// project saves first; a running export says no). The app does NOT
+  /// close by this.
+  Future<bool> mayQuit();
 }
 
 class RealUpdatePlatform implements UpdatePlatform {
@@ -123,6 +128,11 @@ class RealUpdatePlatform implements UpdatePlatform {
   }
 
   @override
+  Future<bool> mayQuit() async =>
+      await ServicesBinding.instance.handleRequestAppExit() ==
+      AppExitResponse.exit;
+
+  @override
   Future<void> quit() async {
     await ServicesBinding.instance.exitApplication(AppExitType.required);
     // Should the window still be there, end the program anyway: the swap
@@ -147,6 +157,18 @@ typedef UpdateDownloader = UpdateDownload Function(
 
 final updateDownloaderProvider = Provider<UpdateDownloader>((ref) =>
     (asset, dir, build) => downloadUpdate(asset, dir, build: build));
+
+/// [startSwap], or what stands in for it in tests.
+typedef SwapStarter = Future<void> Function({
+  required String os,
+  required String scriptText,
+  required String workDir,
+  required String installDir,
+  required String newDir,
+  required String resultFile,
+  required String version,
+  String exeName,
+});
 
 enum UpdateStage {
   /// Nothing going on.
@@ -178,7 +200,12 @@ class UpdateController extends ChangeNotifier {
     required this.fetch,
     required this.download,
     DateTime Function()? now,
-  }) : _now = now ?? DateTime.now;
+    SwapStarter? swap,
+  })  : _now = now ?? DateTime.now,
+        _swap = swap ?? startSwap;
+
+  /// Starts the swap script (tests record the call instead).
+  final SwapStarter _swap;
 
   final AppPrefs prefs;
   final UpdatePlatform platform;
@@ -203,9 +230,19 @@ class UpdateController extends ChangeNotifier {
   /// The result of an update that ran before this start (shown once).
   UpdateResult? lastResult;
 
+  /// With [lastResult] "updated": a sentence about a folder that is still
+  /// named after an older version ([folderNameNote]); else null.
+  String? folderNote;
+
+  /// An unpacked update that is waiting for the swap ("Try again" after a
+  /// failed or unfinished swap uses it; no new download).
+  PendingUpdate? pending;
+
+  /// The app is closing to finish an update that was waiting.
+  bool finishingAtStart = false;
+
   bool autoCheck = true;
   UpdateDownload? _download;
-  String? _stagedNewDir;
   bool _started = false;
 
   int? get _currentBuild => int.tryParse(build.buildNumber ?? '');
@@ -227,17 +264,7 @@ class UpdateController extends ChangeNotifier {
       autoCheck = !await prefs.flag(kUpdateCheckOffFlag);
     } catch (_) {}
     try {
-      lastResult = takeUpdateResult(await platform.stateDir());
-      final dir = platform.installDir;
-      // After a "broken" swap the app runs from the .update-old folder:
-      // leave everything as it is then.
-      if (dir != null && lastResult?.status != 'broken') cleanUpdateLeftovers(dir);
-      if (lastResult != null) {
-        if (lastResult!.updated) {
-          pruneUpdateFiles(await platform.downloadDir());
-        }
-        notifyListeners();
-      }
+      if (await _afterEarlierUpdate()) return;
     } catch (_) {}
     if (!build.isCi || !autoCheck) return;
     DateTime? last;
@@ -248,8 +275,140 @@ class UpdateController extends ChangeNotifier {
     await check(manual: false);
   }
 
+  /// Looks at what an earlier update left behind (the swap script's
+  /// result, the record of an update that is waiting, folders next to the
+  /// app) and acts on it; see [decideUpdateAtStart]. True when the app is
+  /// now closing to finish an update.
+  Future<bool> _afterEarlierUpdate() async {
+    final state = await platform.stateDir();
+    final os = platform.os;
+    final dir = platform.installDir;
+    final result = takeUpdateResult(state);
+    final waiting = PendingUpdate.read(state);
+    final same = waiting != null && dir != null && p.equals(waiting.installDir, dir);
+    final staged = waiting != null &&
+        Directory(waiting.newDir).existsSync() &&
+        hasUpdateMarker(waiting.newDir, os);
+    final action = decideUpdateAtStart(
+        result: result,
+        pending: waiting,
+        currentBuild: _currentBuild,
+        sameInstall: same,
+        stagedReady: staged);
+    switch (action) {
+      case UpdateStartAction.tidy:
+        PendingUpdate.clear(state);
+        if (dir != null) cleanUpdateLeftovers(dir, os);
+        return false;
+      case UpdateStartAction.reportUpdated:
+        lastResult = result ??
+            UpdateResult('updated', '', waiting?.version ?? build.version);
+        PendingUpdate.clear(state);
+        if (dir != null) {
+          cleanUpdateLeftovers(dir, os);
+          folderNote = folderNameNote(dir, build.version, os);
+        }
+        pruneUpdateFiles(await platform.downloadDir());
+        notifyListeners();
+        return false;
+      case UpdateStartAction.reportFailed:
+        lastResult = result;
+        // After a "broken" swap the app runs from the .update-old folder:
+        // everything is left as it is. Otherwise the unpacked update is
+        // kept for "Try again" and the rest is tidied.
+        if (result!.status == 'broken') {
+          PendingUpdate.clear(state);
+        } else if (same && staged) {
+          pending = waiting;
+          cleanUpdateLeftovers(dir, os, keep: {waiting.newDir});
+        } else {
+          PendingUpdate.clear(state);
+          if (dir != null) cleanUpdateLeftovers(dir, os);
+        }
+        notifyListeners();
+        return false;
+      case UpdateStartAction.reportUnfinished:
+        pending = waiting;
+        lastResult = UpdateResult(
+            'failed',
+            'ClipForge closed to finish the update, but the step that swaps '
+                'the old version for the new one did not run (it may have '
+                'been blocked by the system or by security software)',
+            waiting!.version);
+        cleanUpdateLeftovers(dir!, os, keep: {waiting.newDir});
+        notifyListeners();
+        return false;
+      case UpdateStartAction.applyNow:
+        // "Later" was chosen (or the app was closed another way) after the
+        // download was checked and unpacked: finish it now, at the start,
+        // while no project is open and nothing is running.
+        pending = waiting;
+        finishingAtStart = true;
+        notifyListeners();
+        final problem = await finishPending();
+        if (problem == null) return true;
+        finishingAtStart = false;
+        lastResult = UpdateResult('failed', problem, waiting!.version);
+        notifyListeners();
+        return false;
+    }
+  }
+
   /// Forgets [lastResult] (its message was shown).
-  void clearLastResult() => lastResult = null;
+  void clearLastResult() {
+    lastResult = null;
+    folderNote = null;
+  }
+
+  /// Forgets an update that is waiting and removes its folder ("Not now"
+  /// after a failed swap, or the download page was chosen instead).
+  Future<void> dropPending() async {
+    final waiting = pending;
+    pending = null;
+    try {
+      PendingUpdate.clear(await platform.stateDir());
+      final dir = platform.installDir;
+      if (waiting != null && dir != null) cleanUpdateLeftovers(dir, platform.os);
+    } catch (_) {}
+  }
+
+  /// Starts the swap for [pending] and closes the app. Returns null when
+  /// the app is closing, else why it could not be done (in plain words).
+  /// Never while something that is open says no (unsaved changes that
+  /// cannot be saved, a running export).
+  Future<String?> finishPending() async {
+    final waiting = pending, dir = platform.installDir;
+    if (waiting == null || dir == null) return 'There is no update waiting.';
+    if (!Directory(waiting.newDir).existsSync() ||
+        !hasUpdateMarker(waiting.newDir, platform.os)) {
+      await dropPending();
+      return 'The downloaded update is no longer there. Use Update again.';
+    }
+    try {
+      if (!await platform.mayQuit()) {
+        return 'ClipForge is still busy (an export is running, or a project '
+            'could not be saved). The update will be finished the next time '
+            'ClipForge starts.';
+      }
+      final state = await platform.stateDir();
+      waiting.started(_now()).write(state);
+      await _swap(
+        os: platform.os,
+        scriptText: await platform.swapScript(),
+        workDir: state,
+        installDir: dir,
+        newDir: waiting.newDir,
+        resultFile: p.join(state, kUpdateResultFile),
+        version: waiting.version,
+        exeName: p.basename(Platform.resolvedExecutable),
+      );
+      await platform.quit();
+      return null;
+    } catch (e) {
+      return 'The update could not be started ($e). ClipForge is unchanged; '
+          'you can use the download page instead.';
+    }
+  }
 
   Future<void> setAutoCheck(bool on) async {
     autoCheck = on;
@@ -401,11 +560,20 @@ class UpdateController extends ChangeNotifier {
         return;
       }
       _set(UpdateStage.unpacking);
-      if (os == 'windows') {
-        _stagedNewDir = await stageWindowsUpdate(file, installDir!);
-        _set(UpdateStage.readyToRestart);
-      } else if (inPlaceProblem == null) {
-        _stagedNewDir = await stageMacUpdate(file, installDir!);
+      if (os == 'windows' || inPlaceProblem == null) {
+        final newDir = os == 'windows'
+            ? await stageWindowsUpdate(file, installDir!)
+            : await stageMacUpdate(file, installDir!);
+        // Remembered on disk: "Later" (or closing the app another way)
+        // does not lose it; the next start finishes the update.
+        pending = PendingUpdate(
+            version: info.version,
+            build: info.build,
+            installDir: installDir,
+            newDir: newDir);
+        try {
+          pending!.write(await platform.stateDir());
+        } catch (_) {}
         _set(UpdateStage.readyToRestart);
       } else {
         // macOS plan B: the new app, unpacked, shown in Finder.
@@ -451,25 +619,14 @@ class UpdateController extends ChangeNotifier {
   /// script and closes the app. The script puts the new version in place
   /// and starts it.
   Future<void> restartToUpdate() async {
-    final info = available, newDir = _stagedNewDir, dir = platform.installDir;
-    if (info == null || newDir == null || dir == null) return;
-    try {
-      final state = await platform.stateDir();
-      await startSwap(
-        os: platform.os,
-        scriptText: await platform.swapScript(),
-        workDir: state,
-        installDir: dir,
-        newDir: newDir,
-        resultFile: p.join(state, kUpdateResultFile),
-        version: info.version,
-        exeName: p.basename(Platform.resolvedExecutable),
-      );
-      await platform.quit();
-    } catch (e) {
-      _set(UpdateStage.failed,
-          note: 'The update could not be started ($e). ClipForge is '
-              'unchanged; you can use the download page instead.');
+    if (pending == null) return;
+    final problem = await finishPending();
+    if (problem == null) return;
+    if (pending != null && problem.startsWith('ClipForge is still busy')) {
+      // Still ready: said in the window, finished at the next start.
+      _set(UpdateStage.readyToRestart, note: problem);
+    } else {
+      _set(UpdateStage.failed, note: problem);
     }
   }
 }

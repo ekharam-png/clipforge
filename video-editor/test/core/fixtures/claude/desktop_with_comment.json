@@ -1,0 +1,6 @@
+{
+  // my servers
+  "mcpServers": {
+    "notes": { "command": "npx" },
+  }
+}

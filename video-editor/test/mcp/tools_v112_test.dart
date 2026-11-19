@@ -189,6 +189,21 @@ void main() {
     }, skip: skipWithoutFfmpeg, timeout: const Timeout(Duration(minutes: 3)));
   });
 
+  test('self_test quick (the app\'s Test button, 1.14): the slow checks are '
+      'left out and said so', () async {
+    final real = Bench();
+    addTearDown(real.dispose);
+    final r = await real.client.ok('self_test', {'quick': true});
+    expect(r.text, startsWith('ClipForge self-test: PASS'), reason: r.text);
+    final checks = (r.data['checks'] as List).cast<Map>();
+    Map row(String name) => checks.firstWhere((x) => x['name'] == name);
+    expect(row('Export as a background job')['result'], 'SKIPPED');
+    expect(row('Export as a background job')['note'], 'not part of the quick test');
+    expect(row('Speech to text')['result'], 'SKIPPED');
+    expect(row('Remove silences')['result'], 'PASS');
+    expect(checks.where((x) => x['result'] == 'FAIL'), isEmpty);
+  }, skip: skipWithoutFfmpeg, timeout: const Timeout(Duration(minutes: 2)));
+
   group('Windows: the worker is started outside the helper\'s process tree', () {
     test('the PowerShell command hides the window, reports the pid and needs no quoting', () {
       const s = kWindowsWorkerStartScript;

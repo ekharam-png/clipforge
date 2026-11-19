@@ -560,6 +560,7 @@ When you are happy, tap **Export** at the top right.
 - **Full quality**: the best picture, for keeping.
 - **Small file**: 720p, quick to send in messaging apps.
 - **Frames per second**: 30 by default; choose 60 for fast movement filmed at a high frame rate (the window says when). See Sound only and frames per second.
+- **Where is it going?**: ready-made choices for YouTube, Shorts / Reels / TikTok, Instagram, WhatsApp and podcast audio, and **Export several…** for more than one at once. See Export for YouTube, Shorts, WhatsApp….
 - **Use graphics card (faster)**: shows up on computers that can use it.
 - **Video size**: **As first clip** keeps the size of the first clip. If that clip is small (for example sent through a chat app), choose **1080p** so the whole video is not small. The same choice is in the **Shape** menu.
 
@@ -683,6 +684,7 @@ On a Mac use **Cmd** where this says Ctrl. Every shortcut is also in the menu ba
 - **Ctrl+Z**: undo. **Ctrl+Shift+Z** or **Ctrl+Y**: redo.
 - **Ctrl+Shift+H**: show or hide the History.
 - **Ctrl+Shift+T**: show or hide the Text window. **Ctrl+F**: find in the text.
+- **M**: mark a good moment at the playhead, also while playing (see Make a short).
 - **Ctrl+E**: export.
 - Hold **Alt** (Option on a Mac) while dragging on the timeline: no snapping for that drag.
 
@@ -910,11 +912,17 @@ When a newer ClipForge is out, the project list shows a line at the top: "Versio
 
 ## What Update does
 
-- Windows and Mac: ClipForge downloads the new version, checks that it is exactly the published file, and then asks to **Restart ClipForge**. It closes and opens again as the new version after a few seconds. If something goes wrong, the old version stays as it was and ClipForge tells you.
+- Windows and Mac: ClipForge downloads the new version, checks that it is exactly the published file, and then offers **Restart ClipForge to finish**. It closes, swaps the old version for the new one and opens again after a few seconds. If you choose **Later**, the update is finished by itself the next time you start ClipForge (never while an export is running). If something goes wrong, the old version is put back and ClipForge says why, with **Try again** and **Open the download page**.
 - Android: ClipForge downloads and checks the new version and hands it to Android. Android asks you to confirm. The first time it may say that installing from ClipForge is not allowed: tap Settings there, switch on "Allow from this source", go back and confirm.
 - If ClipForge cannot update itself where it is installed, it opens the download page instead: get the new version there and put it over the old one.
 
 Your projects and videos are never touched by an update.
+
+## The ClipForge folder (Windows)
+
+Keep ClipForge in a folder simply called "ClipForge", without a version number: the app updates itself inside that folder, so a name like "ClipForge-1.12.0" would soon be wrong. Such a folder still works. You can rename it while ClipForge is closed; a shortcut to it then has to be made again.
+
+While an update waits to be finished, a folder ending in ".update-new" sits next to the ClipForge folder. Leave it there: ClipForge removes it when the update is done. ClipForge only ever removes folders it made itself.
 
 ## Checking
 
@@ -929,28 +937,40 @@ For the check, ClipForge reads one small file from the ClipForge release page th
 === connect-claude
 title: Connect Claude (computer only)
 section: Computer
-keywords: claude, connect, connection, extension, mcpb, claude desktop, claude code, helper, mcp, install, setup, set up, skill, once, copy, command, terminal
+keywords: claude, connect, connection, disconnect, extension, mcpb, claude desktop, claude code, helper, mcp, install, setup, set up, skill, once, copy, command, terminal, restart claude, in use, running, test, microsoft store, light, status
 related: claude-control, claude-self-test, updates
 
 To let Claude edit your ClipForge projects, connect it once. Open **Help** > **Connect to Claude…** on your Windows PC or Mac.
 
-The page shows whether the Claude helper is installed (ClipForge puts it in place by itself every time it starts) and gives you the two ways to connect:
+The page shows whether the Claude helper is installed (ClipForge puts it in place by itself every time it starts), and a row for each Claude program with a small light and one button.
 
 ## Claude Desktop (the Claude app)
 
-1. Click **Save the Claude extension file…** and save the file, for example on the desktop.
-2. Double-click the saved file. Claude opens and asks whether to install "ClipForge": choose Install.
-3. Close Claude completely and open it again.
+Press **Connect**. ClipForge adds one entry called "clipforge" to Claude's own settings file, also when Claude came from the Microsoft Store. Everything else in that file is kept, and a backup of the file with the date in its name is made next to it first. If the file cannot be read, ClipForge says so and changes nothing.
+
+Then close Claude completely (on Windows also from the small icon next to the clock) and open it again.
+
+The other way is the extension file: **Save the Claude extension file…**, then in Claude open Settings > Extensions > Advanced settings > Install Extension… and choose the file. Double-clicking the file only works where Claude has registered itself for it. Use the button or the extension, not both; the page tells you when both are there.
 
 ## Claude Code
 
-Click **Copy** next to the one line on the page, paste it into a terminal and press Enter.
+Press **Connect**: ClipForge runs the one line for you. If an older ClipForge connection is there, it lists what it will replace and asks first. Then start a new Claude Code session; "/mcp" there shows the list. You can also **Copy** the line and paste it into a terminal yourself.
+
+## Why close and reopen Claude?
+
+Claude reads its list of tools when it starts. After that it starts the ClipForge helper by itself whenever it needs it. ClipForge does not have to be running, and there is nothing to switch on.
+
+## Is it running?
+
+The page says "In use by Claude Desktop now" while a Claude session has the helper open, with when it was last used. "Not in use right now" is normal: Claude starts the helper when needed.
+
+**Test** starts the helper by itself and runs its quick self-test. PASS means the helper works, whether or not Claude is connected. **Details** shows what was done and what came back. **Disconnect** removes only the "clipforge" entry again.
 
 ## You only do this once
 
-Both ways point Claude at the same helper. When ClipForge is updated, it puts the new helper in the same place and Claude uses it the next time Claude starts. Nothing has to be installed or uploaded again, also not the skill.
+When ClipForge is updated, it puts the new helper in the same place and Claude uses it the next time Claude starts. Nothing has to be installed or uploaded again.
 
-If you connected Claude before version 1.12, do it once more with this page, and remove the old "clipforge" entry if you added one by hand.
+If you connected Claude before version 1.12, press **Connect** once on this page: an old entry is replaced.
 
 Adding videos, finding silences and exporting through Claude need the free program FFmpeg on the computer. Claude tells you the one line to install it.
 
@@ -1142,3 +1162,99 @@ related: claude-control
 Coming later, on computers: a small assistant inside ClipForge that edits for you when you ask in plain words. It will always show its plan first and wait for your OK, and one **Undo** takes it all back.
 
 Until then, on a computer you can use Claude control.
+
+=== export-destinations
+title: Export for YouTube, Shorts, WhatsApp…
+section: Export and files
+keywords: youtube, shorts, reels, tiktok, instagram, whatsapp, telegram, podcast, destination, where is it going, preset, export several, kit, publishing kit, 9:16, vertical, upright, square, 4:5, upload, post, share, send, mp3, formats, folder, album
+related: export, export-options, publishing-notes, make-a-short, shape, crop-position
+
+In the Export window, **Where is it going?** chooses the right kind of file for you:
+
+- YouTube: wide 16:9, 1080p, full quality.
+- Shorts / Reels / TikTok: upright 9:16, 1080p.
+- Instagram post: tall 4:5 or square 1:1.
+- WhatsApp / Telegram: a small file that is quick to send.
+- Podcast audio: the sound only, as MP3 or M4A.
+- Custom: choose the size, quality and kind of file yourself, as before.
+
+ClipForge does not upload anything and never asks you to sign in. It makes the files; you post them yourself.
+
+## When the shape is different
+
+A wide video does not fit an upright frame. ClipForge then asks:
+
+- **Make a copy in this shape**: a new project next to yours, with a blurred background filling the frame. Open the copy afterwards and use Crop and position to keep the person in shot. Your project stays as it is.
+- **Export as it is**: keep the shape the video has.
+
+## Warnings
+
+Some places only take short videos or small files. ClipForge warns you, for example when a video for Shorts is longer than 60 seconds. The sites change their limits, so the warning uses a safe value and tells you to check the site. You can export anyway.
+
+## Several at once
+
+**Export several…** lets you tick more than one. The files are made one after another as one job, with one progress bar and one cancel, and saved together with clear names such as "My video - YouTube.mp4", "My video - Short 9x16.mp4", "My video - WhatsApp.mp4" and "My video - audio.mp3", plus "My video - text.txt" with the text to paste.
+
+- Computer: you choose the folder once.
+- Phone: the videos go to your gallery, in an album named after the project.
+
+The copies in another shape are only made for the export. Tick **Keep the shape copies as projects** if you want to adjust them later.
+
+## After the export
+
+- Phone: **Share** hands the file to another app. Many apps ignore text sent along with a video, so **Copy title and description** stays on screen: copy, then paste it there.
+- Computer: **Show in folder**, **Copy title and description**, and a link that opens the site's own upload page in your browser.
+
+=== publishing-notes
+title: Publishing notes: title, description, hashtags, chapters
+section: Export and files
+keywords: publishing notes, title, description, hashtags, tags, chapters, timestamps, youtube chapters, copy, paste, text file, post, upload, caption for post, credits, short title
+related: export-destinations, export, titles, captions, music-credits
+
+**Publishing notes…** keeps the text that goes with your video when you post it: a title, a description, hashtags and a list of chapters. Open it from the Export window, from the File menu, or on a phone from **More**.
+
+Every field has a copy button. **Copy title and description** copies everything in one go. Nothing is posted from here: you paste the text on the site yourself.
+
+## Chapters
+
+**Chapters from titles / captions…** builds a list like "0:00 Start", "1:20 The recipe" from the titles in your video. Without titles it uses the captions (a new chapter where the speaker changes or after a pause), and without captions who is speaking. Change the names as you like.
+
+YouTube shows chapters only when the first one is at 0:00, there are at least three, and each is at least 10 seconds long. ClipForge keeps to that and tells you when a list you typed does not.
+
+## A different title for shorts
+
+Shorts, Reels and TikTok often want a shorter title. Add one with **A different title for Shorts, Reels and TikTok**; it is used for those exports.
+
+## The text file
+
+When you export, the notes are saved next to the video as a text file ("My video - text.txt"), with a part for each file saying what to paste there. Credits for free music are added by themselves.
+
+Changing the notes can be undone like any other change, and is listed in the History.
+
+=== make-a-short
+title: Make a short
+section: Editing
+keywords: short, shorts, reel, reels, tiktok, clip, highlight, vertical, upright, 9:16, good moment, marker, markers, flag, best moments, cut a short, snippet, teaser, captions big, title at the top
+related: export-destinations, text-window, crop-position, captions, who-is-speaking
+
+A short is a new, upright project made from one part of your video. Your long video is never changed.
+
+## From the text
+
+In the Text window, select the sentences you want and choose **Make a short from this…**. ClipForge shows how long the part is, and warns when it is over 60 seconds (safe for Shorts, Reels and TikTok; check the site for more). On a phone, tap the first sentence and choose 30, 45 or 60 seconds from there.
+
+## From the playhead
+
+**Make a short from here…** takes 30, 45 or 60 seconds starting where the playhead is. Computer: the Edit menu, under Shorts, or the panel at the right when nothing is selected. Phone: **More**, then **Shorts and good moments**.
+
+## Good moments
+
+While you watch, press M on a computer (phone: **More**, then **Mark a good moment**) each time something good happens. A small flag appears on the time ruler. **Good moments…** lists them, and **Make shorts from markers…** makes one short around each: about 20 seconds before to 25 seconds after.
+
+## What you can choose
+
+- **Start and end at a pause**: the part is moved outward to the nearest pause in the talk, never into the middle of a word.
+- **Short caption look**: captions bigger, in the lower middle, outlined, one or two lines.
+- **Title at the top**: a few words shown for the whole short. It starts as the first sentence; change it to something that makes people stop.
+
+Then **Open it** to check the picture (Crop and position keeps the person in shot) or **Stay here** and carry on. Export the short with Shorts / Reels / TikTok chosen under **Where is it going?**.

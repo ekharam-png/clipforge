@@ -271,6 +271,8 @@ class McpServer {
     this.instructions,
     List<McpResource> resources = const [],
     void Function(String message)? log,
+    this.onClient,
+    this.onToolCall,
   })  : tools = {for (final t in tools) t.name: t},
         resources = {for (final r in resources) r.uri: r},
         _log = log ?? ((_) {});
@@ -278,6 +280,11 @@ class McpServer {
   final String name;
   final String version;
   final String? title;
+
+  /// Told the client's name when it says hello (`initialize`), and every
+  /// time a tool is called (1.14: the "in use" file of the helper).
+  final void Function(String clientName)? onClient;
+  final void Function()? onToolCall;
 
   /// Usage notes given to the client in the initialize result.
   final String? instructions;
@@ -426,6 +433,9 @@ class McpServer {
           'tools': [for (final t in tools.values) t.toJson()],
         }));
       case 'tools/call':
+        try {
+          onToolCall?.call();
+        } catch (_) {}
         _callTool(id, params);
       case 'resources/list' when resources.isNotEmpty:
         _send(_result(id, {
@@ -459,6 +469,9 @@ class McpServer {
         : kProtocolVersions.first;
     negotiatedVersion = agreed;
     final client = params['clientInfo'];
+    try {
+      onClient?.call(client is Map ? '${client['name'] ?? ''}' : '');
+    } catch (_) {}
     _log('initialize: client '
         '${client is Map ? '${client['name']} ${client['version']}' : 'unknown'}'
         ', requested protocol $requested, using $agreed');

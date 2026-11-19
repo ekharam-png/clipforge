@@ -26,6 +26,8 @@ import 'package:path/path.dart' as p;
 
 import '../core/model/project.dart';
 import '../core/storage/project_lock.dart' show processAlive, localHostName;
+import '../media/destinations.dart';
+import '../media/export_kit.dart';
 import '../media/ffmpeg_command.dart' show exportSize;
 import '../media/media_api.dart';
 import '../media/process_media_engine.dart';
@@ -205,6 +207,11 @@ class ExportJobStore {
   File projectFileOf(String id) => File(p.join(dir, '$id.project.json'));
   File cancelFileOf(String id) => File(p.join(dir, '$id.cancel'));
 
+  /// A kit job's plan (export_kit, 1.14): the projects as they were and
+  /// the destinations asked for. Its name has a second dot, so [read]
+  /// never takes it for a job.
+  File kitFileOf(String id) => File(p.join(dir, '$id.kit.json'));
+
   /// Writes [r] atomically (temporary file, then rename). With
   /// [createDir] false nothing is written when the folder is gone (a render
   /// whose job folder was deleted does not bring it back).
@@ -245,14 +252,19 @@ class ExportJobStore {
     final out = <ExportJobRecord>[];
     for (final e in d.listSync()) {
       final name = p.basename(e.path);
-      if (e is! File || !name.endsWith('.json') || name.endsWith('.project.json')) {
+      if (e is! File ||
+          !name.endsWith('.json') ||
+          name.endsWith('.project.json') ||
+          name.endsWith('.kit.json')) {
         continue;
       }
       final r = read(name.substring(0, name.length - 5));
       if (r == null) continue;
       if (!r.isActive &&
           DateTime.now().difference(r.finishedAt ?? r.createdAt) > kJobKeepFor) {
-        for (final f in [fileOf(r.id), projectFileOf(r.id), cancelFileOf(r.id)]) {
+        for (final f in [
+          fileOf(r.id), projectFileOf(r.id), cancelFileOf(r.id), kitFileOf(r.id), //
+        ]) {
           try {
             if (f.existsSync()) f.deleteSync();
           } catch (_) {}
@@ -436,6 +448,9 @@ Future<void> runExportJob(ExportJobStore store, String id, MediaEngine engine,
     {String runner = '', Duration heartbeat = kJobHeartbeat}) async {
   final r = store.read(id);
   if (r == null || r.status != kJobStarting) return;
+  if (r.format == kKitFormat) {
+    return runKitJob(store, r, engine, runner: runner, heartbeat: heartbeat);
+  }
   final now = DateTime.now();
   r
     ..status = kJobRunning
@@ -733,4 +748,178 @@ String durationText(int ms) {
   final h = s ~/ 3600, m = s ~/ 60 % 60, rest = s % 60;
   if (h > 0) return '$h h ${m.toString().padLeft(2, '0')} min';
   return '$m min ${rest.toString().padLeft(2, '0')} s';
+}
+
+
+/// [ExportJobRecord.format] of a publishing kit (export_kit): several
+/// files for several destinations, made one after another by ONE job.
+const String kKitFormat = 'kit';
+
+/// One project of a kit job with the destinations asked for it.
+class KitJobPart {
+  KitJobPart(this.project, this.choices);
+  final Project project;
+  final List<KitChoice> choices;
+
+  Map<String, dynamic> toJson() => {
+        'project': project.toJson(),
+        'destinations': [for (final c in choices) c.key],
+      };
+
+  static KitJobPart? fromJson(Map<String, dynamic> j) {
+    final raw = j['project'];
+    if (raw is! Map) return null;
+    return KitJobPart(Project.fromJson(raw.cast<String, dynamic>()), [
+      for (final k in (j['destinations'] as List?) ?? const [])
+        ?kitChoiceByKey('$k'),
+    ]);
+  }
+}
+
+/// Renders the kit job [r] with [engine]: every file of every project
+/// into the kit folder ([ExportJobRecord.outputPath]), then the text
+/// files. Progress is over the whole kit. Files finished before a failure
+/// or a cancel stay (the result lists them). Never throws.
+Future<void> runKitJob(ExportJobStore store, ExportJobRecord r, MediaEngine engine,
+    {String runner = '', Duration heartbeat = kJobHeartbeat}) async {
+  final id = r.id;
+  final now = DateTime.now();
+  r
+    ..status = kJobRunning
+    ..startedAt = now
+    ..heartbeatAt = now
+    ..host = localHostName()
+    ..workerPid = pid
+    ..runner = runner.isEmpty ? r.runner : runner;
+  void save() {
+    try {
+      store.write(r, createDir: false);
+    } catch (_) {}
+  }
+
+  final files = <Map<String, dynamic>>[];
+  final texts = <String>[];
+  Timer? timer;
+  KitRun? running;
+  try {
+    save();
+    final List<KitJobPart> parts;
+    try {
+      final raw = (jsonDecode(store.kitFileOf(id).readAsStringSync()) as Map)
+          .cast<String, dynamic>();
+      parts = [
+        for (final x in (raw['parts'] as List))
+          ?KitJobPart.fromJson((x as Map).cast<String, dynamic>()),
+      ];
+    } catch (e) {
+      throw ExportException('The plan of this kit cannot be read: $e');
+    }
+    final plans = [
+      for (final part in parts)
+        planKit(part.project, part.choices, fps: r.fps, useHardwareEncoder: r.hardware),
+    ];
+    final count = plans.fold<int>(0, (n, pl) => n + pl.items.length);
+    var cancelling = false;
+    timer = Timer.periodic(heartbeat, (_) {
+      if (!r.isActive) return;
+      r.heartbeatAt = DateTime.now();
+      save();
+      if (!cancelling && store.cancelFileOf(id).existsSync()) {
+        cancelling = true;
+        running?.cancel();
+      }
+    });
+    var done = 0;
+    for (final plan in plans) {
+      if (cancelling || store.cancelFileOf(id).existsSync()) {
+        throw ExportException('Export cancelled', cancelled: true);
+      }
+      final before = done;
+      final run = runExportKit(engine, plan, r.outputPath,
+          lineEnd: Platform.isWindows ? '\r\n' : '\n',
+          onFile: (f) async {
+        MediaInfo? info;
+        try {
+          info = await engine.probe(f.path);
+        } on ExportException {
+          info = null;
+        }
+        files.add({
+          'path': f.path,
+          'destination': f.item.choice.key,
+          'label': f.item.label,
+          'projectId': plan.project.id,
+          'projectName': plan.project.name,
+          'sizeBytes': File(f.path).existsSync() ? File(f.path).lengthSync() : 0,
+          if (info != null) ...{
+            'durationMs': info.durationMs,
+            'width': info.width,
+            'height': info.height,
+          },
+          if (f.item.warnings.isNotEmpty) 'warnings': f.item.warnings,
+          if (f.warnings.isNotEmpty) 'notApplied': f.warnings,
+        });
+      });
+      running = run;
+      final sub = run.progress.listen((pr) {
+        final f = count == 0
+            ? 0.0
+            : ((before + pr.index + pr.itemFraction) / count).clamp(0.0, 0.99);
+        if (f > r.progress) r.progress = f;
+      });
+      try {
+        final result = await run.done;
+        if (result.textPath != null) texts.add(result.textPath!);
+      } finally {
+        await sub.cancel();
+        running = null;
+      }
+      done += plan.items.length;
+    }
+    timer.cancel();
+    final finished = DateTime.now();
+    r
+      ..status = kJobFinished
+      ..progress = 1
+      ..finishedAt = finished
+      ..heartbeatAt = finished
+      ..result = {
+        'outputPath': r.outputPath,
+        'files': files,
+        'textFiles': texts,
+        'sizeBytes':
+            files.fold<int>(0, (n, f) => n + ((f['sizeBytes'] as int?) ?? 0)),
+        'renderMs': finished.difference(r.startedAt!).inMilliseconds,
+      };
+    save();
+  } catch (e) {
+    timer?.cancel();
+    final ex = e is ExportException ? e : ExportException('Export failed: $e');
+    r
+      ..finishedAt = DateTime.now()
+      ..heartbeatAt = DateTime.now()
+      ..result = {
+        'outputPath': r.outputPath,
+        'files': files,
+        'textFiles': texts,
+      };
+    if (ex.cancelled) {
+      r.status = kJobCancelled;
+    } else {
+      r
+        ..status = kJobFailed
+        ..error = ex.message;
+      final log = (ex.log ?? '').trim();
+      if (log.isNotEmpty) {
+        r.log = log.length > 1500 ? log.substring(log.length - 1500) : log;
+      }
+    }
+    save();
+  } finally {
+    for (final f in [store.cancelFileOf(id), store.kitFileOf(id)]) {
+      try {
+        if (f.existsSync()) f.deleteSync();
+      } catch (_) {}
+    }
+  }
 }

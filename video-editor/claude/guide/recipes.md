@@ -222,8 +222,10 @@ see the picture: say so once.
    `get_transcript` with `format: "words"` around the spot for the exact
    times, and leave about 300 ms before the first word and after the last.
 4. **Wait for their choice.** They may change times or drop some.
+   `suggest_shorts` does the splitting into complete passages for you
+   (see "From a long video to a publishing kit").
 5. **For each approved moment**: `make_short` with `from_ms`, `to_ms` and a
-   `name`. It copies the project, keeps only that part (titles, captions
+   `name` (`caption_style: "short"` and a `title` make it look like a short). It copies the project, keeps only that part (titles, captions
    and linked voices follow), makes it upright 9:16 at 1080p and adds
    captions from the speech. The long project is not changed.
 6. Upright framing: `set_clip_properties` `"all"` on the short with
@@ -236,6 +238,60 @@ see the picture: say so once.
 No transcript possible (no speech program)? Then work from their times
 ("12:30–13:10") or from the long pauses `remove_silences` `dry_run: true`
 lists, and say that you are choosing blind.
+
+## From a long video to a publishing kit
+
+The whole road from a finished edit to "here is the folder, paste this".
+You do the picking where you can; the owner decides at every step marked
+ASK. ClipForge never uploads: the owner posts the files themselves.
+
+1. **Clean-up** first (the recipes above: silences, fillers, sound), on
+   the long video. Shorts are cut from the cleaned video.
+2. **Text**: `transcribe` (or, when the project already has captions,
+   skip it: `get_captions` reads them and `suggest_shorts` works from
+   them).
+3. **Chapters**: `make_chapters` with `dry_run: true`. Rewrite the names
+   from what each part is about (keep the times), show the list, then
+   save it with `set_publishing_notes` `chapters`.
+4. **Publishing notes**. Read the talk, then ASK: offer THREE titles and
+   let the owner pick. Write a description of two or three plain
+   sentences and 5-10 hashtags, show them, and save with
+   `set_publishing_notes`. A `short_title` only if the shorts need
+   another one.
+5. **Candidates**: `suggest_shorts` (page through it). If the owner
+   marked moments in the app, `list_markers` first: those are theirs.
+6. **Pick 3-5** by these rules, and say why in one line each:
+   - a HOOK in the first 3 seconds: a question, a surprising claim, a
+     number, the middle of a story - not "so, as I was saying";
+   - ONE idea, not three;
+   - a COMPLETE thought: it starts at the start of a sentence and ends
+     at the end of one (`suggest_shorts` only offers such passages);
+   - it ENDS ON A POINT: a punchline, an answer, a conclusion - not on a
+     trailing "and then…";
+   - NO inside references: nothing that needs what was said earlier
+     ("as I said", "that thing", a name never introduced);
+   - 20-45 seconds is the sweet spot; never over 60 for all three sites.
+   The signals are hints, not a score: "starts with a question" is a hook
+   only if the question is interesting. You cannot see the picture: say
+   so once.
+7. ASK: "Which of these should I make?" Wait. They may change or drop
+   some.
+8. **Make them**: for each chosen one `make_short` with `from_ms`,
+   `to_ms`, `caption_style: "short"`, `snap_to_speech: true`, a `name`,
+   and a `title` of a few words (the hook). Read the warnings in the
+   answer (too long, mid-sentence) and fix before going on. Upright
+   framing: `set_clip_properties` `"all"` with `fit: "blur"`, or `"fill"`
+   + `position_x` after asking where the person is.
+9. **Export the kit**: one `export_kit` with the long video
+   (`destinations`: `["youtube", "podcast"]`, plus `"whatsapp"` if they
+   send it to family) and `projects`: each short with `["shorts"]`.
+   Poll `get_export_status` to the end.
+10. **Hand over**: the folder, the files by name, and what to paste
+    where: "<Project> - text.txt has the title, description, hashtags
+    and chapters; the YouTube file goes to YouTube Studio > Create >
+    Upload; each Short goes to YouTube Shorts / Instagram Reels / TikTok
+    with its own title". Pass on any warning with "check the site". Ask
+    them to watch each file once before posting.
 
 ## Finished look
 

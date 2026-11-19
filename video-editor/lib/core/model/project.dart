@@ -3,6 +3,10 @@
 // A project serialises to plain JSON so that it can later be synced between
 // devices and edited by external tools (e.g. an MCP server).
 
+import 'publishing.dart';
+
+export 'publishing.dart';
+
 const int kSchemaVersion = 2;
 
 enum ClipType { video, photo }
@@ -1600,7 +1604,16 @@ class Project {
     this.autoCuts = const [],
     this.fadeInMs = 0,
     this.fadeOutMs = 0,
+    this.publishing = PublishingNotes.empty,
+    this.markers = const [],
   });
+
+  /// The text that goes with the video when it is posted (1.14): title,
+  /// description, hashtags, chapters. Empty in older projects.
+  final PublishingNotes publishing;
+
+  /// "Good moments" marked while watching (1.14), in time order.
+  final List<Marker> markers;
 
   /// Longest allowed short side of the output canvas.
   static const int maxCanvasShortSide = 2160;
@@ -1946,6 +1959,8 @@ class Project {
     List<AutoCut>? autoCuts,
     int? fadeInMs,
     int? fadeOutMs,
+    PublishingNotes? publishing,
+    List<Marker>? markers,
   }) =>
       Project(
         id: id,
@@ -1968,6 +1983,8 @@ class Project {
         autoCuts: autoCuts ?? this.autoCuts,
         fadeInMs: fadeInMs ?? this.fadeInMs,
         fadeOutMs: fadeOutMs ?? this.fadeOutMs,
+        publishing: publishing ?? this.publishing,
+        markers: markers ?? this.markers,
       );
 
   Map<String, dynamic> toJson() => {
@@ -1993,6 +2010,9 @@ class Project {
         'overlays': [for (final o in overlays) o.toJson()],
         if (autoCuts.isNotEmpty)
           'autoCuts': [for (final c in autoCuts) c.toJson()],
+        if (!publishing.isEmpty) 'publishing': publishing.toJson(),
+        if (markers.isNotEmpty)
+          'markers': [for (final m in markers) m.toJson()],
       };
 
   /// Reads a project. A project saved before sound tracks existed (no
@@ -2043,6 +2063,14 @@ class Project {
         for (final c in (j['autoCuts'] as List? ?? const []))
           if (c is Map) AutoCut.fromJson(Map<String, dynamic>.from(c)),
       ],
+      publishing: j['publishing'] is Map
+          ? PublishingNotes.fromJson(
+              Map<String, dynamic>.from(j['publishing'] as Map))
+          : PublishingNotes.empty,
+      markers: [
+        for (final m in (j['markers'] as List? ?? const []))
+          if (m is Map) Marker.fromJson(Map<String, dynamic>.from(m)),
+      ]..sort((a, b) => a.ms.compareTo(b.ms)),
       tracks: tracks,
       videoSound: video is Map
           ? SoundTrack.fromJson(Map<String, dynamic>.from(video))

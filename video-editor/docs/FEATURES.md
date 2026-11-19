@@ -8,7 +8,7 @@ every release: a test fails when CHANGELOG.md has a version this file does
 not mention.
 
 Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
-1.8.0, 1.9.0, 1.10.0, 1.11.0, 1.12.0, 1.13.0.
+1.8.0, 1.9.0, 1.10.0, 1.11.0, 1.12.0, 1.13.0, 1.14.0.
 
 ## Projects
 
@@ -31,6 +31,37 @@ Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
 | Find file: Search the gallery (Android) | 1.8.0 | Looks for a missing file by its name on the phone and copies it in. |
 | Clean-up never deletes what is in use | 1.8.0 | Files the open project or its undo history still needs are always kept. |
 | "Open in the app" mark | 1.9.0 | An open project is marked, so Claude does not change it at the same time; leftovers of a crash are ignored and cleaned up. |
+
+## Publishing kit and shorts (1.14.0)
+
+ClipForge uploads nothing and has no logins: it makes the files and the text, the user posts them.
+
+| Feature | Since | Where | What it does |
+|---|---|---|---|
+| Where is it going? | 1.14.0 | Both | Export presets from one table: YouTube (16:9, 1080p), Shorts / Reels / TikTok (9:16, 1080p), Instagram post (4:5 or 1:1), WhatsApp / Telegram (small file), Podcast audio (MP3 / M4A), Custom (the old controls). |
+| Limit warnings | 1.14.0 | Both | A plain warning when a video is longer (60 s for short-form) or bigger (about 16 MB for WhatsApp) than the destination is sure to take; conservative values, "check the site". Never blocks. |
+| Make a copy in this shape / Export as it is | 1.14.0 | Both | A destination with another shape never changes the project: either a new project in that shape (blurred background, Crop and position to follow) or the export keeps the project's shape. |
+| Export several… | 1.14.0 | Both (computer: one chosen folder; phone: a gallery album named after the project) | Several destinations as one job with overall progress and cancel, clear file names, shape copies only in memory unless "Keep the shape copies as projects" is ticked. |
+| Publishing notes | 1.14.0 | Both | Title, description, hashtags, chapters, optional short-form title and description; a copy button per field; undoable, named in the History. |
+| Chapters from titles / captions… | 1.14.0 | Both | A YouTube-style list (first at 0:00, at least 10 s apart) from the titles, else the captions, else who is speaking; rule breaks in a typed list are named. |
+| Text file with the kit | 1.14.0 | Both (phone: shared with the files) | "<Project> - text.txt": title, description, hashtags, tags, chapters, music credits and a section per exported file. |
+| Share after export | 1.14.0 | Phone | The system share sheet with the exported file(s) and the text; "Copy title and description" stays visible. |
+| Show in folder, Open upload page | 1.14.0 | Computer | Opens the file manager at the file; opens the upload page of YouTube / Instagram / TikTok in the user's browser. No embedded browser, no account. |
+| Make a short from this… | 1.14.0 | Both (several sentences at once: computer; phone: one sentence + 30 / 45 / 60 s) | From a selection in the Text window: a new upright 1080p project with only that part, Short caption look, optional title at the top, start and end at a pause; opens it or stays. |
+| Make a short from here… | 1.14.0 | Both | 30 / 45 / 60 s from the playhead (the timeline has no range selection). |
+| Good-moment markers | 1.14.0 | Both (M key: computer; More: phone) | Markers dropped while watching, shown as flags on the ruler and in a list; they follow their picture through cuts. |
+| Make shorts from markers… | 1.14.0 | Both | One short around each marker (20 s before to 25 s after, moved outward to pauses, never into a word or caption). |
+| Claude: suggest_shorts, make_short extras, publishing notes, make_chapters, export_kit, markers | 1.14.0 | Computer | Candidate passages for Claude to judge; caption_style "short", title, snap_to_speech and warnings; notes and chapters; a kit as one background job; add / list / remove markers (70 tools). |
+
+## Connect to Claude and updates, reworked (1.14.0)
+
+| Feature | Since | Where | What it does |
+|---|---|---|---|
+| Connect / Disconnect buttons for Claude Desktop and Claude Code | 1.14.0 | Computer | The app finds both (Claude Desktop also from the Microsoft Store), shows a status light per target and connects with one button: Claude Desktop by adding only the "clipforge" entry to its settings file (dated backup first, unreadable files refused), Claude Code by running `claude mcp add` itself (an older connection is listed and replaced after asking). |
+| "In use by Claude now" | 1.14.0 | Computer | The helper keeps a small file while a Claude session has it open; the page shows which Claude and when it was last used. |
+| Test button | 1.14.0 | Computer | Starts the helper by itself, does the handshake and the quick self-test: PASS / FAIL independent of Claude. |
+| "Restart ClipForge to finish", Later = at the next start | 1.14.0 | Computer | A downloaded and checked update that was not finished is applied when the app next starts; never while something is busy. |
+| Update outcome and leftovers | 1.14.0 | Computer | "Updated to …" in one line (with a note when the folder is named after an old version), or the reason with Try again / Open the download page; ".update-new" / ".update-old" folders are removed only when the updater made them (marker). |
 
 ## Text window, sound waves, who is speaking (1.13.0)
 
@@ -235,6 +266,7 @@ From the roadmap in `docs/HANDOVER.md`; not built yet.
 - Signed and notarized Mac app, a Windows installer; updates for the Linux development build.
 - Removing filler words ("um", "uh") and captions from speech (with the planned on-device transcription).
 - Transcript-based editing, then a local AI assistant (computers, experimental).
+- A separate personal "Publisher" helper that posts for the owner (on hold; see docs/HANDOVER.md). ClipForge itself will not upload or log in anywhere.
 - Voiceover recording.
 - Saved title styles and intro / outro templates.
 - Skip back / forward 5 s buttons; zoom the preview; animated zoom and pan (Ken Burns).

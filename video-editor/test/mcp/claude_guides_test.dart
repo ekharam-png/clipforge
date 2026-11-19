@@ -69,7 +69,7 @@ void main() {
       'get', 'list', 'create', 'duplicate', 'rename', 'set', 'add', 'trim',
       'split', 'remove', 'move', 'import', 'export', 'update', 'separate',
       'reattach', 'copy', 'apply', 'freeze', 'fit', 'relink', 'cancel', 'align',
-      'find', 'captions', 'make', 'restore', 'self', 'replace',
+      'find', 'captions', 'make', 'restore', 'self', 'replace', 'suggest',
     };
     final verbFirst = {
       for (final t in toolNames)

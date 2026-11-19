@@ -1,21 +1,29 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 
-import '../../core/model/project.dart' show ClipType, Project, VideoSize;
+import '../../core/editor/edit_labels.dart' show aspectName;
+import '../../core/model/project.dart' hide Clip;
+import '../../core/music/openverse.dart' show creditsText;
+import '../../core/publish/chapters.dart';
+import '../../media/destinations.dart';
 import '../../media/export_estimate.dart';
+import '../../media/export_kit.dart';
 import '../../media/media_api.dart';
 import '../../media/video_encoder.dart' show encoderDescription, encoderLabel;
 import '../format.dart';
 import '../help/help_screen.dart';
 import '../long_jobs.dart';
+import '../publish_service.dart';
 import '../services.dart';
 import '../theme.dart';
 import 'clip_actions.dart';
 import 'clip_panels.dart' show ChoiceRow;
 import 'long_project_note.dart' show kLongProjectMs;
+import 'publishing_panel.dart';
 import 'session.dart';
 
 Future<void> showExportDialog(
@@ -27,6 +35,11 @@ Future<void> showExportDialog(
   Map<String, String> Function()? processedSound,
   ValueChanged<VideoSize>? onVideoSize,
   DocumentService? documents,
+  PublishService? publish,
+  ValueChanged<PublishingNotes>? onNotes,
+  Future<Project?> Function(Project variant, String name)? onKeepCopy,
+  SpeakerTurns Function()? turns,
+  bool several = false,
 }) {
   return showDialog<void>(
     context: context,
@@ -38,7 +51,12 @@ Future<void> showExportDialog(
         jobs: jobs,
         processedSound: processedSound,
         onVideoSize: onVideoSize,
-        documents: documents),
+        documents: documents,
+        publish: publish,
+        onNotes: onNotes,
+        onKeepCopy: onKeepCopy,
+        turns: turns,
+        several: several),
   );
 }
 
@@ -179,8 +197,32 @@ class ExportDialog extends StatefulWidget {
     this.processedSound,
     this.onVideoSize,
     this.documents,
+    this.publish,
+    this.onNotes,
+    this.onKeepCopy,
+    this.turns,
+    this.several = false,
   });
   final Project project;
+
+  /// The kit folder, the share sheet, "Show in folder" and the sites'
+  /// upload pages (1.14). Null: none of that is offered.
+  final PublishService? publish;
+
+  /// Stores changed publishing notes in the project (one undo step); null:
+  /// the notes can be read and copied here but not changed.
+  final ValueChanged<PublishingNotes>? onNotes;
+
+  /// "Make a copy in this shape": saves [variant] as a new project called
+  /// [name] in the project list and returns it. Null: shape copies exist
+  /// only for the export.
+  final Future<Project?> Function(Project variant, String name)? onKeepCopy;
+
+  /// Who speaks when, for "Chapters from titles / captions…".
+  final SpeakerTurns Function()? turns;
+
+  /// Open on "Export several…".
+  final bool several;
 
   /// Phones: hands a finished sound-only file to the share sheet (the
   /// gallery takes videos only). Null: not offered.
@@ -207,8 +249,49 @@ class ExportDialog extends StatefulWidget {
 class _ExportDialogState extends State<ExportDialog> {
   late Project _project = widget.project;
   _Phase _phase = _Phase.options;
-  ExportQuality _quality = ExportQuality.full;
+  ExportQuality _customQuality = ExportQuality.full;
   double _progress = 0;
+
+  /// "Where is it going?": a row of [kDestinations]. Custom = the controls
+  /// below, as before 1.14.
+  ExportDestination _dest = kCustomDestination;
+  CanvasAspect? _destShape;
+  ExportFormat? _destFormat;
+
+  /// The destination's shape differs from the project's: export it as it
+  /// is instead of making a copy in that shape.
+  bool _asIs = false;
+
+  /// "Export several…": the ticked rows, by [KitChoice.key].
+  late bool _several = widget.several;
+  final Set<String> _ticked = {'youtube', 'shorts'};
+  bool _keepCopies = false;
+
+  /// A kit being exported, what it is doing, and what it made.
+  KitRun? _kit;
+  String _kitNow = '';
+  List<KitFile> _kitFiles = const [];
+  String? _textPath;
+
+  /// What the finished file(s) were made for (upload pages, short-form
+  /// text), and shape copies that were added to the project list.
+  List<KitChoice> _made = const [];
+  final List<Project> _copies = [];
+  String? _copyNote;
+  String? _copiedWhat;
+
+  KitChoice get _choice =>
+      KitChoice(_dest, shape: _destShape, format: _destFormat);
+  ExportQuality get _quality => _dest.custom ? _customQuality : _dest.quality;
+  ExportFormat get _format =>
+      _dest.custom ? _customFormat : _choice.formatInUse;
+
+  /// The destination wants another shape than the project has.
+  bool get _shapeDiffers =>
+      !_dest.custom &&
+      !_format.audioOnly &&
+      shapeDiffers(_project, _choice.shapeInUse);
+  PublishingNotes get _notes => _project.publishing;
   ExportJob? _job;
   StreamSubscription<ExportProgress>? _progressSub;
   bool _cancelling = false;
@@ -218,7 +301,7 @@ class _ExportDialogState extends State<ExportDialog> {
   List<String> _errorMissing = const [];
 
   /// Video, or the sound only (M4A / MP3).
-  ExportFormat _format = ExportFormat.video;
+  ExportFormat _customFormat = ExportFormat.video;
 
   /// Frames per second chosen: one of [ExportOptions.frameRateChoices], or
   /// null for "Same as the clips" ([_sourceFps]).
@@ -250,6 +333,7 @@ class _ExportDialogState extends State<ExportDialog> {
   bool _copying = false;
 
   String get _fileName {
+    if (!_dest.custom) return kitFileName(_project.name, _choice);
     if (_format.audioOnly) {
       return '${safeFileName(_project.name)} (sound).${_format.extension}';
     }
@@ -308,11 +392,15 @@ class _ExportDialogState extends State<ExportDialog> {
   void dispose() {
     _progressSub?.cancel();
     // Closing the dialog mid-export stops the export.
-    if (_phase == _Phase.running) _job?.cancel().catchError((_) {});
+    if (_phase == _Phase.running) {
+      _job?.cancel().catchError((_) {});
+      _kit?.cancel();
+    }
     super.dispose();
   }
 
   Future<void> _start() async {
+    if (_several) return _startKit();
     final files = widget.files;
     String? path;
     try {
@@ -349,6 +437,26 @@ class _ExportDialogState extends State<ExportDialog> {
         format: _format,
         processedSound: widget.processedSound?.call() ?? const {});
     if (!await _roomFor(path, options) || !mounted) return;
+    // A destination: the project in its shape and size. "Make a copy in
+    // this shape" adds that copy to the project list (it can then be
+    // opened to keep the person in shot with Crop and position); the
+    // project itself is never changed by an export.
+    var project = _project;
+    final choice = _choice;
+    _copies.clear();
+    _copyNote = null;
+    if (!_dest.custom) {
+      if (_shapeDiffers && !_asIs) {
+        final variant = destinationVariant(_project, choice);
+        project = await _keepCopy(variant, choice) ?? variant;
+        if (!mounted) return;
+      } else {
+        project = destinationVariant(_project, choice, keepShape: true);
+      }
+    }
+    _made = _dest.custom ? const [] : [choice];
+    _kitFiles = const [];
+    _textPath = null;
 
     RunningJob? tracked;
     var keptAwake = false;
@@ -356,7 +464,7 @@ class _ExportDialogState extends State<ExportDialog> {
     _wantedGpu = useGpu && _gpuAvailable != false;
     try {
       final job = widget.engine.export(
-        _project,
+        project,
         path,
         options: options,
       );
@@ -394,6 +502,8 @@ class _ExportDialogState extends State<ExportDialog> {
         _took = clock.elapsed;
         _warnings = job.warnings;
       });
+      // The notes go next to the video as a text file (computers).
+      if (files.canChooseSaveLocation) unawaited(_writeTextNextTo(output));
       // On a phone the finished video belongs in the gallery (a sound file
       // is offered to the share sheet instead, see _done).
       if (!files.canChooseSaveLocation && !_format.audioOnly) {
@@ -421,6 +531,236 @@ class _ExportDialogState extends State<ExportDialog> {
   }
 
   static const _keepOpenNote = 'Keep ClipForge open while it exports.';
+
+  /// Adds [variant] (the project in a destination's shape) to the project
+  /// list, when the app can. Returns the saved copy.
+  Future<Project?> _keepCopy(Project variant, KitChoice choice) async {
+    final keep = widget.onKeepCopy;
+    final shape = choice.shapeInUse;
+    if (keep == null || shape == null) return null;
+    try {
+      final made = await keep(
+          variant, '${_project.name} - ${KitChoice.shapeTag(shape)}');
+      if (made != null) _copies.add(made);
+      return made;
+    } catch (e) {
+      _copyNote = 'The copy could not be added to your projects ($e); the '
+          'video was exported in this shape all the same.';
+      return null;
+    }
+  }
+
+  /// "(Project) - text.txt" next to a single exported file, when there
+  /// is something to paste (notes, or credits of free music).
+  Future<void> _writeTextNextTo(String output) async {
+    if (_notes.isEmpty && creditsText(_project).isEmpty) return;
+    try {
+      final dir = Directory(p.dirname(output));
+      if (!dir.existsSync()) return;
+      final file = File(p.join(dir.path, kitTextFileName(_project.name)));
+      file.writeAsStringSync(
+          kitText(_project,
+              sections: [
+                (
+                  heading: _dest.custom ? 'This video' : _choice.label,
+                  shortForm: _dest.shortForm,
+                  file: p.basename(output),
+                ),
+              ],
+              lineEnd: Platform.isWindows ? '\r\n' : '\n'),
+          flush: true);
+      if (mounted) setState(() => _textPath = file.path);
+    } catch (_) {
+      // The notes are on the finished screen as well.
+    }
+  }
+
+  List<KitChoice> get _tickedChoices => [
+        for (final c in kitChoices())
+          if (_ticked.contains(c.key)) c,
+      ];
+
+  /// "Export several…": every ticked destination, one after another, as
+  /// one job into one folder (computers: chosen once; phones: the app's
+  /// own folder, videos copied into a gallery album named after the
+  /// project).
+  Future<void> _startKit() async {
+    final choices = _tickedChoices;
+    final publish = widget.publish;
+    if (choices.isEmpty || publish == null) return;
+    final desktop = widget.files.canChooseSaveLocation;
+    final useGpu = _gpuAvailable == false || _useGpu;
+    final plan = planKit(_project, choices,
+        fps: _exportFps,
+        useHardwareEncoder: useGpu,
+        processedSound: widget.processedSound?.call() ?? const {});
+    String? folder;
+    try {
+      folder = desktop
+          ? await publish.chooseFolder()
+          : await publish.appKitFolder(plan.folderName);
+    } catch (e) {
+      _fail('Could not prepare the place to save the files.', '$e');
+      return;
+    }
+    if (folder == null || !mounted) return;
+    // Room for all of them.
+    final free = await LongJobSupport.instance.freeBytes(folder);
+    if (!mounted) return;
+    if (free != null) {
+      var need = 0;
+      for (final i in plan.items) {
+        need += estimateExportSize(i.project, i.options).typicalBytes;
+      }
+      if (!desktop) need *= 2;
+      if (free < need) {
+        _fail(
+            'Not enough free space: these files need about '
+            '${formatBytes(need)} and ${formatBytes(free)} is free. Free up '
+            'some space or tick fewer.',
+            null);
+        return;
+      }
+    }
+    _copies.clear();
+    _copyNote = null;
+    if (_keepCopies) {
+      final done = <CanvasAspect>{};
+      for (final i in plan.items) {
+        final shape = i.choice.shapeInUse;
+        if (!i.reshaped || shape == null || !done.add(shape)) continue;
+        await _keepCopy(i.project, i.choice);
+      }
+      if (!mounted) return;
+    }
+    RunningJob? tracked;
+    final clock = Stopwatch()..start();
+    _wantedGpu = useGpu && _gpuAvailable != false;
+    String? album;
+    String? albumProblem;
+    final run = runExportKit(widget.engine, plan, folder,
+        lineEnd: Platform.isWindows ? '\r\n' : '\n',
+        onFile: desktop
+            ? null
+            : (file) async {
+                // Phones: the gallery takes videos; sound and text stay
+                // in the app's folder and go out through Share.
+                if (file.item.options.format.audioOnly) return;
+                try {
+                  album = await publish.saveToAlbum(file.path, plan.folderName);
+                  albumProblem = album == null
+                      ? 'The app was not allowed to add the videos to the '
+                          'gallery.'
+                      : null;
+                } catch (e) {
+                  albumProblem =
+                      'The videos could not be added to the gallery ($e)';
+                }
+              });
+    setState(() {
+      _phase = _Phase.running;
+      _progress = 0;
+      _cancelling = false;
+      _kit = run;
+      _kitNow = '1 of ${plan.items.length}: ${plan.items.first.label}';
+      _made = choices;
+    });
+    tracked = widget.jobs?.start(JobKind.export, cancel: () async {
+      if (mounted) {
+        await _cancel();
+      } else {
+        await run.cancel();
+      }
+    });
+    unawaited(LongJobSupport.instance.exportStarted(
+        title: 'Exporting ${_project.name}', text: _keepOpenNote));
+    final sub = run.progress.listen((pr) {
+      if (!mounted) return;
+      setState(() {
+        _progress = pr.overall.clamp(0.0, 1.0);
+        _kitNow = '${pr.index + 1} of ${pr.count}: ${pr.label}';
+      });
+    });
+    try {
+      final result = await run.done;
+      if (!mounted) return;
+      setState(() {
+        _phase = _Phase.done;
+        _kitFiles = result.files;
+        _textPath = result.textPath;
+        _outputPath = result.folder;
+        _encoderUsed = result.files
+            .map((f) => f.encoder)
+            .whereType<VideoEncoder>()
+            .firstOrNull;
+        _took = clock.elapsed;
+        _warnings = {
+          for (final f in result.files) ...f.warnings,
+        }.toList();
+        _galleryPlace = album;
+        _galleryProblem = albumProblem;
+      });
+    } on ExportException catch (e) {
+      if (_cancelling || e.cancelled) {
+        _backToOptions();
+      } else {
+        _fail(e.message, e.log, missing: e.missingPaths);
+      }
+    } catch (e) {
+      _fail('The export stopped unexpectedly.', '$e');
+    } finally {
+      unawaited(LongJobSupport.instance.exportEnded());
+      if (tracked != null) widget.jobs?.end(tracked);
+      unawaited(sub.cancel());
+      _kit = null;
+    }
+  }
+
+  Future<void> _copy(String what, String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) setState(() => _copiedWhat = what);
+  }
+
+  /// Opens "Publishing notes" over this window.
+  Future<void> _openNotes() async {
+    await showPublishingNotes(
+      context,
+      project: () => _project,
+      turns: widget.turns,
+      onChanged: (n) {
+        widget.onNotes?.call(n);
+        if (mounted) setState(() => _project = _project.copyWith(publishing: n));
+      },
+    );
+    if (mounted) setState(() {});
+  }
+
+  /// Phones: the share sheet with the finished file(s). The title and
+  /// description go along as text; many apps ignore that, which is why
+  /// "Copy title and description" stays on screen.
+  Future<void> _share() async {
+    final publish = widget.publish;
+    if (publish == null) return;
+    final paths = _kitFiles.isNotEmpty
+        ? [
+            for (final f in _kitFiles) f.path,
+            ?_textPath,
+          ]
+        : [?_outputPath];
+    if (paths.isEmpty) return;
+    final short = _made.isNotEmpty && _made.every((c) => c.destination.shortForm);
+    try {
+      await publish.share(paths,
+          text: _notes.isEmpty && creditsText(_project).isEmpty
+              ? null
+              : titleAndDescription(_project, shortForm: short),
+          subject: _notes.title.isEmpty ? _project.name : _notes.title);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _galleryProblem = 'Sharing did not work ($e)');
+      }
+    }
+  }
 
   /// Space the export needs on the disk it goes to: the video, and on a
   /// phone its copy in the gallery as well.
@@ -501,6 +841,7 @@ class _ExportDialogState extends State<ExportDialog> {
     setState(() => _cancelling = true);
     try {
       await _job?.cancel();
+      await _kit?.cancel();
     } catch (_) {}
   }
 
@@ -535,9 +876,17 @@ class _ExportDialogState extends State<ExportDialog> {
       canPop: _phase != _Phase.running,
       child: AlertDialog(
         title: Text(switch (_phase) {
-          _Phase.options => _format.audioOnly ? 'Export sound' : 'Export video',
+          _Phase.options => _several
+              ? 'Export several'
+              : _format.audioOnly
+                  ? 'Export sound'
+                  : 'Export video',
           _Phase.running => _cancelling ? 'Stopping…' : 'Exporting…',
-          _Phase.done => _format.audioOnly ? 'Sound saved' : 'Video saved',
+          _Phase.done => _kitFiles.isNotEmpty
+              ? 'Files saved'
+              : _format.audioOnly
+                  ? 'Sound saved'
+                  : 'Video saved',
           _Phase.failed => 'Export failed',
         }),
         content: ConstrainedBox(
@@ -546,7 +895,8 @@ class _ExportDialogState extends State<ExportDialog> {
             width: double.maxFinite,
             child: SingleChildScrollView(
               child: switch (_phase) {
-                _Phase.options => _options(context),
+                _Phase.options =>
+                  _several ? _severalOptions(context) : _options(context),
                 _Phase.running => _running(context),
                 _Phase.done => _done(context),
                 _Phase.failed => _failed(context),
@@ -560,7 +910,14 @@ class _ExportDialogState extends State<ExportDialog> {
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text('Cancel'),
               ),
-              FilledButton(onPressed: _start, child: const Text('Export')),
+              FilledButton(
+                  key: const ValueKey('export-go'),
+                  onPressed:
+                      _several && _tickedChoices.isEmpty ? null : _start,
+                  child: Text(_several
+                      ? 'Export ${_tickedChoices.length} '
+                          '${_tickedChoices.length == 1 ? 'file' : 'files'}'
+                      : 'Export')),
             ],
           _Phase.running => [
               TextButton(
@@ -612,7 +969,7 @@ class _ExportDialogState extends State<ExportDialog> {
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: () => setState(() => _quality = q),
+            onTap: () => setState(() => _customQuality = q),
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Row(
@@ -646,10 +1003,27 @@ class _ExportDialogState extends State<ExportDialog> {
 
     final onSize = widget.onVideoSize;
     final audio = _format.audioOnly;
+    if (!_dest.custom) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ..._destinationPicker(text),
+          ..._presetDetails(text),
+          if (!audio && _gpuAvailable != null) _encoderPlan(text),
+          _sizeLine(text),
+          const SizedBox(height: 4),
+          Text(_lengthLine(audio),
+              style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+          _notesRow(text),
+        ],
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        ..._destinationPicker(text),
         Text('Make', style: text.labelLarge),
         const SizedBox(height: 6),
         ChoiceRow<ExportFormat>(
@@ -661,7 +1035,7 @@ class _ExportDialogState extends State<ExportDialog> {
             ExportFormat.mp3 => 'Sound MP3',
           },
           selected: _format,
-          onSelected: (f) => setState(() => _format = f),
+          onSelected: (f) => setState(() => _customFormat = f),
         ),
         const SizedBox(height: 4),
         Text(
@@ -744,16 +1118,282 @@ class _ExportDialogState extends State<ExportDialog> {
         if (!audio) _encoderPlan(text),
         _sizeLine(text),
         const SizedBox(height: 4),
+        Text(_lengthLine(audio),
+            style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+        _notesRow(text),
+      ],
+    );
+  }
+
+  String _lengthLine(bool audio) => widget.files.canChooseSaveLocation
+      ? 'Length ${formatLength(_project.durationMs)}. '
+          'You choose where to save it next.'
+      : audio
+          ? 'Length ${formatLength(_project.durationMs)}. '
+              'When it is ready you can send it to another app.'
+          : 'Length ${formatLength(_project.durationMs)}. '
+              'The finished video goes to your gallery.';
+
+  Widget _warningLine(String w, {Key? key}) => Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                size: 16, color: Color(0xFFFFC56B)),
+            const SizedBox(width: 6),
+            Expanded(
+                child: Text(w, key: key, style: const TextStyle(fontSize: 12))),
+          ],
+        ),
+      );
+
+  /// "Where is it going?": the rows of the destinations table, and
+  /// "Export several…".
+  List<Widget> _destinationPicker(TextTheme text) => [
+        Row(
+          children: [
+            Expanded(
+              child: LabelWithHint('Where is it going?',
+                  articleId: 'export-destinations', style: text.labelLarge),
+            ),
+            if (widget.publish != null)
+              TextButton(
+                key: const ValueKey('export-several'),
+                onPressed: () => setState(() => _several = true),
+                child: const Text('Export several…'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final d in kDestinations)
+              ChoiceChip(
+                key: ValueKey('export-dest-${d.id}'),
+                label: Text(d.label, style: const TextStyle(fontSize: 13)),
+                selected: _dest.id == d.id,
+                showCheckmark: false,
+                // Small enough for two in a row on a phone.
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                onSelected: (_) => setState(() {
+                  _dest = d;
+                  _destShape = null;
+                  _destFormat = null;
+                  _asIs = false;
+                }),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(_dest.detail,
+            key: const ValueKey('export-dest-detail'),
+            style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+        const SizedBox(height: 10),
+      ];
+
+  /// What a destination other than Custom adds: its shape or file choice,
+  /// the question about a different shape, and its warnings.
+  List<Widget> _presetDetails(TextTheme text) {
+    final d = _dest;
+    final choice = _choice;
+    final shape = choice.shapeInUse;
+    final canvas = destinationVariant(_project, choice, keepShape: _asIs)
+        .canvasSize;
+    return [
+      if (d.shapes.length > 1) ...[
+        ChoiceRow<CanvasAspect>(
+          key: const ValueKey('export-dest-shape'),
+          values: d.shapes,
+          label: (a) => a == CanvasAspect.square1x1
+              ? 'Square 1:1'
+              : 'Tall ${aspectName(a)}',
+          selected: shape,
+          onSelected: (a) => setState(() => _destShape = a),
+        ),
+        const SizedBox(height: 8),
+      ],
+      if (d.formats.length > 1) ...[
+        ChoiceRow<ExportFormat>(
+          key: const ValueKey('export-dest-format'),
+          values: d.formats,
+          label: (f) => f.extension.toUpperCase(),
+          selected: choice.formatInUse,
+          onSelected: (f) => setState(() => _destFormat = f),
+        ),
+        const SizedBox(height: 8),
+      ],
+      if (_shapeDiffers) ...[
         Text(
-          widget.files.canChooseSaveLocation
-              ? 'Length ${formatLength(_project.durationMs)}. '
-                  'You choose where to save it next.'
-              : audio
-                  ? 'Length ${formatLength(_project.durationMs)}. '
-                      'When it is ready you can send it to another app.'
-                  : 'Length ${formatLength(_project.durationMs)}. '
-                      'The finished video goes to your gallery.',
-          style: text.bodySmall?.copyWith(color: AppColors.textDim),
+            'Your video is ${aspectName(_project.aspect) == 'Original' ? '${_project.canvasSize.width} × ${_project.canvasSize.height}' : aspectName(_project.aspect)}; '
+            'this needs ${aspectName(shape!)}.',
+            key: const ValueKey('export-shape-differs'),
+            style: text.bodyMedium),
+        RadioGroup<bool>(
+          groupValue: _asIs,
+          onChanged: (v) => setState(() => _asIs = v ?? false),
+          child: Column(
+            children: [
+              RadioListTile<bool>(
+                key: const ValueKey('export-shape-copy'),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                value: false,
+                title: const Text('Make a copy in this shape'),
+                subtitle: Text(
+                    '${widget.onKeepCopy == null ? 'A' : 'A new project next to this one: a'} '
+                    'blurred background fills the frame. Open the copy and '
+                    'use Crop and position to keep the person in shot. This '
+                    'project stays as it is.',
+                    style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+              ),
+              RadioListTile<bool>(
+                key: const ValueKey('export-shape-as-is'),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                value: true,
+                title: const Text('Export as it is'),
+                subtitle: Text('Keep the shape the video has now.',
+                    style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+              ),
+            ],
+          ),
+        ),
+      ],
+      if (!_format.audioOnly)
+        Text('${canvas.width} × ${canvas.height}'
+            '${d.quality == ExportQuality.small ? ', made smaller for sending (720p)' : ''}',
+            key: const ValueKey('export-dest-size'),
+            style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+      for (final w in destinationWarnings(_project, choice))
+        _warningLine(w, key: const ValueKey('export-dest-warning')),
+      const SizedBox(height: 8),
+    ];
+  }
+
+  /// "Publishing notes…" in the options, with what they hold now.
+  Widget _notesRow(TextTheme text) {
+    final n = _notes;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              n.isEmpty
+                  ? 'No title or description for posting yet.'
+                  : 'Notes: ${n.title.isEmpty ? '(no title)' : n.title}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: text.bodySmall?.copyWith(color: AppColors.textDim),
+            ),
+          ),
+          TextButton.icon(
+            key: const ValueKey('export-notes'),
+            onPressed: _openNotes,
+            icon: const Icon(Icons.notes, size: 18),
+            label: const Text('Publishing notes…'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// "Export several…": tick the destinations; one job makes them all.
+  Widget _severalOptions(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final ticked = _tickedChoices;
+    final plan = planKit(_project, ticked);
+    final reshaped = plan.items.where((i) => i.reshaped).toList();
+    var bytes = 0;
+    for (final i in plan.items) {
+      bytes += estimateExportSize(i.project, i.options).typicalBytes;
+    }
+    final desktop = widget.files.canChooseSaveLocation;
+    return Column(
+      key: const ValueKey('export-several-list'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+            'Tick where the video is going. The files are made one after '
+            'another and saved together, with a text file to paste from.',
+            style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+        const SizedBox(height: 4),
+        for (final c in kitChoices())
+          CheckboxListTile(
+            key: ValueKey('export-tick-${c.key}'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: _ticked.contains(c.key),
+            onChanged: (v) => setState(() =>
+                v == true ? _ticked.add(c.key) : _ticked.remove(c.key)),
+            title: Text(c.label),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(kitFileName(_project.name, c),
+                    style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+                if (_ticked.contains(c.key))
+                  for (final w in destinationWarnings(_project, c))
+                    _warningLine(w,
+                        key: ValueKey('export-tick-warning-${c.key}')),
+              ],
+            ),
+          ),
+        if (reshaped.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+              '${reshaped.map((i) => aspectName(i.choice.shapeInUse!)).toSet().join(' and ')}: '
+              'a copy of the video in that shape is made for the export, '
+              'with a blurred background. Your project stays as it is.',
+              key: const ValueKey('export-several-shapes'),
+              style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+          if (widget.onKeepCopy != null)
+            CheckboxListTile(
+              key: const ValueKey('export-keep-copies'),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _keepCopies,
+              onChanged: (v) => setState(() => _keepCopies = v ?? false),
+              title: const Text('Keep the shape copies as projects'),
+              subtitle: Text(
+                  'To adjust Crop and position in them later. Otherwise '
+                  'nothing is added to your project list.',
+                  style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+            ),
+        ],
+        const SizedBox(height: 6),
+        Text(
+            ticked.isEmpty
+                ? 'Tick at least one.'
+                : '${ticked.length} ${ticked.length == 1 ? 'file' : 'files'}, '
+                    'about ${formatBytes(bytes)} together. '
+                    '${desktop ? 'You choose the folder next.' : 'The videos go to your gallery, in an album called "${plan.folderName}".'}',
+            key: const ValueKey('export-several-summary'),
+            style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          children: [
+            TextButton(
+              key: const ValueKey('export-one'),
+              onPressed: () => setState(() => _several = false),
+              child: const Text('Export just one…'),
+            ),
+            TextButton.icon(
+              key: const ValueKey('export-notes'),
+              onPressed: _openNotes,
+              icon: const Icon(Icons.notes, size: 18),
+              label: const Text('Publishing notes…'),
+            ),
+          ],
         ),
       ],
     );
@@ -847,7 +1487,9 @@ class _ExportDialogState extends State<ExportDialog> {
           ),
         ),
         const SizedBox(height: 12),
-        Text('${(_progress * 100).round()}%'),
+        Text('${(_progress * 100).round()}%'
+            '${_kit == null || _kitNow.isEmpty ? '' : ' · $_kitNow'}',
+            key: const ValueKey('export-progress')),
         const SizedBox(height: 4),
         Text(
           _project.durationMs >= kLongProjectMs
@@ -870,6 +1512,8 @@ class _ExportDialogState extends State<ExportDialog> {
           const Text('Adding it to your gallery…')
         else if (_galleryPlace != null)
           Text('Saved to ${_galleryPlace!}')
+        else if (_kitFiles.isNotEmpty && !widget.files.canChooseSaveLocation)
+          const Text('Saved inside the app')
         else ...[
           const Text('Saved to'),
           const SizedBox(height: 4),
@@ -922,8 +1566,190 @@ class _ExportDialogState extends State<ExportDialog> {
             style: TextStyle(color: AppColors.textDim, fontSize: 12),
           ),
         ],
+        ..._afterExport(context),
       ],
     );
+  }
+
+  /// The finished screen since 1.14: the files of a kit, shape copies,
+  /// the notes with Copy buttons, Share (phones), "Show in folder" and the
+  /// sites' own upload pages (computers).
+  List<Widget> _afterExport(BuildContext context) {
+    final publish = widget.publish;
+    final desktop = widget.files.canChooseSaveLocation;
+    final n = _notes;
+    final short = _made.isNotEmpty && _made.every((c) => c.destination.shortForm);
+    final credits = creditsText(_project);
+    const dim = TextStyle(color: AppColors.textDim, fontSize: 12);
+    Widget copyRow(String id, String label, String value) => Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: dim),
+                    Text(value,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13)),
+                  ],
+                ),
+              ),
+              IconButton(
+                key: ValueKey('export-copy-$id'),
+                tooltip: 'Copy ${label.toLowerCase()}',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(_copiedWhat == id ? Icons.check : Icons.copy,
+                    size: 18, semanticLabel: 'Copy ${label.toLowerCase()}'),
+                onPressed: () => _copy(id, value),
+              ),
+            ],
+          ),
+        );
+    final uploads = <UploadLink>[];
+    for (final c in _made) {
+      for (final u in c.destination.uploads) {
+        if (!uploads.any((x) => x.url == u.url)) uploads.add(u);
+      }
+    }
+    return [
+      if (_kitFiles.isNotEmpty) ...[
+        const SizedBox(height: 10),
+        for (final f in _kitFiles)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Row(
+              children: [
+                Icon(
+                    f.item.options.format.audioOnly
+                        ? Icons.audiotrack
+                        : Icons.movie_outlined,
+                    size: 16,
+                    color: AppColors.textDim),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(p.basename(f.path),
+                      key: ValueKey('export-file-${f.item.choice.key}'),
+                      style: const TextStyle(fontSize: 13)),
+                ),
+              ],
+            ),
+          ),
+      ],
+      if (_textPath != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Row(
+            children: [
+              const Icon(Icons.description_outlined,
+                  size: 16, color: AppColors.textDim),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                    '${p.basename(_textPath!)} - the text to paste',
+                    key: const ValueKey('export-text-file'),
+                    style: const TextStyle(fontSize: 13)),
+              ),
+            ],
+          ),
+        ),
+      for (final c in _copies)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+              'The copy "${c.name}" is in your project list: open it to '
+              'adjust Crop and position.',
+              key: const ValueKey('export-copy-made'),
+              style: const TextStyle(fontSize: 12)),
+        ),
+      if (_copyNote != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(_copyNote!, style: const TextStyle(fontSize: 12)),
+        ),
+      const Divider(height: 24),
+      if (!n.isEmpty) ...[
+        if ((short ? n.titleForShort : n.title).isNotEmpty)
+          copyRow('title', 'Title', short ? n.titleForShort : n.title),
+        if (pasteText(_project, shortForm: short).isNotEmpty)
+          copyRow('description', 'Description',
+              pasteText(_project, shortForm: short)),
+      ] else if (credits.isNotEmpty)
+        copyRow('description', 'Music credits', 'Music: $credits')
+      else
+        const Text('No title or description for posting yet.', style: dim),
+      const SizedBox(height: 6),
+      Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          if (publish != null && publish.canShare && _outputPath != null)
+            FilledButton.icon(
+              key: const ValueKey('export-share'),
+              onPressed: _share,
+              icon: const Icon(Icons.share, size: 18),
+              label: const Text('Share'),
+            ),
+          if (!n.isEmpty || credits.isNotEmpty)
+            OutlinedButton.icon(
+              key: const ValueKey('export-copy-notes'),
+              onPressed: () => _copy(
+                  'all', titleAndDescription(_project, shortForm: short)),
+              icon: Icon(_copiedWhat == 'all' ? Icons.check : Icons.copy_all,
+                  size: 18),
+              label: const Text('Copy title and description'),
+            ),
+          OutlinedButton.icon(
+            key: const ValueKey('export-notes'),
+            onPressed: _openNotes,
+            icon: const Icon(Icons.notes, size: 18),
+            label: Text(n.isEmpty ? 'Write publishing notes…' : 'Publishing notes…'),
+          ),
+          if (publish != null && desktop && _outputPath != null)
+            OutlinedButton.icon(
+              key: const ValueKey('export-show-folder'),
+              onPressed: () => publish
+                  .showInFolder(_kitFiles.isNotEmpty
+                      ? _kitFiles.first.path
+                      : _outputPath!)
+                  .catchError((Object _) {}),
+              icon: const Icon(Icons.folder_open, size: 18),
+              label: const Text('Show in folder'),
+            ),
+        ],
+      ),
+      if (publish != null && publish.canShare)
+        const Padding(
+          padding: EdgeInsets.only(top: 4),
+          child: Text(
+              'Many apps ignore text that is shared with a video: copy the '
+              'title and description, then paste them there.',
+              style: dim),
+        ),
+      if (publish != null && desktop && uploads.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        const Text(
+            'Upload it yourself on the site (opens in your browser; '
+            'ClipForge does not sign in or post):',
+            style: dim),
+        Wrap(
+          spacing: 4,
+          children: [
+            for (final u in uploads)
+              TextButton.icon(
+                key: ValueKey('export-upload-${u.label.toLowerCase()}'),
+                onPressed: () =>
+                    publish.openUrl(u.url).catchError((Object _) {}),
+                icon: const Icon(Icons.open_in_new, size: 16),
+                label: Text('Open ${u.label} upload page'),
+              ),
+          ],
+        ),
+      ],
+    ];
   }
 
   Widget _failed(BuildContext context) {

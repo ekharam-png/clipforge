@@ -1,0 +1,21 @@
+{
+  "numStartups": 41,
+  "mcpServers": {
+    "notes": {"type": "stdio", "command": "npx", "args": ["-y", "@example/notes-mcp"]},
+    "clipforge": {"type": "stdio", "command": "D:\\Apps\\ClipForge-1.11.0\\clipforge-mcp.exe", "args": [], "env": {}}
+  },
+  "projects": {
+    "C:/Users/sam/videos": {
+      "allowedTools": [],
+      "mcpServers": {
+        "clipforge": {"type": "stdio", "command": "C:\\old\\ClipForge\\clipforge-mcp.exe", "args": []}
+      }
+    },
+    "C:/Users/sam/code/site": {
+      "mcpServers": {
+        "clipforge": {"type": "stdio", "command": "node", "args": ["my-own-clipforge-tool.js"]}
+      }
+    },
+    "C:/Users/sam/other": {"mcpServers": {}}
+  }
+}

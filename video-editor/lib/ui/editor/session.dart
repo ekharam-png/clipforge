@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/editor/editor_controller.dart';
 import '../../core/model/project.dart';
+import '../../core/storage/project_store.dart';
 import '../../media/media_api.dart';
 import '../../media/processed_sound_cache.dart';
 import '../../media/speech_map.dart';
@@ -10,6 +11,7 @@ import '../playback/playback_controller.dart';
 import '../playback/timeline_player.dart';
 import '../gallery_search.dart';
 import '../music_search.dart';
+import '../publish_service.dart';
 import '../services.dart';
 import '../speech/speech_service.dart';
 import 'sound_pictures.dart';
@@ -144,6 +146,8 @@ class EditorSession {
     this.music = const NoMusicSearch(),
     this.speech,
     SoundPictures? pictures,
+    this.store,
+    this.publish,
   }) : sounds = SoundRenders(
           engine: engine,
           cache: soundCache,
@@ -184,6 +188,25 @@ class EditorSession {
 
   /// "Add music" > "Find free music" (Openverse).
   final MusicSearch music;
+
+  /// The project list (1.14: shorts and shape copies are new projects in
+  /// it). Null when there is none to add to.
+  final ProjectStore? store;
+
+  /// The kit folder, share sheet and upload pages (1.14).
+  final PublishService? publish;
+
+  /// Set by the editor screen: writes the project to disk now, and opens
+  /// another project in place of this one.
+  Future<void> Function()? saveNow;
+  Future<void> Function(String projectId)? openProject;
+
+  /// Who speaks when, as turns (for chapters of a project without titles
+  /// or captions).
+  List<({String name, int startMs, int endMs})> get speakerTurnsNow => [
+        for (final t in speakerTurns(pictures.speakers))
+          (name: t.name, startMs: t.startMs, endMs: t.endMs),
+      ];
 
   /// Speech-to-text (1.11). Null on phones: nothing about speech is shown.
   final SpeechService? speech;

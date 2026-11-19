@@ -1,0 +1,12 @@
+{
+  "globalShortcut": "Ctrl+Space",
+  "mcpServers": {
+    "notes": {
+      "command": "npx",
+      "args": ["-y", "@example/notes-mcp"],
+      "env": { "NOTES_DIR": "C:\\Users\\sam\\Notes" }
+    },
+    "weather": { "command": "weather-mcp.exe" }
+  },
+  "preferences": { "sidebar": true, "zoom": 1.25 }
+}

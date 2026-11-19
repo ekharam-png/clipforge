@@ -51,6 +51,10 @@ void main() {
         'remove_fillers', 'list_auto_cuts', 'restore_cut', 'make_short',
         // 1.13: captions as text, find and replace, who speaks.
         'get_captions', 'replace_in_captions', 'get_speech_map',
+        // 1.14: shorts, publishing notes, kits, markers.
+        'suggest_shorts', 'get_publishing_notes', 'set_publishing_notes',
+        'make_chapters', 'export_kit', 'add_marker', 'list_markers',
+        'remove_marker',
         'get_guide', 'self_test',
       ]);
       for (final t in tools) {

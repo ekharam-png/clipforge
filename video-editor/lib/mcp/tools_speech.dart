@@ -352,7 +352,10 @@ extension _SpeechTools on ClipForgeTools {
               'captions are made from the transcript when the part has '
               'none. Returns the new project_id - export it with '
               'export_video. Use get_transcript / find_in_transcript to '
-              'choose from_ms and to_ms at sentence starts and ends.',
+              'choose from_ms and to_ms at sentence starts and ends '
+              '(suggest_shorts lists candidates). The answer WARNS when '
+              'the short is longer than is safe for Shorts / Reels / '
+              'TikTok or starts or ends in the middle of a sentence.',
           properties: {
             'project_id': _projectId,
             'from_ms': _int('Start on the timeline, in ms.', min: 0),
@@ -363,6 +366,15 @@ extension _SpeechTools on ClipForgeTools {
                 values: kAspectNames.keys.toList()),
             'captions': _bool('Add captions from the transcript. Default '
                 'true.'),
+            'caption_style': _str('"short": the look made for shorts '
+                '(bigger, centred in the lower middle, outlined, at most '
+                'two lines; captions the part already has get it too). '
+                'Default "standard".', values: const ['standard', 'short']),
+            'title': _str('A title shown at the top for the whole short '
+                '(a few words: the hook).'),
+            'snap_to_speech': _bool('true: move from_ms and to_ms outward '
+                'to the nearest pause in the talk (never into a word), so '
+                'the short does not start or end mid-word. Default false.'),
           },
           required: const ['project_id', 'from_ms', 'to_ms'],
           handler: _makeShort,
@@ -1271,7 +1283,7 @@ extension _SpeechTools on ClipForgeTools {
 
   Future<ToolResult> _makeShort(Map<String, dynamic> a, ToolCall call) async {
     final source = await _load(a['project_id']);
-    final from = ClipForgeTools._i(a, 'from_ms')!, to = ClipForgeTools._i(a, 'to_ms')!;
+    var from = ClipForgeTools._i(a, 'from_ms')!, to = ClipForgeTools._i(a, 'to_ms')!;
     final total = source.project.durationMs;
     if (from < 0 || to > total + 50 || to - from < 1000) {
       throw ToolError('from_ms..to_ms must be a part of the video of at '
@@ -1281,6 +1293,40 @@ extension _SpeechTools on ClipForgeTools {
     if (shape == null) {
       throw ToolError('Unknown shape "${a['shape']}". Shapes: '
           '${kAspectNames.keys.join(', ')}.');
+    }
+    final shortStyle = a['caption_style'] == 'short';
+    final warnings = <String>[];
+    final notes = <String>[];
+    // What is said in the long video: for snapping and the warnings.
+    final spoken = await _spokenOf(source);
+    if (a['snap_to_speech'] == true) {
+      final pauses = await _pausesOf(source.project, spoken.items);
+      final snapped = snapShortRange(from, to,
+          pauses: pauses.pauses,
+          words: [
+            for (final s in spoken.items) (startMs: s.startMs, endMs: s.endMs),
+          ],
+          totalMs: total);
+      if (snapped.movedStart || snapped.movedEnd) {
+        notes.add('Moved outward to the pauses '
+            '(${pauses.fromSound ? 'from the sound' : 'between the ${spoken.source == 'transcript' ? 'words' : 'captions'}'}): '
+            '$from-$to became ${snapped.fromMs}-${snapped.toMs}.');
+        from = snapped.fromMs;
+        to = snapped.toMs;
+      } else {
+        notes.add('The start and end already were in pauses.');
+      }
+    }
+    if (spoken.items.any((s) => endsSentence(s.text))) {
+      if (startsMidSentence(spoken.items, from)) {
+        warnings.add('The short starts in the middle of a sentence '
+            '(${_mss(from)}): move from_ms to where the sentence begins '
+            '(get_transcript / suggest_shorts give the times).');
+      }
+      if (endsMidSentence(spoken.items, to)) {
+        warnings.add('The short ends before its last sentence is finished '
+            '(${_mss(to)}): move to_ms to the end of the sentence.');
+      }
     }
     final given = (a['name'] as String?)?.trim() ?? '';
     final name = given.isNotEmpty
@@ -1293,43 +1339,52 @@ extension _SpeechTools on ClipForgeTools {
       throw ToolError('The project could not be copied: ${e.message}');
     }
     final copyDir = p.join(store.rootPath, copy.id);
-    final e = ProjectEditor(copy, newId: _newId);
-    if (!keepTimelineRange(e, from, to)) {
+    // A short starts without the long video's notes and markers.
+    final e = ProjectEditor(
+        copy.copyWith(publishing: PublishingNotes.empty, markers: const []),
+        newId: _newId);
+    final speechOf = await _speechOf(_Loaded(
+        copy, File(p.join(copyDir, FileProjectStore.projectFileName)), ''));
+    final transcribed = speechOf.cover.sources.isNotEmpty && !speechOf.cover.none;
+    final language = transcribed ? _languageOf(speechOf) : '';
+    final built = buildShort(e,
+        fromMs: from,
+        toMs: to,
+        shape: shape,
+        captions: a['captions'] != false,
+        shortCaptions: shortStyle,
+        title: (a['title'] as String?) ?? '',
+        words: (short) =>
+            transcribed ? timelineWords(short, speechOf.lookup) : null,
+        skipWord: transcribed ? isFillerSound(fillersFor(language)) : null,
+        newId: _newId);
+    if (!built.ok) {
       throw ToolError('That part holds no video; nothing was kept. (An '
           'empty project "$name" was left: project_id ${copy.id}.)');
     }
-    e.setAspect(shape);
-    e.setVideoSize(VideoSize.p1080);
-    final notes = <String>[];
-    var captionCount = 0;
-    if (a['captions'] != false) {
-      final had = captionsInRange(e.project);
-      if (had.isNotEmpty) {
-        notes.add('The part already had ${had.length} caption(s); they were '
-            'kept and no new ones were made.');
-      } else {
-        final speechOf = await _speechOf(
-            _Loaded(e.project, File(p.join(copyDir, FileProjectStore.projectFileName)), ''));
-        if (speechOf.cover.sources.isEmpty || speechOf.cover.none) {
-          notes.add('No captions were added: this part is not transcribed '
-              '(call transcribe on the original first, then '
-              'captions_from_transcript on the short).');
-        } else {
-          final template = captionTemplate(e.project);
-          final language = _languageOf(speechOf);
-          final cues = buildCaptions(timelineWords(e.project, speechOf.lookup),
-              skip: isFillerSound(fillersFor(language)),
-              lineFits: captionLineFits(e.project, template));
-          if (cues.isEmpty) {
-            notes.add('No captions were added: nothing is said in this part.');
-          } else {
-            addSpeechCaptions(e, captionTitles(cues, template, newId: _newId));
-            captionCount = cues.length;
-          }
-        }
-      }
+    if (built.captionsKept > 0) {
+      notes.add('The part already had ${built.captionsKept} caption(s); '
+          'they were kept and no new ones were made.');
+    } else if (built.notTranscribed) {
+      notes.add('No captions were added: this part is not transcribed '
+          '(call transcribe on the original first, then '
+          'captions_from_transcript on the short).');
+    } else if (built.nothingSaid) {
+      notes.add('No captions were added: nothing is said in this part.');
     }
+    if (shortStyle && built.captionsAfter > 0) {
+      notes.add('The captions have the "Short" look (bigger, lower middle, '
+          'outlined, at most two lines'
+          '${built.captionsAfter != built.captionsKept + built.captionsFromSpeech ? '; long ones were divided: ${built.captionsAfter} now' : ''}).');
+    }
+    if (built.titleAdded) notes.add('The title is at the top for the whole short.');
     final result = e.project;
+    if (result.durationMs > kShortMaxSeconds * 1000 + 500) {
+      warnings.add('The short is ${_mss(result.durationMs)} long: more than '
+          'the $kShortMaxSeconds s that is safe on Shorts, Reels and TikTok '
+          '(each site has its own limit and changes it; check the site, or '
+          'make it shorter).');
+    }
     try {
       await store.save(result);
       recordClaudeEdit(
@@ -1341,17 +1396,20 @@ extension _SpeechTools on ClipForgeTools {
       throw ToolError('The short could not be saved: ${err.message}');
     }
     final size = result.canvasSize;
+    final captionCount = built.captionsFromSpeech;
     return _projectResult(
         'Made the short "${result.name}" (project_id ${result.id}) from '
         '${_mss(from)}-${_mss(to)} of "${source.project.name}": '
         '${_mss(result.durationMs)} long, ${aspectName(result.aspect)}, '
         '${size.width}x${size.height}'
         '${captionCount > 0 ? ', $captionCount captions from the speech' : ''}. '
-        'The original is unchanged. Export it with export_video.'
+        'The original is unchanged. Export it with export_video or '
+        'export_kit ("shorts").'
         '${ClipForgeTools._numbered(result.name, name, name)}'
         '${notes.isEmpty ? '' : ' ${notes.join(' ')}'}',
         result,
         detail: a['detail'] as String?,
+        warnings: warnings,
         extra: {
           'changed': true,
           'newProjectId': result.id,
@@ -1359,6 +1417,8 @@ extension _SpeechTools on ClipForgeTools {
           'fromMs': from,
           'toMs': to,
           'captionCount': captionCount,
+          if (shortStyle) 'captionStyle': 'short',
+          if (built.titleAdded) 'title': (a['title'] as String).trim(),
         },
         maxTitles: kSummaryTitles);
   }

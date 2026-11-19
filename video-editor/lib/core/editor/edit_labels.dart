@@ -36,8 +36,68 @@ String describeEdit(Project before, Project after) {
         ? 'Lower music under speech on'
         : 'Lower music under speech off';
   }
+  final notes = publishingChange(before.publishing, after.publishing);
+  if (notes != null) return notes;
+  final markers = _describeMarkers(before.markers, after.markers);
+  if (markers != null) return markers;
   if (before.name != after.name) return 'Renamed project';
   return 'Edit';
+}
+
+/// What changed in the publishing notes ("Publishing title", "Chapters
+/// (6)", ...), or null.
+String? publishingChange(PublishingNotes a, PublishingNotes b) {
+  if (a == b) return null;
+  final what = <String>[
+    if (a.title != b.title) 'Publishing title',
+    if (a.description != b.description) 'Publishing description',
+    if (a.hashtagLine != b.hashtagLine) 'Hashtags',
+    if (a.shortTitle != b.shortTitle) 'Short title',
+    if (a.shortDescription != b.shortDescription) 'Short description',
+  ];
+  var chapters = false;
+  if (a.chapters.length != b.chapters.length) {
+    chapters = true;
+  } else {
+    for (var i = 0; i < a.chapters.length; i++) {
+      if (a.chapters[i] != b.chapters[i]) chapters = true;
+    }
+  }
+  if (chapters) {
+    what.add(b.chapters.isEmpty
+        ? 'Removed chapters'
+        : 'Chapters (${b.chapters.length})');
+  }
+  if (what.length == 1) return what.single;
+  return 'Publishing notes';
+}
+
+String _markerTime(int ms) {
+  final s = ms ~/ 1000;
+  return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
+}
+
+String? _describeMarkers(List<Marker> before, List<Marker> after) {
+  if (identical(before, after)) return null;
+  final old = {for (final m in before) m.id: m};
+  final now = {for (final m in after) m.id: m};
+  final added = [for (final m in after) if (!old.containsKey(m.id)) m];
+  final removed = [for (final m in before) if (!now.containsKey(m.id)) m];
+  if (added.length == 1 && removed.isEmpty) {
+    return 'Marked a good moment at ${_markerTime(added.single.ms)}';
+  }
+  if (added.length > 1) return 'Added ${added.length} markers';
+  if (removed.length == 1) {
+    return 'Removed marker at ${_markerTime(removed.single.ms)}';
+  }
+  if (removed.length > 1) return 'Removed ${removed.length} markers';
+  for (final m in after) {
+    final o = old[m.id];
+    if (o == null) continue;
+    if (o.label != m.label) return 'Renamed marker';
+    if (o.ms != m.ms) return 'Moved marker';
+  }
+  return null;
 }
 
 /// "9:16", "Original", ...

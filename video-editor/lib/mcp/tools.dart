@@ -11,11 +11,14 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../core/build_info.dart';
-import '../core/editor/edit_labels.dart' show describeEdit;
+import '../core/editor/edit_labels.dart' show describeEdit, publishingChange;
 import '../core/editor/project_editor.dart';
 import '../core/model/picture_layout.dart';
 import '../core/model/project.dart';
 import '../core/model/title_layout.dart';
+import '../core/music/openverse.dart' show creditsText;
+import '../core/publish/chapters.dart';
+import '../core/publish/shorts.dart';
 import '../core/storage/project_lock.dart';
 import '../core/storage/project_store.dart';
 import '../core/subtitles/srt.dart';
@@ -28,6 +31,8 @@ import '../core/transcript/transcript_store.dart';
 import '../core/transcript/transcript_timeline.dart';
 import '../core/editor/sound_tracks.dart' show VoiceProblem;
 import '../media/clip_silences.dart';
+import '../media/destinations.dart';
+import '../media/export_kit.dart';
 import '../media/jump_check.dart';
 import '../media/media_api.dart';
 import '../media/sound_align.dart';
@@ -44,6 +49,7 @@ import 'report.dart';
 import 'summary.dart';
 import 'transcribe_jobs.dart';
 
+part 'tools_publish.dart';
 part 'tools_selftest.dart';
 part 'tools_speech.dart';
 part 'tools_text.dart';
@@ -133,7 +139,13 @@ const String kServerInstructions =
     'get_transcript reads it (compact; page long talks), find_in_transcript '
     'finds a phrase, captions_from_transcript makes captions, '
     'remove_fillers cuts "um" / "uh" (dry_run is true by default) and '
-    'make_short turns a part of the timeline into a new upright project. '
+    'make_short turns a part of the timeline into a new upright project '
+    '(caption_style "short", title, snap_to_speech). suggest_shorts lists '
+    'candidate passages for you to judge; set_publishing_notes / '
+    'make_chapters keep the title, description, hashtags and chapters; '
+    'export_kit makes the files for YouTube, Shorts, WhatsApp, a podcast '
+    'in one folder with a text file to paste from (ClipForge never '
+    'uploads anything). '
     'get_captions reads the captions on the timeline (whatever made them) '
     'as compact text; replace_in_captions fixes a word in all of them '
     '(dry run by default). get_speech_map says who talks when from the '
@@ -2681,6 +2693,7 @@ class ClipForgeTools {
     ),
     ..._speechToolDefs,
     ..._textToolDefs,
+    ..._publishToolDefs,
     ..._selfToolDefs,
   ];
 
@@ -4536,6 +4549,7 @@ class ClipForgeTools {
 
   ToolResult _jobResult(JobView v, {bool started = false}) {
     final r = v.record;
+    if (r.format == kKitFormat) return _kitResult(v, started: started);
     final res = r.result ?? const <String, dynamic>{};
     final percent = (r.progress * 100).floor();
     final notes = r.notes.isEmpty ? '' : '\n${r.notes.map((n) => '- $n').join('\n')}';

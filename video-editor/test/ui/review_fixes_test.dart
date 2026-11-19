@@ -342,6 +342,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('high frame rate'), findsOneWidget);
       expect(find.textContaining('Length 18.0 s.'), findsOneWidget);
+      await tester.ensureVisible(find.text('60'));
       await tester.tap(find.text('60'));
       await tester.pumpAndSettle();
       await fakes.screenshot(tester, 'export_60fps_$label');
