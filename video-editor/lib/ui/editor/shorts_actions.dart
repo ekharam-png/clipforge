@@ -470,7 +470,8 @@ Future<void> makeShortFromHere(BuildContext context, EditorSession s) {
       lengths: kShortLengths);
 }
 
-/// Drops a "good moment" marker at the playhead (M; phones: More).
+/// Drops a "good moment" marker at the playhead (M; Add > Good moment
+/// marker; phones: the Add sheet).
 void markGoodMoment(BuildContext context, EditorSession s) {
   if (s.project.clips.isEmpty) return;
   final at = s.playback.positionMs;
@@ -523,8 +524,8 @@ Future<void> showGoodMoments(BuildContext context, EditorSession s) {
               width: double.maxFinite,
               child: markers.isEmpty
                   ? const Text(
-                      'No markers yet. While you watch, press M (or More > '
-                      'Mark a good moment on a phone) whenever something '
+                      'No markers yet. While you watch, press M (on a phone: Add, '
+                      'then Good moment marker) whenever something '
                       'good happens. Then come back here to make a short '
                       'around each one.',
                       key: ValueKey('markers-empty'))

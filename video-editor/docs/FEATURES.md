@@ -8,7 +8,7 @@ every release: a test fails when CHANGELOG.md has a version this file does
 not mention.
 
 Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
-1.8.0, 1.9.0, 1.10.0, 1.11.0, 1.12.0, 1.13.0, 1.14.0.
+1.8.0, 1.9.0, 1.10.0, 1.11.0, 1.12.0, 1.13.0, 1.14.0, 1.14.1, 1.15.0.
 
 ## Projects
 
@@ -31,6 +31,31 @@ Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
 | Find file: Search the gallery (Android) | 1.8.0 | Looks for a missing file by its name on the phone and copies it in. |
 | Clean-up never deletes what is in use | 1.8.0 | Files the open project or its undo history still needs are always kept. |
 | "Open in the app" mark | 1.9.0 | An open project is marked, so Claude does not change it at the same time; leftovers of a crash are ignored and cleaned up. |
+
+## Finding things (1.15.0)
+
+No new editing feature: the same commands, sorted so that they can be found. Every keyboard shortcut of 1.14.1 still works.
+
+| Feature | Since | Where | What it does |
+|---|---|---|---|
+| Menus by task | 1.15.0 | Computer | File, Edit, Add, Clip, Sound, Text and speech, View, Playback, Help. One tree for the macOS menu bar and the bar in the window on Windows and Linux. The full tree is in the README ("Where everything is") and in the "menus" help article. |
+| Greyed-out items say why | 1.15.0 | Both | An item that cannot be used stays in place and its label (menus, context menu) or second line (phone sheets) or tooltip (panel buttons) gives the reason: "Fit music to video (select a music clip)". One source for menus, side panel, phone and context menu. |
+| Timeline context menu | 1.15.0 | Both | Right-click (computer) or hold (phone) a clip, sound, title or caption, overlay, marker or an empty place: the actions of that item. Holding and dragging a clip still moves it. |
+| Settings page | 1.15.0 | Both | One page: Editing (Snap to playhead and edges, Show sound waves, Smooth preview on phones), Text window position (computers), Export (Use graphics card, remembered), Suggestions, Updates (Check for updates automatically, Check now, version), Claude (computers), About (About, Copy version info, What's new, Licences). File > Settings… / Ctrl+comma; phones: the three dots on the project list and in a project. The View menu and the Export window use the same switches. |
+| Snapping can be turned off on a phone | 1.15.0 | Phone | Settings > Snap to playhead and edges (before: computers only). |
+| Use graphics card is remembered | 1.15.0 | Both | The switch in the Export window is a setting now. |
+| Suggestions | 1.15.0 | Both | One quiet line with a button, a cross and "Don't show again": music longer or shorter than the video (Fit to video), a voice added as music (Line up with the picture), a small first clip with "Same as the first clip" (Use 1080p), a clip of another shape (Fill / Blur / Crop…), a long clip with pauses (Remove silences…), music over speech (Lower the music), captions and the Text window never opened (Open Text), speech and no captions on a computer (Captions from speech…), the first voice track (See who is speaking). One at a time by priority, never during playback or under a dialog. Computer: a thin bar under the top bar; phone: a line above the tools that can be swiped away. |
+| Notes in the Export window | 1.15.0 | Both | One line when an upright video is longer than a short (60 s), and one line about the graphics card on the first export. Not questions. |
+| "Updated to X · What's new" | 1.15.0 | Both | A quiet line on the project list after the app became a newer version, with What's new one tap away; also Help > What's new. |
+| Lower music under speech: one truth | 1.15.0 | Both | The per-track switches are what the export uses; the project-level switch (side panel, Sound menu, context menu) shows all / some / none of the tracks that are not speech and sets them all. |
+| Phone: Add, Text, Split, More | 1.15.0 | Phone | The bottom bar with nothing selected. Add opens ONE sheet with everything addable (videos or photos, music or sound, voice recording, title, caption, overlay, good moment marker), each with a line of explanation. |
+| Phone: More grouped like the menus | 1.15.0 | Phone | Clip / Edit / Sound / Text, with "Trim start to here" and "Trim end to here" (the I and O keys' actions). |
+| Phone: one project menu | 1.15.0 | Phone | The three dots at the top of a project: Shape and size, Fade in and out, Publishing notes, Text, History, Markers, Settings, Help. |
+| Computer layout from 840 dp | 1.15.0 | Tablet, phone held sideways | The side-panel layout instead of the phone bars. |
+| Touch targets | 1.15.0 | Phone | Tool-bar and top-bar buttons at least 48 dp; a tool bar that has to scroll shows it. |
+| What moved | 1.15.0 | Both | Shown once after updating from an older version: the biggest moves, "Show me Settings", What's new. |
+| The same words everywhere | 1.15.0 | Both | Captions (on screen) vs subtitle file (.srt); Text (the window); Same as the first clip; Pause (K); Go to start; Crop and position; Move earlier / later; Check for updates automatically; sound, not audio. A test keeps them. |
+| Three downloads | 1.15.0 | Release | Windows installer, Mac zip, Android APK. The guide is part of the install; no 32-bit Android APK; no separate read-me, .mcpb or skill files in a release. |
 
 ## Publishing kit and shorts (1.14.0)
 

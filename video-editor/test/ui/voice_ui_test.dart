@@ -13,6 +13,7 @@ import 'package:clipforge/ui/editor/editor_screen.dart';
 import 'package:clipforge/ui/editor/preview_view.dart';
 import 'package:clipforge/ui/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -83,13 +84,7 @@ Future<void> afterMessage(WidgetTester tester) async {
 
 /// Music button > the picker's files.
 Future<void> pickSound(WidgetTester tester) async {
-  // On a phone the tools of a selected sound are in the way: Done first.
-  if (find.byIcon(Icons.library_music_outlined).evaluate().isEmpty) {
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
-  }
-  await tester.tap(find.widgetWithIcon(InkWell, Icons.library_music_outlined).first);
-  await tester.pumpAndSettle();
+  await tapAdd(tester, 'Music');
 }
 
 bool selectedRole(WidgetTester tester, String role) {
@@ -507,7 +502,7 @@ void main() {
     await afterMessage(tester);
   });
 
-  testWidgets('Edit > Sound has the voice items (Windows menu bar)',
+  testWidgets('Add and Sound have the voice items (Windows menu bar)',
       (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     try {
@@ -519,19 +514,23 @@ void main() {
     await tester.pumpAndSettle();
     MenuItemButton item(String key) =>
         tester.widget<MenuItemButton>(find.byKey(ValueKey(key)));
-    Future<void> openSound() async {
-      await tester.tap(find.widgetWithText(SubmenuButton, 'Edit'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(SubmenuButton, 'Sound').first);
+    Future<void> openMenu(String menu) async {
+      await tester.tap(find.widgetWithText(SubmenuButton, menu));
       await tester.pumpAndSettle();
     }
 
+    Future<void> openSound() => openMenu('Sound');
+
     await openSound();
-    expect(find.text('Add voice recording…'), findsOneWidget);
-    expect(find.text('Line up with the video'), findsOneWidget);
-    expect(item('menu-add-voice').onPressed, isNotNull);
-    // Nothing selected: nothing to line up.
+    // Greyed out, and it says why.
+    expect(find.text('Line up voice with video (select a sound)'),
+        findsOneWidget);
     expect(item('menu-line-up-voice').onPressed, isNull);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    await openMenu('Add');
+    expect(find.text('Voice recording…'), findsOneWidget);
+    expect(item('menu-add-voice').onPressed, isNotNull);
     // The picker has nothing: no question.
     await tester.tap(find.byKey(const ValueKey('menu-add-voice')));
     await tester.pumpAndSettle();

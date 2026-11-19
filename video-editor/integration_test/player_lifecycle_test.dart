@@ -20,6 +20,7 @@ import 'dart:ui' show AppExitResponse;
 import 'package:clipforge/core/model/project.dart';
 import 'package:clipforge/core/storage/project_store.dart';
 import 'package:clipforge/ui/app.dart';
+import 'package:clipforge/core/build_info.dart';
 import 'package:clipforge/ui/app_prefs.dart';
 import 'package:clipforge/ui/editor/preview_view.dart';
 import 'package:clipforge/ui/editor/session.dart';
@@ -159,7 +160,9 @@ void main() {
         fileServiceProvider.overrideWithValue(NoFiles()),
         playerBackendProvider.overrideWithValue(backend),
         // The first-launch tour question counts as answered.
-        appPrefsProvider.overrideWithValue(MemoryAppPrefs(answered: true)),
+        // (and no 1.15 notes or suggestions: this run is about players).
+        appPrefsProvider.overrideWithValue(
+            MemoryAppPrefs.settled(BuildInfo.current.version)),
       ],
       child: const ClipForgeApp(),
     ));

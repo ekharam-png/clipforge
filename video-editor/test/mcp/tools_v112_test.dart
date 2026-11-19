@@ -241,7 +241,6 @@ void main() {
       'ClipForge-windows.zip': List.filled(1234, 1),
       'ClipForge-macos.zip': List.filled(99, 2),
       'ClipForge-android.apk': List.filled(4321, 3),
-      'ClipForge-android-old-32bit-phones.apk': List.filled(7, 4),
     };
     for (final e in files.entries) {
       File(p.join(tmp.path, e.key)).writeAsBytesSync(e.value);
@@ -260,12 +259,11 @@ void main() {
       'https://github.com/example/clipforge/releases/tag/v1.12.0',
     ]);
     final info = UpdateInfo.parse(text);
-    expect(info.platforms.keys, ['windows', 'macos', 'android', 'android32']);
+    expect(info.platforms.keys, ['windows', 'macos', 'android']);
     for (final (key, name) in const [
       ('windows', 'ClipForge-windows.zip'),
       ('macos', 'ClipForge-macos.zip'),
       ('android', 'ClipForge-android.apk'),
-      ('android32', 'ClipForge-android-old-32bit-phones.apk'),
     ]) {
       final a = info.platforms[key]!;
       expect(a.url, 'https://github.com/example/clipforge/releases/download/v1.12.0/$name');

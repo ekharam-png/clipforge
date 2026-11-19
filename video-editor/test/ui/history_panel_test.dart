@@ -112,10 +112,8 @@ void main() {
     final s = sessionOf(tester);
     await edit(tester, s);
     expect(find.byTooltip('History'), findsNothing, reason: 'no room up top');
-    await tester.tap(find.text('More'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('more-history')));
-    await tester.pumpAndSettle();
+    // The project menu has it (and so does More, under Edit).
+    await tapProjectMenu(tester, 'History');
     expect(find.byKey(const ValueKey('history-sheet')), findsOneWidget);
     expect(find.text('Speed 1.25× on clip 1'), findsOneWidget);
     await fakes.screenshot(tester, 'editor_phone_history');

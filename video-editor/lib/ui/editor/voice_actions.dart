@@ -582,7 +582,7 @@ Future<List<String>> _addVoices(BuildContext context, EditorSession s,
   return problems;
 }
 
-/// Edit > Sound > "Add voice recording…": picks sound files and adds them
+/// Add > "Voice recording…": picks sound files and adds them
 /// as the voice for the video (the question opens with Voice chosen).
 Future<void> addVoiceRecording(BuildContext context, EditorSession s) async {
   s.playback.pause();

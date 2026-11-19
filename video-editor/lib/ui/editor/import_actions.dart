@@ -311,7 +311,7 @@ Future<void> _importSubtitlesFrom(
   }
   if (!context.mounted) return;
   if (captions.isEmpty) {
-    _say(context, 'No subtitles were found in that file.');
+    _say(context, 'No captions were found in that file.');
     return;
   }
   session.editor.addTitles(captions);
@@ -333,9 +333,9 @@ Future<void> exportSubtitles(BuildContext context, EditorSession session) async 
   try {
     final where = await session.documents
         .saveText('${safeFileName(session.project.name)}.srt', text);
-    if (where != null && context.mounted) _say(context, 'Subtitles saved: $where');
+    if (where != null && context.mounted) _say(context, 'Subtitle file saved: $where');
   } catch (e) {
-    if (context.mounted) _say(context, 'The subtitles could not be saved ($e)');
+    if (context.mounted) _say(context, 'The subtitle file could not be saved ($e)');
   }
 }
 
@@ -421,7 +421,7 @@ class _CaptionsDialogState extends State<_CaptionsDialog> {
                 TextButton.icon(
                   onPressed: () => _file(importSubtitles),
                   icon: const Icon(Icons.file_open_outlined, size: 18),
-                  label: const Text('Import subtitles (.srt)'),
+                  label: const Text('Add a subtitle file (.srt)'),
                 ),
                 if (hasCaptions(s.project))
                   TextButton.icon(

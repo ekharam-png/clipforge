@@ -7,6 +7,8 @@ import 'claude/claude_helper.dart';
 import 'claude/connect_claude.dart';
 import 'help/help_screen.dart';
 import 'help/tour.dart';
+import 'help/whats_new.dart' show kWhatsNewId;
+import 'settings/settings_screen.dart';
 import 'home/home_screen.dart';
 import 'theme.dart';
 import 'update/update_controller.dart';
@@ -36,35 +38,38 @@ class ClipForgeApp extends ConsumerWidget {
       navigatorKey: appNavigatorKey,
       home: const HomeScreen(),
       // The app's menu bar: macOS in the system's bar; Windows and Linux
-      // along the top of the window (File, Edit, Playback, Help).
+      // along the top of the window (see app_menu.dart for the tree).
       // Everywhere: the guided tour draws over every screen.
-      // The Help menu shows whether the automatic update check is on.
       builder: (context, child) => ListenableBuilder(
         listenable: updates,
         child: TourOverlayHost(child: child!),
         builder: (context, child) => AppMenuBar(
         help: HelpMenuActions(
           checkForUpdates: () => withNavigator(checkForUpdatesNow),
-          autoUpdateCheck: updates.autoCheck,
-          toggleAutoUpdateCheck: () => updates.setAutoCheck(!updates.autoCheck),
           connectClaude: claude.supported
               ? () => withNavigator((c) {
                     openConnectClaude(c);
                   })
               : null,
-          openHelp: () {
-            final navigator = appNavigatorKey.currentState;
-            if (navigator != null) openHelp(navigator.context);
-          },
+          openHelp: () => withNavigator((c) {
+            openHelp(c);
+          }),
           showTour: tour.requestStart,
-          showAbout: () {
-            final navigator = appNavigatorKey.currentState;
-            if (navigator != null) showAboutClipForge(navigator.context);
-          },
-          copyVersionInfo: () {
-            final navigator = appNavigatorKey.currentState;
-            if (navigator != null) copyVersionInfo(navigator.context);
-          },
+          showAbout: () => withNavigator((c) {
+            showAboutClipForge(c);
+          }),
+          copyVersionInfo: () => withNavigator((c) {
+            copyVersionInfo(c);
+          }),
+          showWhatsNew: () => withNavigator((c) {
+            openHelp(c, articleId: kWhatsNewId);
+          }),
+          showShortcuts: () => withNavigator((c) {
+            showHelpArticle(c, 'keyboard-shortcuts');
+          }),
+          openSettings: () => withNavigator((c) {
+            openSettings(c);
+          }),
         ),
         child: child!,
       ),

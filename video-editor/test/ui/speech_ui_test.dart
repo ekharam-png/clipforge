@@ -115,22 +115,20 @@ void main() {
     });
   }
 
-  testWidgets('the Edit menu has Speech only with a speech service',
+  testWidgets('the Text and speech menu has the speech items only with a speech service',
       (tester) async {
     await onWindows(() async {
       await open(tester, desktop, menuBar: true);
-      await tester.tap(find.widgetWithText(SubmenuButton, 'Edit'));
+      await tester.tap(find.widgetWithText(SubmenuButton, 'Text and speech'));
       await tester.pumpAndSettle();
-      expect(find.text('Sound'), findsWidgets);
-      expect(find.text('Speech'), findsNothing);
+      expect(find.text('Text window'), findsOneWidget);
+      expect(find.textContaining('Transcribe speech'), findsNothing);
       await tester.tapAt(const Offset(900, 500));
       await tester.pumpAndSettle();
 
       final speech = FakeSpeech(backend: FakeSpeech.whisperCpp, packs: {'base'});
       await open(tester, desktop, speech: speech, menuBar: true);
-      await tester.tap(find.widgetWithText(SubmenuButton, 'Edit'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(SubmenuButton, 'Speech').first);
+      await tester.tap(find.widgetWithText(SubmenuButton, 'Text and speech'));
       await tester.pumpAndSettle();
       expect(find.text('Transcribe speech…'), findsOneWidget);
       expect(find.text('Captions from speech…'), findsOneWidget);
@@ -546,7 +544,7 @@ void main() {
     final speech = FakeSpeech(backend: FakeSpeech.whisperCpp, packs: {'base'})
       ..stored['$talkPath|0'] = spokenTranscript(talkPath, english);
     await open(tester, const Size(700, 800), speech: speech, menuBar: true);
-    await tester.tap(find.widgetWithText(SubmenuButton, 'Edit'));
+    await tester.tap(find.widgetWithText(SubmenuButton, 'Text and speech'));
     await tester.pumpAndSettle();
     await tester.tap(key('menu-text'));
     await tester.pumpAndSettle();

@@ -3,6 +3,7 @@
 // open editor, keys that never run twice.
 
 import 'package:clipforge/ui/app_menu.dart';
+import 'package:clipforge/ui/editor/acts.dart';
 import 'package:clipforge/ui/editor/export_dialog.dart';
 import 'package:clipforge/ui/editor/session.dart';
 import 'package:clipforge/ui/editor/editor_screen.dart';
@@ -27,20 +28,30 @@ EditorMenuActions _editor(
   bool canUndo = true,
   bool canExport = true,
   bool playing = false,
-}) => EditorMenuActions(
-  canUndo: canUndo,
-  canRedo: false,
-  canDelete: true,
-  canPlay: true,
-  playing: playing,
-  undo: calls('undo'),
-  redo: calls('redo'),
-  delete: calls('delete'),
-  togglePlay: calls('play'),
-  canExport: canExport,
-  export: calls('export'),
-  backToProjects: calls('back'),
-);
+}) {
+  ActionEntry e(Act a, String name, {String? reason}) => ActionEntry(
+    act: a,
+    label: actLabel(a),
+    icon: actIcon(a),
+    reason: reason,
+    onTap: reason == null ? calls(name) : null,
+  );
+  return EditorMenuActions(
+    entries: {
+      Act.undo: e(Act.undo, 'undo', reason: canUndo ? null : 'nothing to undo'),
+      Act.redo: e(Act.redo, 'redo', reason: 'nothing to redo'),
+      Act.delete: e(Act.delete, 'delete'),
+      Act.playPause: e(Act.playPause, 'play'),
+      Act.export: e(
+        Act.export,
+        'export',
+        reason: canExport ? null : 'add a video first',
+      ),
+      Act.backToProjects: e(Act.backToProjects, 'back'),
+    },
+    playing: playing,
+  );
+}
 
 Widget _app(AppMenuController c, _Calls calls) => MaterialApp(
   theme: ThemeData.dark(),
@@ -74,14 +85,19 @@ Future<void> _key(
 
 void main() {
   testWidgets(
-    'Windows and Linux: File, Edit, Playback, Help in the window',
+    'Windows and Linux: the nine menus in the window',
     (tester) async {
       final platform = defaultTargetPlatform;
+      // Wide enough for all nine menus (the test font is wide).
+      useScreen(tester, desktop);
       final c = AppMenuController();
       final calls = _Calls();
       await tester.pumpWidget(_app(c, calls));
       expect(find.byType(MenuBar), findsOneWidget);
-      for (final m in ['File', 'Edit', 'Playback', 'Help']) {
+      for (final m in [
+        'File', 'Edit', 'Add', 'Clip', 'Sound', 'Text and speech', 'View', //
+        'Playback', 'Help',
+      ]) {
         expect(find.widgetWithText(SubmenuButton, m), findsOneWidget);
       }
       expect(
@@ -126,16 +142,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(calls['back'], 1);
       await _open(tester, 'Edit');
-      expect(_item(tester, 'Undo').onPressed, isNull);
-      expect(_item(tester, 'Delete (or Backspace)').onPressed, isNotNull);
+      // Greyed out, and it says why.
+      expect(_item(tester, 'Undo (nothing to undo)').onPressed, isNull);
+      expect(_item(tester, 'Delete').onPressed, isNotNull);
       expect(find.text('Ctrl+Z'), findsOneWidget);
       expect(find.text('Ctrl+Shift+Z'), findsOneWidget);
       expect(find.text('Ctrl+D'), findsOneWidget);
-      await tester.tap(find.text('Delete (or Backspace)'));
+      await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();
       expect(calls['delete'], 1);
       await _open(tester, 'Playback');
-      await tester.tap(find.text('Play'));
+      await tester.tap(find.text('Play/Pause'));
       await tester.pumpAndSettle();
       expect(calls['play'], 1);
       await _open(tester, 'Help');

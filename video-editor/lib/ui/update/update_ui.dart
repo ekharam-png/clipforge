@@ -107,6 +107,59 @@ class UpdateBanner extends ConsumerWidget {
   }
 }
 
+/// "Updated to 1.15.0 · What's new": one quiet line on the project list
+/// after the app became a newer version (by its own Update or by hand),
+/// until it is closed. What's new is one tap.
+class UpdatedLine extends StatelessWidget {
+  const UpdatedLine({
+    super.key,
+    required this.version,
+    required this.onWhatsNew,
+    required this.onClose,
+  });
+  final String version;
+  final VoidCallback onWhatsNew;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Material(
+        key: const ValueKey('updated-line'),
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 14),
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle_outline,
+                  size: 18, color: AppColors.textDim),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('Updated to $version',
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              TextButton(
+                key: const ValueKey('updated-line-whats-new'),
+                onPressed: onWhatsNew,
+                child: const Text("What's new"),
+              ),
+              IconButton(
+                key: const ValueKey('updated-line-close'),
+                tooltip: 'Close',
+                icon: const Icon(Icons.close,
+                    size: 18, semanticLabel: 'Close'),
+                onPressed: onClose,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 void _say(BuildContext context, String message) {
   ScaffoldMessenger.maybeOf(context)
     ?..hideCurrentSnackBar()
@@ -126,7 +179,7 @@ Future<void> copyUpdateDetails(BuildContext context, UpdateController c,
         content: Text('Details copied. Paste them into your message.')));
 }
 
-/// "Check for updates" (Help menu, phones: More): asks now and says the
+/// "Check for updates" (Help menu, Settings; phones: the three dots): asks now and says the
 /// result - the banner when there is a newer version, a plain message
 /// otherwise (also when offline).
 Future<void> checkForUpdatesNow(BuildContext context) async {
@@ -365,7 +418,7 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
 /// the reason and "Try again" / "Open the download page" when it did not.
 /// [whatsNew] opens the release notes inside the app.
 Future<void> showUpdateOutcome(BuildContext context, UpdateController c,
-    {VoidCallback? whatsNew}) async {
+    {VoidCallback? whatsNew, bool quietSuccess = false}) async {
   final result = c.lastResult;
   if (result == null) return;
   final note = c.folderNote;
@@ -387,6 +440,8 @@ Future<void> showUpdateOutcome(BuildContext context, UpdateController c,
     return;
   }
   if (result.updated) {
+    // [quietSuccess]: the project list already shows "Updated to X".
+    if (quietSuccess && note == null) return;
     ScaffoldMessenger.maybeOf(context)
       ?..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(

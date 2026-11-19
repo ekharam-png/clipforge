@@ -15,6 +15,7 @@ import 'package:clipforge/ui/gallery_search.dart';
 import 'package:clipforge/ui/music_search.dart';
 import 'package:clipforge/ui/services.dart' show PickedFile;
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -97,8 +98,7 @@ void main() {
           const MediaInfo(
               durationMs: 95000, width: 0, height: 0, hasVideo: false,
               hasAudio: true);
-      await tester.tap(find.text('Music').first);
-      await tester.pumpAndSettle();
+      await tapAdd(tester, 'Music');
       expect(find.text('Find free music'), findsOneWidget);
       expect(find.text('My files'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'happy');
@@ -164,8 +164,7 @@ void main() {
     fakes.music
       ..on = true
       ..error = offlineError;
-    await tester.tap(find.text('Music'));
-    await tester.pumpAndSettle();
+    await tapAdd(tester, 'Music');
     await tester.enterText(find.byType(TextField), 'piano');
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
@@ -245,11 +244,13 @@ void main() {
     expect(missingFileName(r'C:\Videos\a.mp4'), 'a.mp4');
   });
 
-  testWidgets('Smooth preview switch in More (phone)', (tester) async {
+  testWidgets('Smooth preview switch in Settings (phone)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     final fakes = await openEditor(tester, phone);
-    await tester.tap(find.text('More'));
-    await tester.pumpAndSettle();
-    final sw = find.byKey(const ValueKey('more-smooth-preview'));
+    // Settings are on one page since 1.15: the project menu > Settings.
+    await tapProjectMenu(tester, 'Settings');
+    final sw = find.byKey(const ValueKey('settings-smooth-preview'));
     expect(sw, findsOneWidget);
     await fakes.screenshot(tester, 'editor_phone_more_smooth');
     final before = tester.widget<SwitchListTile>(sw).value;
@@ -258,6 +259,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<SwitchListTile>(sw).value, !before);
     expect(await fakes.prefs.flag('smoothPreviewOff'), before);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('playing: the titles and picture layers do not rebuild every '

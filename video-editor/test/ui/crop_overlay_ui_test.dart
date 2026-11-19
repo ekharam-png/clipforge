@@ -7,6 +7,7 @@ import 'package:clipforge/core/model/picture_layout.dart';
 import 'package:clipforge/core/model/project.dart';
 import 'package:clipforge/media/media_api.dart';
 import 'package:clipforge/ui/app_menu.dart';
+import 'package:clipforge/ui/editor/acts.dart';
 import 'package:clipforge/ui/editor/editor_screen.dart';
 import 'package:clipforge/ui/editor/preview_view.dart';
 import 'package:clipforge/ui/editor/session.dart';
@@ -154,7 +155,7 @@ void main() {
           tester.getTopLeft(find.byType(TimelineView)).dy;
       final mainTop = mainInTimeline();
       if (phoneScreen) {
-        await tester.tap(find.byTooltip('Add videos, photos, music or text'));
+        await tester.tap(find.byKey(const ValueKey('tool-add')));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Overlay (picture-in-picture)'));
       } else {
@@ -322,7 +323,7 @@ void main() {
         closeTo(canvas.left + expected.picture.left, 1));
   });
 
-  testWidgets('Edit menu: crop and position, rotate, add overlay',
+  testWidgets('Clip and Add menus: crop and position, rotate, add overlay',
       (tester) async {
     useScreen(tester, desktop);
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;
@@ -331,15 +332,23 @@ void main() {
         fakes.app(const EditorScreen(projectId: 'p1'), menuBar: true));
     await tester.pumpAndSettle();
     final s = sessionOf(tester);
-    Future<void> openEdit() async {
-      await tester.tap(find.widgetWithText(SubmenuButton, 'Edit'));
+    Future<void> openMenu(String menu) async {
+      await tester.tap(find.widgetWithText(SubmenuButton, menu));
       await tester.pumpAndSettle();
     }
+
+    Future<void> openEdit() => openMenu('Clip');
 
     MenuItemButton item(String key) =>
         tester.widget<MenuItemButton>(find.byKey(ValueKey(key)));
     await openEdit();
     expect(item('menu-crop').onPressed, isNull);
+    // Greyed out, and it says why.
+    expect(find.text('Crop and position… (select a clip or an overlay)'),
+        findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    await openMenu('Add');
     expect(item('menu-add-overlay').onPressed, isNotNull);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -360,32 +369,38 @@ void main() {
 
   test('macOS menu: the same items, enabled by the editor', () {
     var crops = 0;
-    final menus = buildAppMenus(EditorMenuActions(
-      canUndo: false,
-      canRedo: false,
-      canDelete: true,
-      canPlay: true,
-      playing: false,
-      undo: () {},
-      redo: () {},
-      delete: () {},
-      togglePlay: () {},
-      canCrop: true,
-      cropAndPosition: () => crops++,
-      rotateRight: () {},
-      canAddOverlay: false,
-      addOverlay: () {},
-    ));
-    final edit = menus.whereType<PlatformMenu>().firstWhere((m) => m.label == 'Edit');
-    final items = [
-      for (final g in edit.menus.whereType<PlatformMenuItemGroup>())
-        ...g.members.whereType<PlatformMenuItem>(),
-    ];
-    PlatformMenuItem named(String l) => items.firstWhere((i) => i.label == l);
-    expect(named('Crop and position…').onSelected, isNotNull);
-    expect(named('Rotate right').onSelected, isNotNull);
-    expect(named('Add overlay video or photo…').onSelected, isNull);
-    named('Crop and position…').onSelected!();
+    ActionEntry e(Act a, {String? reason, VoidCallback? run}) => ActionEntry(
+        act: a,
+        label: actLabel(a),
+        icon: actIcon(a),
+        reason: reason,
+        onTap: reason == null ? (run ?? () {}) : null);
+    final menus = buildAppMenus(EditorMenuActions(entries: {
+      Act.crop: e(Act.crop, run: () => crops++),
+      Act.rotateRight: e(Act.rotateRight),
+      Act.addOverlay: e(Act.addOverlay, reason: 'add a video first'),
+    }));
+    List<PlatformMenuItem> itemsOf(String menu) {
+      final m =
+          menus.whereType<PlatformMenu>().firstWhere((m) => m.label == menu);
+      return [
+        for (final g in m.menus)
+          if (g is PlatformMenuItemGroup)
+            ...g.members.whereType<PlatformMenuItem>()
+          else
+            g,
+      ];
+    }
+
+    PlatformMenuItem named(String menu, String l) =>
+        itemsOf(menu).firstWhere((i) => i.label == l);
+    expect(named('Clip', 'Crop and position…').onSelected, isNotNull);
+    expect(named('Clip', 'Rotate right').onSelected, isNotNull);
+    // Greyed out, and the label says why.
+    expect(
+        named('Add', 'Overlay video or photo… (add a video first)').onSelected,
+        isNull);
+    named('Clip', 'Crop and position…').onSelected!();
     expect(crops, 1);
   });
 

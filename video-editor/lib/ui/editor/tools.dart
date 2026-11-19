@@ -1,31 +1,34 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/editor/editor_controller.dart';
+import '../../core/editor/sound_tracks.dart';
 import '../../core/model/project.dart';
 import '../../core/model/title_layout.dart';
-import '../app_prefs.dart';
 import '../format.dart';
-import '../playback/media_kit_backend.dart' show MediaKitBackend;
 import '../help/help_screen.dart';
 import '../help/tour.dart';
 import '../theme.dart';
 import 'clip_actions.dart';
+import 'action_sheets.dart';
 import 'clip_panels.dart';
+import 'editor_actions.dart';
 import 'import_actions.dart';
 import 'music_actions.dart';
-import 'history_panel.dart';
 import 'picture_tools.dart';
 import 'publishing_panel.dart';
 import 'shorts_actions.dart';
 import 'session.dart';
-import 'text_panel.dart';
+export 'action_sheets.dart';
 import 'sound_tracks_ui.dart';
 import 'voice_actions.dart';
 
 class ToolAction {
   const ToolAction(this.icon, this.label, this.onTap,
-      {this.danger = false, this.tourId});
+      {this.danger = false, this.tourId, this.reason, this.key});
+
+  /// Why it is greyed out (its tooltip then says so).
+  final String? reason;
+  final Key? key;
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
@@ -37,20 +40,31 @@ class ToolAction {
 
 /// The actions that make sense for what is selected right now.
 ///
-/// On phones ([compact]) the settings of the selection open in bottom
-/// sheets, so a clip gets one button per group of settings; wide windows
+/// On phones ([compact]) the bar shows the most-used actions of the
+/// selection and "More" (everything else, grouped like the computer's
+/// menus); with nothing selected: Add, Text, Split, More. Wide windows
 /// show the settings in the side panel and only need the direct actions.
+/// Whether an action can be done comes from [EditorActions].
 List<ToolAction> buildToolActions(
   BuildContext context,
   EditorSession s, {
   required bool compact,
 }) {
-  final editor = s.editor;
-  final project = s.project;
+  final actions = EditorActions(s);
   final clip = s.selectedClip;
   final audio = s.selectedAudio;
   final title = s.selectedTitle;
   final close = ToolAction(Icons.close, 'Done', s.clearSelection);
+  ToolAction of(Act a, {String? label, String? tourId}) {
+    final e = actions.entry(context, a);
+    return ToolAction(e.icon, label ?? actName(a), e.onTap,
+        danger: e.danger, tourId: tourId, reason: e.reason);
+  }
+
+  final more = ToolAction(
+      Icons.more_horiz, 'More', () => showMoreSheet(context, s),
+      key: const ValueKey('tool-more'));
+  final delete = of(Act.delete);
 
   if (clip != null) {
     final isVideo = clip.type == ClipType.video;
@@ -59,8 +73,7 @@ List<ToolAction> buildToolActions(
       if (s.playback.isMissing(clip.path))
         ToolAction(Icons.search, 'Find file',
             () => findMissingFile(context, s, clip.path, audio: false)),
-      ToolAction(Icons.content_cut, 'Split', () => splitAtPlayhead(context, s),
-          tourId: TourIds.split),
+      of(Act.split, tourId: TourIds.split),
       if (compact) ...[
         for (final tool in clipToolsFor(clip))
           // Transition and Crop live under "More" so the bar stays
@@ -74,16 +87,12 @@ List<ToolAction> buildToolActions(
                   ClipTool.sound => TourIds.toolSound,
                   _ => null,
                 }),
-        ToolAction(Icons.more_horiz, 'More', () => showClipMoreSheet(context, s)),
+        more,
       ] else ...[
-        if (isVideo)
-          ToolAction(Icons.ac_unit, 'Freeze', () => freezeFrame(context, s)),
-        ToolAction(Icons.copy_all_outlined, 'Duplicate',
-            () => duplicateSelection(context, s)),
+        if (isVideo) of(Act.freezeFrame, label: 'Freeze'),
+        of(Act.duplicate),
       ],
-      ToolAction(Icons.delete_outline, 'Delete',
-          () => editor.removeClip(clip.id),
-          danger: true),
+      delete,
     ];
   }
   final overlay = s.selectedOverlay;
@@ -103,9 +112,7 @@ List<ToolAction> buildToolActions(
               () => tool == ClipTool.crop
                   ? showCropSheet(context, s, overlay.id)
                   : showOverlayToolSheet(context, s, tool)),
-      ToolAction(Icons.delete_outline, 'Delete',
-          () => editor.removeOverlay(overlay.id),
-          danger: true),
+      delete,
     ];
   }
   if (audio != null) {
@@ -114,12 +121,13 @@ List<ToolAction> buildToolActions(
       if (s.playback.isMissing(audio.path))
         ToolAction(Icons.search, 'Find file',
             () => findMissingFile(context, s, audio.path, audio: true)),
-      if (compact)
+      if (compact) ...[
         ToolAction(Icons.edit_outlined, 'Edit',
             () => showPropertiesSheet(context, s)),
-      ToolAction(Icons.delete_outline, 'Delete',
-          () => editor.removeAudio(audio.id),
-          danger: true),
+        if (!audio.belongsToClip) of(Act.fitMusic, label: 'Fit'),
+        more,
+      ],
+      delete,
     ];
   }
   if (title != null) {
@@ -128,298 +136,56 @@ List<ToolAction> buildToolActions(
       if (compact)
         ToolAction(Icons.edit_outlined, 'Edit',
             () => showPropertiesSheet(context, s)),
-      ToolAction(Icons.copy_all_outlined, 'Duplicate',
-          () => duplicateSelection(context, s)),
-      ToolAction(Icons.delete_outline, 'Delete',
-          () => editor.removeTitle(title.id),
-          danger: true),
+      of(Act.duplicate),
+      if (compact) more,
+      delete,
+    ];
+  }
+  if (compact) {
+    // Phones, nothing selected: Add, Text, Split, More.
+    return [
+      ToolAction(Icons.add_circle_outline, 'Add', () => showAddSheet(context, s),
+          tourId: TourIds.addMedia, key: const ValueKey('tool-add')),
+      ToolAction(Icons.subject, 'Text', () => toggleTextWindow(context, s),
+          key: const ValueKey('tool-text')),
+      of(Act.split, tourId: TourIds.split),
+      more,
     ];
   }
   return [
     ...buildAddActions(context, s, compact: compact),
-    if (project.clips.isNotEmpty)
-      ToolAction(Icons.content_cut, 'Split', () => splitAtPlayhead(context, s),
-          tourId: TourIds.split),
-    // Phones: the less common things (History); wide windows have them in
-    // the top bar and the menu bar.
-    if (compact && project.clips.isNotEmpty)
-      ToolAction(Icons.more_horiz, 'More', () => showEditorMoreSheet(context, s)),
+    if (s.project.clips.isNotEmpty) of(Act.split, tourId: TourIds.split),
   ];
 }
 
-/// Phones, nothing selected: the less common editor actions.
-Future<void> showEditorMoreSheet(BuildContext context, EditorSession s) {
-  return _showSheet(
-    context,
-    title: 'More',
-    builder: (sheet) => Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ListTile(
-          key: const ValueKey('more-fades'),
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.gradient),
-          title: const Text('Fade in and out'),
-          subtitle: const Text('Start from black, end in black'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            Navigator.of(sheet).pop();
-            _showSheet(context,
-                title: 'Fade in and out',
-                builder: (_) => ListenableBuilder(
-                    listenable: s.editor,
-                    builder: (_, _) => ProjectFadesPanel(session: s)));
-          },
-        ),
-        ListTile(
-          key: const ValueKey('more-text'),
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.subject),
-          title: const Text('Text'),
-          subtitle: const Text('Read and search everything said or written'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            Navigator.of(sheet).pop();
-            showTextSheet(context, s);
-          },
-        ),
-        _historyTile(context, sheet, s),
-        ListTile(
-          key: const ValueKey('more-mark-moment'),
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.flag_outlined),
-          title: const Text('Mark a good moment'),
-          subtitle: const Text('A marker here, to make a short around later'),
-          onTap: () {
-            Navigator.of(sheet).pop();
-            markGoodMoment(context, s);
-          },
-        ),
-        ListTile(
-          key: const ValueKey('more-shorts'),
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.smartphone),
-          title: const Text('Shorts and good moments'),
-          subtitle: Text(s.project.markers.isEmpty
-              ? 'Make a short from here, or from your markers'
-              : '${s.project.markers.length} '
-                  '${s.project.markers.length == 1 ? 'marker' : 'markers'}'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            Navigator.of(sheet).pop();
-            _showSheet(context,
-                title: 'Shorts',
-                builder: (_) => ShortsPanel(session: s, host: context));
-          },
-        ),
-        ListTile(
-          key: const ValueKey('more-publishing-notes'),
-          contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.notes),
-          title: const Text('Publishing notes'),
-          subtitle: const Text('Title, description, hashtags, chapters'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            Navigator.of(sheet).pop();
-            showPublishingNotes(context,
-                project: () => s.project,
-                onChanged: s.editor.setPublishingNotes,
-                turns: () => s.speakerTurnsNow);
-          },
-        ),
-        ListenableBuilder(
-          listenable: s.pictures,
-          builder: (context, _) => s.pictures.speakers
-                  .any((t) => t.stretches.isNotEmpty)
-              ? ListTile(
-                  key: const ValueKey('more-speech-starts'),
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.record_voice_over_outlined),
-                  title: const LabelWithHint('Go to speech start',
-                      articleId: 'who-is-speaking'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        key: const ValueKey('more-previous-speech'),
-                        tooltip: 'Previous speech start',
-                        icon: const Icon(Icons.keyboard_double_arrow_left),
-                        onPressed: () => s.goToSpeechStart(forward: false),
-                      ),
-                      IconButton(
-                        key: const ValueKey('more-next-speech'),
-                        tooltip: 'Next speech start',
-                        icon: const Icon(Icons.keyboard_double_arrow_right),
-                        onPressed: () => s.goToSpeechStart(forward: true),
-                      ),
-                    ],
-                  ),
-                )
-              : const SizedBox.shrink(),
-        ),
-        SoundWavesSwitch(session: s),
-        const SmoothPreviewSwitch(),
-      ],
-    ),
-  );
-}
-
-/// Phones: "Show sound waves" (computers have it in the Playback menu).
-class SoundWavesSwitch extends ConsumerWidget {
-  const SoundWavesSwitch({super.key, required this.session});
-  final EditorSession session;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: session.showWaves,
-      builder: (context, on, _) => SwitchListTile(
-        key: const ValueKey('more-sound-waves'),
-        contentPadding: EdgeInsets.zero,
-        secondary: const Icon(Icons.graphic_eq),
-        title: const LabelWithHint('Show sound waves',
-            articleId: 'who-is-speaking'),
-        subtitle: const Text(
-            'The sound drawn on the timeline, and who is speaking. Turn '
-            'off on a slow phone.'),
-        value: on,
-        onChanged: (v) {
-          session.showWaves.value = v;
-          session.pictures.enabled = v;
-          final prefs = ref.read(appPrefsProvider);
-          (v
-                  ? prefs.clearFlag(kSoundWavesOffFlag)
-                  : prefs.setFlag(kSoundWavesOffFlag))
-              .catchError((Object _) {});
-        },
-      ),
-    );
-  }
-}
-
-/// Phones: "Smooth preview" (see MediaKitBackend.smoothPreview). Takes
-/// effect for the clips loaded after it is changed.
-class SmoothPreviewSwitch extends ConsumerStatefulWidget {
-  const SmoothPreviewSwitch({super.key});
-
-  @override
-  ConsumerState<SmoothPreviewSwitch> createState() =>
-      _SmoothPreviewSwitchState();
-}
-
-class _SmoothPreviewSwitchState extends ConsumerState<SmoothPreviewSwitch> {
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      key: const ValueKey('more-smooth-preview'),
-      contentPadding: EdgeInsets.zero,
-      secondary: const Icon(Icons.speed),
-      title: const LabelWithHint('Smooth preview', articleId: 'phone-speed'),
-      subtitle: const Text(
-          'Lighter video decoding while editing; the preview may look a '
-          'little softer. Exports are not affected.'),
-      value: MediaKitBackend.smoothPreview,
-      onChanged: (on) {
-        setState(() => MediaKitBackend.smoothPreview = on);
-        final prefs = ref.read(appPrefsProvider);
-        (on
-                ? prefs.clearFlag(kSmoothPreviewOffFlag)
-                : prefs.setFlag(kSmoothPreviewOffFlag))
-            .catchError((Object _) {});
-      },
-    );
-  }
-}
-
-/// "History" in a More sheet: closes the sheet and opens the history.
-Widget _historyTile(BuildContext context, BuildContext sheet, EditorSession s) =>
-    ListTile(
-      key: const ValueKey('more-history'),
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.history),
-      title: const Text('History'),
-      subtitle: const Text('Your changes; go back to any of them'),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () {
-        Navigator.of(sheet).pop();
-        showHistorySheet(context, s);
-      },
-    );
-
-/// The things that can be added to the project. Always within reach: the
-/// tool bar and the side panel show them when nothing is selected, the "+"
-/// button next to Play (phones) and the "Add" row of the side panel show
-/// them whatever is selected.
+/// The things that can be added to the project, as the side panel shows
+/// them: when nothing is selected, and in its "Add" row whatever is
+/// selected. (Phones: the Add sheet, [showAddSheet].)
 List<ToolAction> buildAddActions(
   BuildContext context,
   EditorSession s, {
   required bool compact,
 }) {
+  final actions = EditorActions(s);
   return [
     ToolAction(Icons.add_photo_alternate_outlined, 'Add media',
-        () => addMedia(context, s),
+        () => actions.run(context, Act.addMedia),
         tourId: TourIds.addMedia),
     if (s.project.clips.isNotEmpty) ...[
       ToolAction(Icons.library_music_outlined, 'Music',
-          () => showAddMusic(context, s)),
+          () => actions.run(context, Act.addMusic)),
       ToolAction(Icons.picture_in_picture_alt, 'Overlay',
-          () => addOverlay(context, s)),
-      ToolAction(Icons.title, 'Title', () {
-        addTitle(s);
-        if (compact) showPropertiesSheet(context, s);
-      }),
-      ToolAction(Icons.closed_caption_outlined, 'Captions',
-          () => showCaptionsDialog(context, s)),
+          () => actions.run(context, Act.addOverlay)),
+      ToolAction(Icons.title, 'Title', () => actions.run(context, Act.addTitle)),
+      ToolAction(Icons.closed_caption_outlined, 'Caption',
+          () => actions.run(context, Act.addCaption)),
     ],
   ];
 }
 
-/// Phones: the "+" button. Lists what can be added without giving up the
-/// selection first.
-Future<void> showAddSheet(BuildContext context, EditorSession s) {
-  s.playback.pause();
-  final selected = s.selectedClip != null;
-  return _showSheet(
-    context,
-    title: 'Add',
-    builder: (sheet) => Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final a in buildAddActions(context, s, compact: true))
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(a.icon),
-            title: Text(switch (a.label) {
-              'Add media' => 'Videos or photos',
-              'Captions' => 'Caption',
-              'Overlay' => 'Overlay (picture-in-picture)',
-              _ => a.label,
-            }),
-            subtitle: Text(switch (a.label) {
-              'Add media' => s.project.clips.isEmpty
-                  ? 'Start the video'
-                  : selected
-                      ? 'Go in after the selected clip'
-                      : 'Go in after the clip at the playhead',
-              'Music' => 'Starts at the playhead',
-              'Overlay' =>
-                'A video or photo over the picture, at the playhead',
-              'Title' => 'Text over the picture, at the playhead',
-              _ => 'A line of subtitles, or a subtitle file',
-            }),
-            onTap: () {
-              Navigator.of(sheet).pop();
-              a.onTap?.call();
-            },
-          ),
-      ],
-    ),
-  );
-}
-
 // Bottom sheets (phones) ------------------------------------------------------
 
-Future<void> _showSheet(BuildContext context,
+Future<void> showToolSheet(BuildContext context,
     {required String title, required WidgetBuilder builder}) {
   return showModalBottomSheet<void>(
     context: context,
@@ -455,7 +221,7 @@ Future<void> _showSheet(BuildContext context,
 /// Properties of the selected music or text.
 Future<void> showPropertiesSheet(BuildContext context, EditorSession s) {
   final title = s.selectedTitle;
-  return _showSheet(
+  return showToolSheet(
     context,
     title: s.selectedAudio != null
         ? (s.selectedAudio!.isVoice
@@ -471,7 +237,7 @@ Future<void> showPropertiesSheet(BuildContext context, EditorSession s) {
 /// One group of settings of the selected clip.
 Future<void> showClipToolSheet(
     BuildContext context, EditorSession s, ClipTool tool) {
-  return _showSheet(
+  return showToolSheet(
     context,
     title: clipToolLabel(tool),
     builder: (_) => ListenableBuilder(
@@ -489,7 +255,7 @@ Future<void> showClipToolSheet(
 Future<void> showOverlayToolSheet(
     BuildContext context, EditorSession s, ClipTool tool) {
   final o = s.selectedOverlay;
-  return _showSheet(
+  return showToolSheet(
     context,
     title: o == null ? 'Overlay' : overlayToolLabel(tool, o),
     builder: (_) => ListenableBuilder(
@@ -554,154 +320,6 @@ void showCropSheet(BuildContext context, EditorSession s, String itemId,
   );
 }
 
-/// The less common clip actions.
-Future<void> showClipMoreSheet(BuildContext context, EditorSession s) {
-  return _showSheet(
-    context,
-    title: 'More',
-    builder: (sheet) => ListenableBuilder(
-      listenable: Listenable.merge([s.editor, s.selection]),
-      builder: (_, _) {
-        final clip = s.selectedClip;
-        if (clip == null) return const SizedBox(height: 8);
-        final project = s.project;
-        final index = project.clips.indexOf(clip);
-        void close() => Navigator.of(sheet).pop();
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              key: const ValueKey('more-crop'),
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(clipToolIcon(ClipTool.crop)),
-              title: const Text('Crop and position'),
-              subtitle: Text(clip.framing.isDefault
-                  ? 'Crop, rotate, flip, choose what stays in the frame'
-                  : framingSummary(clip.framing)),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                close();
-                showCropSheet(context, s, clip.id);
-              },
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(clipToolIcon(ClipTool.transition)),
-              title: const Text('Transition and fades'),
-              subtitle: Text(index <= 0
-                  ? 'Fade in from black, fade out'
-                  : 'From the clip before: '
-                      '${clipToolSummary(ClipTool.transition, clip, project)}'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                close();
-                showClipToolSheet(context, s, ClipTool.transition);
-              },
-            ),
-            if (clip.type == ClipType.video)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.ac_unit),
-                title: const Text('Freeze frame'),
-                subtitle: Text('Hold the picture at the playhead for '
-                    '${formatLength(kFreezeFrameMs)}'),
-                onTap: () {
-                  close();
-                  freezeFrame(context, s);
-                },
-              ),
-            ListTile(
-              key: const ValueKey('more-duplicate'),
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.copy_all_outlined),
-              title: const Text('Duplicate'),
-              subtitle: const Text('A copy right after this clip'),
-              onTap: () {
-                close();
-                duplicateSelection(context, s);
-              },
-            ),
-            ListTile(
-              key: const ValueKey('more-copy-settings'),
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.content_copy),
-              title: const Text('Copy settings'),
-              subtitle: const Text('Look, speed, sound, crop and fit'),
-              onTap: () {
-                close();
-                copyClipSettings(context, s);
-              },
-            ),
-            if (s.copiedSettings.value != null)
-              ListTile(
-                key: const ValueKey('more-paste-settings'),
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.content_paste),
-                title: const Text('Paste settings'),
-                subtitle: const Text('Give this clip the copied settings'),
-                onTap: () {
-                  close();
-                  pasteClipSettings(context, s);
-                },
-              ),
-            _historyTile(context, sheet, s),
-            const Divider(height: 16),
-            _MoveRow(session: s, index: index),
-          ],
-        );
-      },
-    ),
-  );
-}
-
-/// Buttons to change a clip's place; the same as dragging it on the timeline.
-class _MoveRow extends StatelessWidget {
-  const _MoveRow({required this.session, required this.index});
-  final EditorSession session;
-  final int index;
-
-  @override
-  Widget build(BuildContext context) {
-    final editor = session.editor;
-    final last = session.project.clips.length - 1;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: index > 0
-                    ? () => editor.moveClip(index, index - 1)
-                    : null,
-                icon: const Icon(Icons.arrow_back, size: 18),
-                label: const Text('Move earlier'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: index >= 0 && index < last
-                    ? () => editor.moveClip(index, index + 1)
-                    : null,
-                icon: const Icon(Icons.arrow_forward, size: 18),
-                label: const Text('Move later'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'You can also hold a clip on the timeline and drag it to a new '
-          'place.',
-          style: TextStyle(color: AppColors.textDim, fontSize: 12),
-        ),
-      ],
-    );
-  }
-}
-
 class _ToolButton extends StatelessWidget {
   const _ToolButton(this.action, {this.width = 72});
   final ToolAction action;
@@ -745,19 +363,34 @@ class _ToolButton extends StatelessWidget {
         ),
       ),
     );
-    return id == null ? button : TourAnchor(id: id, child: button);
+    final reason = action.reason;
+    final keyed = KeyedSubtree(
+      key: action.key,
+      child: reason == null
+          ? button
+          : Tooltip(message: '${action.label}: $reason', child: button),
+    );
+    return id == null ? keyed : TourAnchor(id: id, child: keyed);
   }
 }
 
-/// Bottom tool bar for narrow screens.
+/// Bottom tool bar for narrow screens. Every button is at least 48 wide
+/// and 60 high. The buttons share the width; when there are too many to
+/// fit (a clip with a missing file on a small phone) the bar scrolls and
+/// its right edge fades out with an arrow, so nothing hides unannounced.
 class ToolBar extends StatelessWidget {
   const ToolBar({super.key, required this.session});
   final EditorSession session;
 
+  static const double minButtonWidth = 48;
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([session.editor, session.selection]),
+      listenable: Listenable.merge([
+        session.editor, session.selection, session.copiedSettings, //
+        session.playheadClip,
+      ]),
       builder: (context, _) {
         final actions = buildToolActions(context, session, compact: true);
         return Container(
@@ -767,20 +400,19 @@ class ToolBar extends StatelessWidget {
             color: AppColors.panel,
             border: Border(top: BorderSide(color: AppColors.outline)),
           ),
-          // Everything stays reachable without scrolling on a phone: the
-          // buttons share the width, and only scroll if they would get too
-          // small to hit.
           child: LayoutBuilder(
             builder: (context, box) {
-              final each = ((box.maxWidth - 16) / actions.length)
-                  .clamp(52.0, 88.0)
+              final room = box.maxWidth - 16;
+              final each = (room / actions.length)
+                  .clamp(minButtonWidth, 96.0)
                   .toDouble();
-              return SingleChildScrollView(
+              final scrolls = each * actions.length > room + 0.5;
+              final bar = SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: box.maxWidth - 16),
+                  constraints: BoxConstraints(minWidth: room),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -788,6 +420,34 @@ class ToolBar extends StatelessWidget {
                     ],
                   ),
                 ),
+              );
+              if (!scrolls) return bar;
+              return Stack(
+                children: [
+                  bar,
+                  Positioned(
+                    key: const ValueKey('tool-bar-more-to-the-right'),
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 28,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: [
+                            AppColors.panel.withValues(alpha: 0),
+                            AppColors.panel,
+                          ]),
+                        ),
+                        child: const Align(
+                          alignment: Alignment.centerRight,
+                          child: Icon(Icons.chevron_right,
+                              size: 18, color: AppColors.textDim),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -805,8 +465,10 @@ class InspectorPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge(
-          [session.editor, session.selection, session.openTool]),
+      listenable: Listenable.merge([
+        session.editor, session.selection, session.openTool, //
+        session.playheadClip, session.copiedSettings,
+      ]),
       builder: (context, _) {
         final actions = buildToolActions(context, session, compact: false);
         final selection = session.selection.value;
@@ -1163,39 +825,45 @@ class PropertiesEditor extends StatelessWidget {
   }
 }
 
-/// "Lower music under speech" for the whole project: every sound track that
-/// is not a speech track (each track also has its own switch in its menu).
+/// "Lower music under speech" for the whole project. The truth is each
+/// track's own switch (its menu on the timeline); this one shows whether
+/// all, some or none of the tracks that are not speech are lowered, and
+/// sets them all. The Sound menu shows the same state.
 class DuckMusicSwitch extends StatelessWidget {
   const DuckMusicSwitch({super.key, required this.session});
   final EditorSession session;
 
   @override
   Widget build(BuildContext context) {
+    final state = lowerMusicState(session.project);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const PanelLabel('All music in this project'),
         SwitchListTile(
+          key: const ValueKey('lower-music-all'),
           contentPadding: EdgeInsets.zero,
           title: const LabelWithHint('Lower music under speech',
               articleId: 'lower-music'),
-          subtitle: const Text(
-            'Every music track gets quieter while the video sound or the '
-            'Voice track plays. Applied when you export.',
-            style: TextStyle(color: AppColors.textDim, fontSize: 12),
+          subtitle: Text(
+            switch (state) {
+              LowerMusic.some =>
+                'On for some tracks only (set in each track\'s menu). Turn '
+                    'this on to lower every music track.',
+              _ => 'Every music track gets quieter while the video sound or '
+                  'the Voice track plays. Applied when you export.',
+            },
+            style: const TextStyle(color: AppColors.textDim, fontSize: 12),
           ),
-          value: _allLowered(session.project),
-          onChanged: session.editor.setDuckMusic,
+          value: state == LowerMusic.all,
+          // Some -> all on; all -> off.
+          onChanged: (_) =>
+              session.editor.setDuckMusic(state != LowerMusic.all),
         ),
       ],
     );
   }
-}
-
-bool _allLowered(Project p) {
-  final music = [for (final t in p.soundTracks) if (!t.speech) t];
-  return music.isEmpty ? p.duckMusic : music.every((t) => t.duck);
 }
 
 /// A title's size in words, with the share of the frame's short side that
@@ -1547,7 +1215,7 @@ class _Swatch extends StatelessWidget {
 
 /// "Shorts and publishing": the buttons for good-moment markers, shorts
 /// and (with [notes]) the publishing notes. In the Project panel on
-/// computers (nothing selected), in a sheet under More on phones.
+/// computers (nothing selected), in a sheet from More on phones.
 class ShortsPanel extends StatelessWidget {
   const ShortsPanel(
       {super.key, required this.session, required this.host, this.notes = false});
@@ -1584,7 +1252,7 @@ class ShortsPanel extends StatelessWidget {
                     key: const ValueKey('panel-mark-moment'),
                     onPressed: () => markGoodMoment(host, s),
                     icon: const Icon(Icons.flag_outlined, size: 18),
-                    label: const Text('Mark a good moment (M)'),
+                    label: const Text('Good moment marker (M)'),
                   ),
                 OutlinedButton.icon(
                   key: const ValueKey('panel-good-moments'),

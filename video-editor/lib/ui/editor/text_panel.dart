@@ -588,7 +588,7 @@ class TextPanelState extends State<TextPanel> {
                   'Captions and titles on this part go with it.'
                   '${plan.photosLeft > 0 ? ' A photo that is only partly in this part stays as it is.' : ''}'
                   '\nUndo brings everything back. Later, '
-                  '${_s.speech != null ? 'Edit > Speech > Automatic cuts… > ' : ''}'
+                  '${_s.speech != null ? 'Text and speech > Automatic cuts… > ' : ''}'
                   'Put back returns the picture and sound (not the captions).',
                   style: const TextStyle(fontSize: 13)),
             ],
@@ -852,7 +852,7 @@ class TextPanelState extends State<TextPanel> {
               PopupMenuItem(
                   value: 'save-srt',
                   enabled: hasCaptions(_s.project),
-                  child: const Text('Save as subtitle file (.srt)…')),
+                  child: const Text('Export subtitles (.srt)…')),
               if (widget.onDock != null) ...[
                 const PopupMenuDivider(),
                 CheckedPopupMenuItem(
@@ -1572,7 +1572,7 @@ class _TextEmpty extends StatelessWidget {
                     importSubtitles(host, s);
                   },
                   icon: const Icon(Icons.upload_file_outlined, size: 18),
-                  label: const Text('Import subtitles…'),
+                  label: const Text('Subtitle file (.srt)…'),
                 ),
                 OutlinedButton.icon(
                   key: const ValueKey('text-add-caption'),

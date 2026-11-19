@@ -27,43 +27,25 @@ import '../music_search.dart';
 import '../services.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../app_settings.dart';
 import 'clip_actions.dart';
+import 'editor_actions.dart';
+import 'suggestions.dart';
 import 'export_dialog.dart';
 import 'history_panel.dart';
-import 'speech_actions.dart';
 import 'text_panel.dart';
 import '../speech/speech_service.dart';
 import 'import_actions.dart';
 import 'leave_flow.dart';
-import 'music_actions.dart';
 import 'preview_view.dart';
-import 'publishing_panel.dart';
 import 'shorts_actions.dart';
 import '../publish_service.dart';
 import 'save_status.dart';
 import 'session.dart';
-import 'sound_tracks_ui.dart' show addSoundTrack, separateSound;
-import 'voice_actions.dart' show addVoiceRecording, lineUpVoice;
+export 'session.dart' show kWideLayoutWidth;
+export 'editor_actions.dart' show frameStepFor;
 import 'timeline_view.dart';
 import 'tools.dart';
-
-/// One step of the Left / Right keys: one frame of the clip under the
-/// playhead (its source frame rate, speed included), else 33 ms (a frame
-/// at 30 fps) when that is not known (photos, clips added before 1.7).
-int frameStepFor(EditorSession s) {
-  const fallback = 33;
-  final p = s.project;
-  final t = s.playback.positionMs;
-  final i = t < p.durationMs ? p.clipIndexAt(t) : p.clips.length - 1;
-  if (i < 0) return fallback;
-  final c = p.clips[i];
-  if (c.type != ClipType.video || c.frameRate <= 1) return fallback;
-  final ms = (1000 / c.frameRate / (c.speed <= 0 ? 1 : c.speed)).round();
-  return ms < 1 ? 1 : ms;
-}
-
-/// Window width from which the editor uses the side-panel layout.
-const double kWideLayoutWidth = 900;
 
 class EditorScreen extends ConsumerStatefulWidget {
   const EditorScreen({
@@ -98,6 +80,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   late final Ticker _ticker;
   Duration _lastTick = Duration.zero;
   bool _closing = false;
+  AppSettings? _settings;
+  SuggestionController? _suggestions;
 
   /// Receives the keyboard shortcuts while nothing else in the editor has
   /// the focus.
@@ -238,7 +222,39 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       });
       _session!
         ..saveNow = (() async => _autosaver?.flush())
-        ..openProject = _openOther;
+        ..openProject = _openOther
+        ..hooks = EditorHooks(
+          export: ({bool several = false}) {
+            final s = _session;
+            if (s != null && s.project.clips.isNotEmpty) {
+              _export(s, several: several);
+            }
+          },
+          rename: () {
+            final s = _session;
+            if (s != null) _rename(s);
+          },
+          backToProjects: _back,
+          playBackwards: () {
+            final s = _session;
+            if (s != null) _playBackwards(s);
+          },
+          stopReverse: _stopReverse,
+          setSnapping: (on) {
+            final s = _session;
+            if (s != null) _setSnapping(s, on);
+          },
+          setSoundWaves: (on) {
+            final s = _session;
+            if (s != null) _setWaves(s, on);
+          },
+          scaffold: () => _scaffoldKey.currentState,
+        );
+      _suggestions = SuggestionController(
+        session: _session!,
+        settings: ref.read(appSettingsProvider),
+        host: () => mounted ? context : null,
+      );
       _liveMedia = () => editor.editor.mediaPathsInHistory;
       _liveRegistry = ref.read(liveMediaProvider);
       _liveRegistry!.add(_liveMedia!);
@@ -249,31 +265,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       s.copiedSettings.addListener(_updateMenu);
       s.showText.addListener(_updateMenu);
       s.showWaves.addListener(_updateMenu);
+      s.playheadClip.addListener(_updateMenu);
       s.pictures.addListener(_onPictures);
       s.transcripts.addListener(_updateMenu);
       unawaited(s.loadTranscripts());
-      // Timeline snapping is an app setting (on unless turned off).
+      // Snapping, sound waves, where the Text window sits and (phones)
+      // the lighter preview are app settings: one live object that the
+      // Settings page and the View menu write to as well.
+      final settings = ref.read(appSettingsProvider);
+      _settings = settings;
+      settings.addListener(_onSettings);
+      settings.load().then((_) => _onSettings());
       final prefs = ref.read(appPrefsProvider);
-      // Phones: lighter preview decoding unless turned off (More sheet).
-      if (Platform.isAndroid || Platform.isIOS) {
-        prefs.flag(kSmoothPreviewOffFlag).then((off) {
-          MediaKitBackend.smoothPreview = !off;
-        }).catchError((Object _) {});
-      }
-      prefs.flag(kSnappingOffFlag).then((off) {
-        if (mounted && !s.isDisposed) s.snapping.value = !off;
-      }).catchError((Object _) {});
-      // "Show sound waves" and the Text window's place and size.
-      prefs.flag(kSoundWavesOffFlag).then((off) {
-        if (!mounted || s.isDisposed || !off) return;
-        s.showWaves.value = false;
-        s.pictures.enabled = false;
-      }).catchError((Object _) {});
-      prefs.text(kTextDockText).then((v) {
-        if (mounted && !s.isDisposed && v == 'below') {
-          s.textDock.value = TextDock.below;
-        }
-      }).catchError((Object _) {});
       prefs.text(kTextWidthText).then((v) {
         final w = double.tryParse(v ?? '');
         if (mounted && !s.isDisposed && w != null && w >= kTextMinWidth) {
@@ -321,17 +324,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   void _setWaves(EditorSession s, bool on) {
     s.showWaves.value = on;
     s.pictures.enabled = on;
-    final prefs = ref.read(appPrefsProvider);
-    (on ? prefs.clearFlag(kSoundWavesOffFlag) : prefs.setFlag(kSoundWavesOffFlag))
-        .catchError((Object _) {});
+    ref.read(appSettingsProvider).setSoundWaves(on);
   }
 
   void _setTextDock(EditorSession s, TextDock dock) {
     s.textDock.value = dock;
-    ref
-        .read(appPrefsProvider)
-        .setText(kTextDockText, dock.name)
-        .catchError((Object _) {});
+    ref.read(appSettingsProvider).setTextBelow(dock == TextDock.below);
   }
 
   void _rememberTextSize(EditorSession s) {
@@ -345,176 +343,63 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
   }
 
   /// Tells the menu bar (macOS; Windows and Linux: the one in the
-  /// window) what the editor can do now.
+  /// window) what the editor can do now. What can be done, and why not,
+  /// comes from [EditorActions]: the same source the side panel, the
+  /// phone's bars and the timeline's context menu use.
   void _updateMenu() {
     final s = _session;
     if (s == null || !mounted) return;
-    final playback = s.playback;
+    final actions = EditorActions(s);
     appMenu.attach(
       this,
       EditorMenuActions(
-        canUndo: s.editor.canUndo,
-        canRedo: s.editor.canRedo,
-        canDelete: s.selection.value != null,
-        canPlay: playback.durationMs > 0,
-        playing: playback.playing,
-        undo: _inFront(s.editor.undo),
-        redo: _inFront(s.editor.redo),
-        showHistory: _inFront(() => _toggleHistory(s)),
-        delete: _inFront(() => _deleteSelection(s)),
-        togglePlay: _inFront(() {
-          _stopReverse();
-          if (playback.durationMs > 0) playback.toggle();
-        }),
-        canExport: s.project.clips.isNotEmpty,
-        export: _inFront(() {
-          if (s.project.clips.isNotEmpty) _export(s);
-        }),
-        canCrop: _pictureId(s) != null,
-        cropAndPosition: _inFront(() => _openCrop(s)),
-        rotateRight: _inFront(() {
-          final id = _pictureId(s);
-          if (id != null) s.editor.rotatePicture(id);
-        }),
-        canAddOverlay: s.project.clips.isNotEmpty,
-        addOverlay: _inFront(() {
-          if (s.project.clips.isNotEmpty) addOverlay(context, s);
-        }),
-        extra: _extraMenu(s),
-        backToProjects: _inFront(() {
-          // Like the back arrow: during the tour it ends the tour.
-          if (widget.tour && _tour.active) {
-            _tour.skip();
-          } else {
-            _close();
-          }
-        }),
+        entries: {
+          for (final a in Act.values)
+            if (a != Act.editItem && a != Act.shapeAndSize && a != Act.fades)
+              a: _menuEntry(actions, a),
+        },
+        playing: s.playback.playing,
+        // Computers only: without a speech service the speech items are
+        // not in the menu at all.
+        speech: s.speech != null,
+        shape: _inFront2<CanvasAspect>(s.editor.setAspect),
+        currentShape: s.project.aspect,
+        videoSize: _inFront2<VideoSize>(s.editor.setVideoSize),
+        currentVideoSize: s.project.videoSize,
       ),
     );
   }
 
-  /// The menu items added in 1.7 (see [EditorMenuExtra]); a null action is
-  /// shown greyed out.
-  EditorMenuExtra _extraMenu(EditorSession s) {
-    final p = s.project;
-    final has = p.clips.isNotEmpty;
-    final clip = s.selectedClip;
-    final clipIndex = clip == null ? -1 : p.clips.indexOf(clip);
-    final under = s.clipIndexUnderPlayhead;
-    final settingsClip = clip ?? (under >= 0 ? p.clips[under] : null);
-    final videoUnder = under >= 0 && p.clips[under].type == ClipType.video;
-    final separatedOf = clip == null
-        ? null
-        : p.audio
-            .where((a) => a.isSeparated && a.sourceClipId == clip.id)
-            .firstOrNull;
-    final selectedSound = s.selectedAudio;
-    final soundToPutBack = selectedSound != null &&
-            selectedSound.isSeparated &&
-            p.clips.any((c) => c.id == selectedSound.sourceClipId)
-        ? selectedSound
-        : separatedOf;
-    VoidCallback? f(bool ok, VoidCallback a) => ok ? _inFront(a) : null;
-    return EditorMenuExtra(
-      addMedia: _inFront(() => addMedia(context, s)),
-      addMusic: f(has, () => showAddMusic(context, s)),
-      addTitle: f(has, () {
-        addTitle(s);
-        if (MediaQuery.sizeOf(context).width < kWideLayoutWidth) {
-          showPropertiesSheet(context, s);
-        }
-      }),
-      addCaption: f(has, () => showCaptionsDialog(context, s)),
-      importSubtitles: f(has, () => importSubtitles(context, s)),
-      exportSubtitles: f(hasCaptions(p), () => exportSubtitles(context, s)),
-      renameProject: _inFront(() => _rename(s)),
-      publishingNotes: _inFront(() => _openNotes(s)),
-      exportSeveral: f(has, () => _export(s, several: true)),
-      markMoment: f(has, () => markGoodMoment(context, s)),
-      goodMoments: f(has, () => showGoodMoments(context, s)),
-      shortFromHere: f(has, () => makeShortFromHere(context, s)),
-      shortsFromMarkers:
-          f(p.markers.isNotEmpty, () => makeShortsFromMarkers(context, s)),
-      split: f(has, () => splitAtPlayhead(context, s)),
-      freezeFrame: f(videoUnder, () => freezeFrame(context, s)),
-      removeSilences: f(
-          (clip ?? settingsClip)?.type == ClipType.video &&
-              (clip ?? settingsClip)!.hasAudio,
-          () => removeSilences(context, s, (clip ?? settingsClip)!)),
-      moveEarlier: f(clipIndex > 0, () => s.editor.moveClip(clipIndex, clipIndex - 1)),
-      moveLater: f(clipIndex >= 0 && clipIndex < p.clips.length - 1,
-          () => s.editor.moveClip(clipIndex, clipIndex + 1)),
-      startAtPlayhead: f(has, () => trimToPlayhead(context, s, start: true)),
-      endAtPlayhead: f(has, () => trimToPlayhead(context, s, start: false)),
-      duplicate: f(clip != null || s.selectedTitle != null,
-          () => duplicateSelection(context, s)),
-      copySettings: f(settingsClip != null, () => copyClipSettings(context, s)),
-      pasteSettings: f(settingsClip != null && s.copiedSettings.value != null,
-          () => pasteClipSettings(context, s)),
-      separateSound: f(
-          clip != null && EditorController.separateSoundProblem(p, clip.id) == null,
-          () => separateSound(context, s, clip!)),
-      putSoundBack: f(soundToPutBack != null,
-          () => s.editor.reattachSound(soundToPutBack!.id)),
-      addVoice: f(p.clips.any((c) => c.type == ClipType.video),
-          () => addVoiceRecording(context, s)),
-      lineUpVoice: f(
-          selectedSound != null &&
-              !selectedSound.isSeparated &&
-              p.clips.any((c) => c.type == ClipType.video),
-          () => lineUpVoice(context, s, selectedSound!.id)),
-      addSoundTrack: f(
-          has && p.soundTracks.length < EditorController.maxSoundTracks,
-          () => addSoundTrack(context, s)),
-      fitMusic: f(s.selectedAudio != null && !s.selectedAudio!.belongsToClip,
-          () => fitMusic(context, s, s.selectedAudio!.id)),
-      copyCredits: f(p.audio.any((a) => a.credit != null),
-          () => copyMusicCredits(context, s)),
-      lowerMusic: f(p.audio.isNotEmpty, () => s.editor.setDuckMusic(!p.duckMusic)),
-      lowerMusicOn: p.duckMusic,
-      shape: _inFront2<CanvasAspect>(s.editor.setAspect),
-      currentShape: p.aspect,
-      videoSize: _inFront2<VideoSize>(s.editor.setVideoSize),
-      currentVideoSize: p.videoSize,
-      goToStart: f(has, () => s.playback.seek(0)),
-      goToEnd: f(has, () => s.playback.seek(s.playback.durationMs)),
-      playBackwards: f(has, () => _playBackwards(s)),
-      pause: f(has, () {
-        _stopReverse();
-        s.playback.pause();
-      }),
-      playForwards: f(has, () {
-        _stopReverse();
-        if (!s.playback.playing) s.playback.toggle();
-      }),
-      previousFrame: f(has, () => _step(s, -frameStepFor(s))),
-      nextFrame: f(has, () => _step(s, frameStepFor(s))),
-      zoomIn: _inFront(() => s.setZoom(s.zoom.value * 1.5)),
-      zoomOut: _inFront(() => s.setZoom(s.zoom.value / 1.5)),
-      toggleSnapping: _inFront(() => _setSnapping(s, !s.snapping.value)),
-      snapping: s.snapping.value,
-      showShortcuts: _inFront(() => showHelpArticle(context, 'keyboard-shortcuts')),
-      showText: _inFront(() => _toggleText(s)),
-      textShown: s.showText.value,
-      findInText: _inFront(() => _findInText(s)),
-      toggleWaves: _inFront(() => _setWaves(s, !s.showWaves.value)),
-      wavesOn: s.showWaves.value,
-      previousSpeech:
-          f(_hadSpeakers, () => s.goToSpeechStart(forward: false)),
-      nextSpeech: f(_hadSpeakers, () => s.goToSpeechStart(forward: true)),
-      // Computers only: without a speech service there is no Speech menu.
-      speech: s.speech == null
-          ? null
-          : SpeechMenu(
-              transcribe: f(canTranscribe(p),
-                  () => showTranscribeDialog(context, s, clip: clip)),
-              captions:
-                  f(canTranscribe(p), () => captionsFromSpeech(context, s)),
-              fillers:
-                  f(canTranscribe(p), () => removeFillerWords(context, s)),
-              autoCuts: f(p.autoCuts.isNotEmpty, () => showAutoCuts(context, s)),
-            ),
+  /// [a] for the menu bar: it only acts while the editor itself is in
+  /// front (see [_inFront]).
+  ActionEntry _menuEntry(EditorActions actions, Act a) {
+    final reason = actions.whyNot(a);
+    return ActionEntry(
+      act: a,
+      label: actions.label(a),
+      icon: actIcon(a),
+      reason: reason,
+      checked: actions.checked(a),
+      mixed: actions.mixed(a),
+      onTap: reason == null
+          ? _inFront(() {
+              if (a == Act.backToProjects) {
+                // Like the back arrow: during the tour it ends the tour.
+                _back();
+              } else {
+                actions.run(context, a);
+              }
+            })
+          : null,
     );
+  }
+
+  void _back() {
+    if (widget.tour && _tour.active) {
+      _tour.skip();
+    } else {
+      _close();
+    }
   }
 
   ValueChanged<T> _inFront2<T>(ValueChanged<T> action) => (v) {
@@ -529,12 +414,32 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     s.playback.seek(s.playback.positionMs + by);
   }
 
-  /// Turns timeline snapping on or off and remembers it.
+  /// Turns timeline snapping on or off and remembers it (the setting is
+  /// the app's: see [_onSettings]).
   void _setSnapping(EditorSession s, bool on) {
     s.snapping.value = on;
-    final prefs = ref.read(appPrefsProvider);
-    (on ? prefs.clearFlag(kSnappingOffFlag) : prefs.setFlag(kSnappingOffFlag))
-        .catchError((Object _) {});
+    ref.read(appSettingsProvider).setSnapping(on);
+  }
+
+  /// The app's settings changed (the Settings page, the View menu, another
+  /// place): the open editor follows at once.
+  void _onSettings() {
+    final s = _session;
+    if (s == null || !mounted || s.isDisposed) return;
+    final settings = ref.read(appSettingsProvider);
+    if (!settings.loaded) return;
+    if (s.snapping.value != settings.snapping) {
+      s.snapping.value = settings.snapping;
+    }
+    if (s.showWaves.value != settings.soundWaves) {
+      s.showWaves.value = settings.soundWaves;
+      s.pictures.enabled = settings.soundWaves;
+    }
+    final dock = settings.textBelow ? TextDock.below : TextDock.right;
+    if (s.textDock.value != dock) s.textDock.value = dock;
+    if (Platform.isAndroid || Platform.isIOS) {
+      MediaKitBackend.smoothPreview = settings.smoothPreview;
+    }
   }
 
   /// [action], run only while the editor itself is in front: the menu bar
@@ -664,7 +569,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       }
       if (repeat) return KeyEventResult.ignored;
       if (key == LogicalKeyboardKey.keyF && !shift) {
-        _findInText(s);
+        findInTextWindow(context, s);
         return KeyEventResult.handled;
       }
       if (key == LogicalKeyboardKey.keyD && !shift) {
@@ -752,51 +657,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
     if (key == LogicalKeyboardKey.delete ||
         key == LogicalKeyboardKey.backspace) {
-      return _deleteSelection(s)
+      return deleteSelection(s)
           ? KeyEventResult.handled
           : KeyEventResult.ignored;
     }
     return KeyEventResult.ignored;
   }
 
-  /// The selected clip or overlay item, whose picture the menu bar's
-  /// "Crop and position" works on; null for anything else.
-  static String? _pictureId(EditorSession s) =>
-      s.selectedClip?.id ?? s.selectedOverlay?.id;
-
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey();
-
-  /// Edit > Crop and position…: the Crop section of the side panel, or the
-  /// crop sheet when the window is too narrow for the panel.
-  void _openCrop(EditorSession s) {
-    final id = _pictureId(s);
-    if (id == null) return;
-    if (MediaQuery.sizeOf(context).width >= kWideLayoutWidth) {
-      s.openTool.value = ClipTool.crop;
-    } else {
-      showCropSheet(context, s, id, scaffold: _scaffoldKey.currentState);
-    }
-  }
-
-  /// Deletes what is selected on the timeline (Delete key, menu bar).
-  /// False when nothing is.
-  static bool _deleteSelection(EditorSession s) {
-    // Several captions selected in the Text window go together.
-    if (s.textDeleteHook?.call() ?? false) return true;
-    final selection = s.selection.value;
-    if (selection == null) return false;
-    switch (selection.kind) {
-      case ItemKind.clip:
-        s.editor.removeClip(selection.id);
-      case ItemKind.audio:
-        s.editor.removeAudio(selection.id);
-      case ItemKind.title:
-        s.editor.removeTitle(selection.id);
-      case ItemKind.overlay:
-        s.editor.removeOverlay(selection.id);
-    }
-    return true;
-  }
 
   @override
   void dispose() {
@@ -809,6 +677,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     _tour.removeListener(_onTour);
     _tour.detachEditor(_tourHooks);
     appMenu.detach(this);
+    _settings?.removeListener(_onSettings);
+    _suggestions?.dispose();
+    _session?.hooks = null;
     _stopReverse();
     _session?.editor.removeListener(_onEdited);
     _session?.selection.removeListener(_updateMenu);
@@ -907,47 +778,6 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
-  /// "Publishing notes" (File menu, More on phones, the Project panel).
-  void _openNotes(EditorSession s) {
-    s.playback.pause();
-    showPublishingNotes(context,
-        project: () => s.project,
-        onChanged: s.editor.setPublishingNotes,
-        turns: () => s.speakerTurnsNow);
-  }
-
-  /// Shows or hides the Text window; in a narrow window (and on phones)
-  /// it opens as a full-screen sheet instead.
-  void _toggleText(EditorSession s) {
-    if (MediaQuery.sizeOf(context).width < kWideLayoutWidth) {
-      showTextSheet(context, s);
-    } else {
-      s.showText.value = !s.showText.value;
-    }
-  }
-
-  /// Ctrl/Cmd+F: the Text window's search box (opening the window first).
-  void _findInText(EditorSession s) {
-    if (MediaQuery.sizeOf(context).width < kWideLayoutWidth) {
-      showTextSheet(context, s);
-    } else {
-      s.showText.value = true;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !s.isDisposed) s.findInText.value++;
-    });
-  }
-
-  /// Shows or hides the History column (wide windows) or opens the
-  /// History sheet (phones).
-  void _toggleHistory(EditorSession s) {
-    if (MediaQuery.sizeOf(context).width < kWideLayoutWidth) {
-      showHistorySheet(context, s);
-    } else {
-      s.showHistory.value = !s.showHistory.value;
-    }
-  }
-
   Future<void> _rename(EditorSession s) async {
     final name = await promptText(context,
         title: 'Rename project', initial: s.project.name);
@@ -1009,6 +839,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       onNotes: s.editor.setPublishingNotes,
       turns: () => s.speakerTurnsNow,
       several: several,
+      settings: ref.read(appSettingsProvider),
       onKeepCopy: s.store == null
           ? null
           : (variant, name) async {
@@ -1122,10 +953,17 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 ),
               );
               final notSaved = _NotSavedBar(session: s, onRetry: _retrySave);
+              final suggestions = _suggestions;
               if (wide) {
+                // Narrower than this, a Text window at the right would
+                // leave no room for the picture: it sits under it.
+                final roomAtRight = box.maxWidth >= 340 + kTextMinWidth + 200;
                 return Column(
                   children: [
                     notSaved,
+                    // Suggestions: one thin line under the top bar.
+                    if (suggestions != null)
+                      SuggestionBar(controller: suggestions, phone: false),
                     Expanded(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1136,7 +974,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                                   [s.showText, s.textDock, s.textHeight]),
                               builder: (context, _) {
                                 final below = s.showText.value &&
-                                    s.textDock.value == TextDock.below;
+                                    (s.textDock.value == TextDock.below ||
+                                        !roomAtRight);
                                 return LayoutBuilder(
                                   builder: (context, column) => Column(
                                     children: [
@@ -1197,7 +1036,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                             ]),
                             builder: (context, _) {
                               if (!s.showText.value ||
-                                  s.textDock.value != TextDock.right) {
+                                  s.textDock.value != TextDock.right ||
+                                  !roomAtRight) {
                                 return const SizedBox.shrink();
                               }
                               // At least 420 wide; the preview keeps
@@ -1242,11 +1082,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                 children: [
                   notSaved,
                   Expanded(child: preview),
+                  // While something is selected the tool bar shows that
+                  // item's tools; adding stays within reach here.
                   TransportBar(
-                    session: s,
-                    onAdd: () => showAddSheet(context, s),
-                  ),
+                      session: s, onAdd: () => showAddSheet(context, s)),
                   timeline,
+                  // Suggestions: one thin line just above the tool bar,
+                  // which a swipe sends away.
+                  if (suggestions != null)
+                    SuggestionBar(controller: suggestions, phone: true),
                   ToolBar(session: s),
                 ],
               );
@@ -1262,6 +1106,66 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         onClose: () => s.showText.value = false,
         onDock: (dock) => _setTextDock(s, dock),
       );
+
+  /// Phones: the "⋯" project menu of the top bar.
+  Widget _projectMenu(EditorSession s) {
+    final actions = EditorActions(s);
+    const items = <(Act, String)>[
+      (Act.shapeAndSize, 'Shape and size'),
+      (Act.fades, 'Fade in and out'),
+      (Act.publishingNotes, 'Publishing notes'),
+      (Act.textWindow, 'Text'),
+      (Act.history, 'History'),
+      (Act.goodMoments, 'Markers'),
+      (Act.settings, 'Settings'),
+    ];
+    return PopupMenuButton<Object>(
+      key: const ValueKey('project-menu'),
+      tooltip: 'Project menu',
+      icon: const Icon(Icons.more_horiz, semanticLabel: 'Project menu'),
+      onSelected: (v) {
+        // The menu closes first, then the sheet or page opens.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          if (v is Act) {
+            actions.run(context, v);
+          } else {
+            s.playback.pause();
+            openHelp(context);
+          }
+        });
+      },
+      itemBuilder: (context) => [
+        for (final (act, label) in items)
+          PopupMenuItem<Object>(
+            key: ValueKey('project-menu-${act.name}'),
+            value: act,
+            enabled: actions.whyNot(act) == null,
+            height: 48,
+            child: Row(
+              children: [
+                Icon(actIcon(act), size: 20, color: AppColors.textDim),
+                const SizedBox(width: 14),
+                Text(label),
+              ],
+            ),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<Object>(
+          key: ValueKey('project-menu-help'),
+          value: 'help',
+          height: 48,
+          child: Row(
+            children: [
+              Icon(Icons.help_outline, size: 20, color: AppColors.textDim),
+              SizedBox(width: 14),
+              Text('Help'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   PreferredSizeWidget _topBar(EditorSession s) {
     final narrow = MediaQuery.sizeOf(context).width < kWideLayoutWidth;
@@ -1307,15 +1211,11 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             children: [
               IconButton(
                 tooltip: 'Undo',
-                // Phones: a little narrower, so the project name keeps
-                // some room next to Help.
-                visualDensity: narrow ? VisualDensity.compact : null,
                 icon: const Icon(Icons.undo, semanticLabel: 'Undo'),
                 onPressed: s.editor.canUndo ? s.editor.undo : null,
               ),
               IconButton(
                 tooltip: 'Redo',
-                visualDensity: narrow ? VisualDensity.compact : null,
                 icon: const Icon(Icons.redo, semanticLabel: 'Redo'),
                 onPressed: s.editor.canRedo ? s.editor.redo : null,
               ),
@@ -1328,7 +1228,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                     tooltip: shown ? 'Hide history' : 'History',
                     isSelected: shown,
                     icon: const Icon(Icons.history, semanticLabel: 'History'),
-                    onPressed: () => _toggleHistory(s),
+                    onPressed: () => toggleHistory(context, s),
                   ),
                 ),
               if (!narrow)
@@ -1341,9 +1241,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                         : 'Text: read and search what is said',
                     isSelected: shown,
                     icon: const Icon(Icons.subject, semanticLabel: 'Text'),
-                    onPressed: () => _toggleText(s),
+                    onPressed: () => toggleTextWindow(context, s),
                   ),
                 ),
+              if (!narrow)
               TourAnchor(
                 id: TourIds.shape,
                 child: PopupMenuButton<Object>(
@@ -1432,18 +1333,24 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   ),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: IconButton(
-                  tooltip: 'Help',
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.help_outline, semanticLabel: 'Help'),
-                  onPressed: () {
-                    s.playback.pause();
-                    openHelp(context);
-                  },
+              if (narrow)
+                // Phones: ONE project menu (shape and size, fades, notes,
+                // Text, History, markers, Settings, Help).
+                TourAnchor(id: TourIds.shape, child: _projectMenu(s))
+              else
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: IconButton(
+                    tooltip: 'Help',
+                    visualDensity: VisualDensity.compact,
+                    icon:
+                        const Icon(Icons.help_outline, semanticLabel: 'Help'),
+                    onPressed: () {
+                      s.playback.pause();
+                      openHelp(context);
+                    },
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -1503,13 +1410,7 @@ String aspectLabel(CanvasAspect aspect) => switch (aspect) {
     };
 
 /// The shape with a word about what it is for, as the menu shows it.
-String aspectMenuLabel(CanvasAspect aspect) => switch (aspect) {
-      CanvasAspect.original => 'Original (as the first clip)',
-      CanvasAspect.portrait9x16 => '9:16 upright',
-      CanvasAspect.landscape16x9 => '16:9 wide',
-      CanvasAspect.square1x1 => '1:1 square',
-      CanvasAspect.portrait4x5 => '4:5 upright',
-    };
+String aspectMenuLabel(CanvasAspect aspect) => shapeMenuLabel(aspect);
 
 /// A thin line at the top of the editor while the project is not on disk.
 class _NotSavedBar extends StatelessWidget {
@@ -1556,8 +1457,8 @@ class TransportBar extends StatelessWidget {
   const TransportBar({super.key, required this.session, this.onAdd});
   final EditorSession session;
 
-  /// Phones: opens the list of things that can be added. Wide windows have
-  /// those in the side panel.
+  /// Phones: opens the Add sheet. Shown only while something is selected
+  /// (with nothing selected the tool bar itself starts with Add).
   final VoidCallback? onAdd;
 
   @override
@@ -1575,8 +1476,8 @@ class TransportBar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    tooltip: 'Back to start',
-                    icon: const Icon(Icons.skip_previous, semanticLabel: 'Back to start'),
+                    tooltip: 'Go to start',
+                    icon: const Icon(Icons.skip_previous, semanticLabel: 'Go to start'),
                     onPressed:
                         playback.durationMs > 0 ? () => playback.seek(0) : null,
                   ),
@@ -1639,10 +1540,17 @@ class TransportBar extends StatelessWidget {
                     : const SizedBox.shrink(),
               ),
             if (onAdd != null)
-              IconButton(
-                tooltip: 'Add videos, photos, music or text',
-                icon: const Icon(Icons.add_circle_outline, semanticLabel: 'Add videos, photos, music or text'),
-                onPressed: onAdd,
+              ValueListenableBuilder<Selection?>(
+                valueListenable: session.selection,
+                builder: (context, selected, _) => selected == null
+                    ? const SizedBox.shrink()
+                    : IconButton(
+                        key: const ValueKey('transport-add'),
+                        tooltip: 'Add',
+                        icon: const Icon(Icons.add_circle_outline,
+                            semanticLabel: 'Add'),
+                        onPressed: onAdd,
+                      ),
               ),
             ValueListenableBuilder<double>(
               valueListenable: session.zoom,
@@ -1650,15 +1558,15 @@ class TransportBar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    tooltip: 'Zoom out timeline',
-                    icon: const Icon(Icons.zoom_out, semanticLabel: 'Zoom out timeline'),
+                    tooltip: 'Zoom out',
+                    icon: const Icon(Icons.zoom_out, semanticLabel: 'Zoom out'),
                     onPressed: zoom > EditorSession.minZoom
                         ? () => session.setZoom(session.zoom.value / 1.5)
                         : null,
                   ),
                   IconButton(
-                    tooltip: 'Zoom in timeline',
-                    icon: const Icon(Icons.zoom_in, semanticLabel: 'Zoom in timeline'),
+                    tooltip: 'Zoom in',
+                    icon: const Icon(Icons.zoom_in, semanticLabel: 'Zoom in'),
                     onPressed: zoom < EditorSession.maxZoom
                         ? () => session.setZoom(session.zoom.value * 1.5)
                         : null,

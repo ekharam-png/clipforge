@@ -19,6 +19,36 @@ import 'sound_renders.dart';
 
 enum ItemKind { clip, audio, title, overlay }
 
+/// Window width from which the editor uses the side-panel layout
+/// (computers, and tablets or phones held sideways: 840 dp and up).
+const double kWideLayoutWidth = 840;
+
+/// What only the editor screen can do (it owns the autosaver, the page's
+/// scaffold and the timers); set on [EditorSession.hooks] while the screen
+/// is open, so that actions started anywhere reach it.
+class EditorHooks {
+  EditorHooks({
+    required this.export,
+    required this.rename,
+    required this.backToProjects,
+    required this.playBackwards,
+    required this.stopReverse,
+    required this.setSnapping,
+    required this.setSoundWaves,
+    this.scaffold,
+  });
+  final void Function({bool several}) export;
+  final VoidCallback rename;
+  final VoidCallback backToProjects;
+  final VoidCallback playBackwards;
+  final VoidCallback stopReverse;
+  final ValueChanged<bool> setSnapping;
+  final ValueChanged<bool> setSoundWaves;
+
+  /// The editor page's scaffold (the crop sheet is shown on it).
+  final Object? Function()? scaffold;
+}
+
 /// Where the Text window sits in a wide window: a column at the right
 /// (default) or under the preview.
 enum TextDock { right, below }
@@ -159,6 +189,7 @@ class EditorSession {
     playback.processedSound = sounds.readyPath;
     sounds.addListener(_onSoundsChanged);
     playback.addListener(_onPlaybackChanged);
+    playback.position.addListener(_onPosition);
     sounds.update(editor.project);
     this.pictures = pictures ??
         SoundPictures(
@@ -195,6 +226,9 @@ class EditorSession {
 
   /// The kit folder, share sheet and upload pages (1.14).
   final PublishService? publish;
+
+  /// Set by the editor screen while it shows this session.
+  EditorHooks? hooks;
 
   /// Set by the editor screen: writes the project to disk now, and opens
   /// another project in place of this one.
@@ -335,6 +369,16 @@ class EditorSession {
     sounds.playing = playback.playing;
   }
 
+  /// The clip the playhead is on (-1: none). What can be done changes
+  /// with it ("Freeze frame" needs a video there), so the bars, panels
+  /// and menus listen to this instead of to every frame of the position.
+  final ValueNotifier<int> playheadClip = ValueNotifier(-1);
+
+  void _onPosition() {
+    if (_disposed) return;
+    playheadClip.value = clipIndexUnderPlayhead;
+  }
+
   Project get project => editor.project;
 
   void select(ItemKind kind, String id) => selection.value = Selection(kind, id);
@@ -441,6 +485,7 @@ class EditorSession {
 
   void _onEdited() {
     playback.updateProject(editor.project);
+    playheadClip.value = clipIndexUnderPlayhead;
     sounds.update(editor.project);
     pictures.update(editor.project);
     // Drop a selection whose item is gone (deleted or undone).
@@ -469,6 +514,8 @@ class EditorSession {
     editor.removeListener(_onEdited);
     sounds.removeListener(_onSoundsChanged);
     playback.removeListener(_onPlaybackChanged);
+    playback.position.removeListener(_onPosition);
+    playheadClip.dispose();
     sounds.dispose();
     playback.dispose();
     selection.dispose();

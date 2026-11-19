@@ -94,12 +94,14 @@ void main() {
     expect(find.textContaining('will not be offered again'), findsOneWidget);
   });
 
-  testWidgets('phones: Check for updates and its switch are under More', (tester) async {
+  testWidgets('phones: Check for updates is under More, its switch in Settings', (tester) async {
     final fakes = await home(tester, phone, latest: null);
     await tester.tap(find.byKey(const ValueKey('home-more')));
     await tester.pumpAndSettle();
     expect(find.text('Check for updates'), findsOneWidget);
-    expect(find.text('Check automatically'), findsOneWidget);
+    // The switch for the automatic check is in Settings since 1.15.
+    expect(find.text('Check automatically'), findsNothing);
+    expect(find.text('Settings'), findsOneWidget);
     await fakes.screenshot(tester, 'update_more_phone');
     await tester.tap(find.text('Check for updates'));
     await tester.pumpAndSettle();
@@ -115,7 +117,12 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('home-more')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Check automatically'));
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('settings-auto-updates')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-auto-updates')));
     await tester.pumpAndSettle();
     expect(fakes.prefs.flags, contains(kUpdateCheckOffFlag));
   });
@@ -128,34 +135,34 @@ void main() {
       final fakes = Fakes(projects: someProjects())
         ..buildInfo = ci139
         ..latest = release(142);
-      var checks = 0, toggles = 0, claude = 0;
+      var checks = 0, settings = 0, claude = 0;
       await tester.pumpWidget(fakes.app(const HomeScreen(),
           menuBar: true,
           help: HelpMenuActions(
             openHelp: () {},
             showTour: () {},
             checkForUpdates: () => checks++,
-            autoUpdateCheck: true,
-            toggleAutoUpdateCheck: () => toggles++,
+            openSettings: () => settings++,
             connectClaude: () => claude++,
           )));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Help'));
       await tester.pumpAndSettle();
       expect(find.text('Check for updates…'), findsOneWidget);
-      expect(find.text('Check for updates automatically'), findsOneWidget);
+      // The switch for the automatic check lives in Settings since 1.15.
+      expect(find.text('Check for updates automatically'), findsNothing);
       expect(find.text('Connect to Claude…'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('menu-check-updates')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Help'));
+      await tester.tap(find.text('File'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('menu-auto-updates')));
+      await tester.tap(find.byKey(const ValueKey('menu-settings')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Help'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('menu-connect-claude')));
       await tester.pumpAndSettle();
-      expect([checks, toggles, claude], [1, 1, 1]);
+      expect([checks, settings, claude], [1, 1, 1]);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

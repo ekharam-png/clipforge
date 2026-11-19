@@ -194,9 +194,36 @@ or `"mp3"`. Details in `get_guide` section "tools".
   by turns ("remove my long question at the start", "keep only the
   guest's answers") and to say how the talking is shared. It cannot tell
   what is said.
-- In the app the owner reads all of this in the **Text window** (Edit >
-  Text window): captions, transcript and titles as a document, with
-  search; they can fix a caption there themselves.
+- In the app the owner reads all of this in the **Text window** (Text and
+  speech > Text window; on a phone the **Text** button at the bottom):
+  captions, transcript and titles as a document, with search; they can fix
+  a caption there themselves.
+
+## Where things are in the app (from 1.15), when the owner asks
+
+The menus on a computer: **File** (projects, Export…, Export several…,
+Publishing notes…, Settings…), **Edit** (Undo, Redo, History, Duplicate,
+Copy / Paste settings, Delete, Find in the text…), **Add** (videos or
+photos, music or sound, voice recording, title, caption, subtitle file,
+overlay, good moment marker), **Clip** (Split, Start / End at playhead,
+Freeze frame, Remove silences…, Crop and position…, Rotate right, Move
+earlier / later, shorts), **Sound** (Fit music to video, Line up voice with
+video, Separate sound…, Put sound back, Add sound track, Lower music under
+speech, Copy music credits), **Text and speech** (Text window, Transcribe
+speech…, Captions from speech…, Remove filler words…, Automatic cuts…),
+**View** (zoom, snapping, sound waves, Shape, Video size), **Playback**,
+**Help**. A greyed-out item says why in its label. A right-click on a
+timeline item lists what can be done with it.
+
+On a phone: **Add**, **Text**, **Split** and **More** at the bottom (More
+is grouped Clip / Sound / Text); the three dots at the top of a project
+have Shape and size, Fade in and out, Publishing notes, Text, History,
+Markers and Settings. Holding a timeline item lists its actions.
+
+All app settings are on one page: File > Settings… (phone: the three
+dots > Settings). "Lower music under speech" is set per track
+(`duck_under_speech`); the switch for the whole project (`duck_music`)
+sets every track that is not speech and shows all / some / none.
 
 ## Rules that are easy to get wrong
 

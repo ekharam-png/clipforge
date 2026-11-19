@@ -254,10 +254,18 @@ void main() {
     testWidgets('video size in the Shape menu on a $label screen',
         (tester) async {
       final fakes = await openEditor(tester, size, missingFiles: const {});
-      await tester.tap(find.byTooltip('Shape of the video: upright, wide or square'));
+      if (size == phone) {
+        await tapProjectMenu(tester, 'Shape and size');
+        await tester
+            .ensureVisible(find.byKey(const ValueKey('video-size-p1080')));
+      } else {
+        await tester.tap(
+            find.byTooltip('Shape of the video: upright, wide or square'));
+      }
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('video-size-p1080')));
       await tester.pumpAndSettle();
+      await closeSheet(tester, size);
       expect(now(tester).videoSize, VideoSize.p1080);
       await tester.tap(find.text('Export'));
       await tester.pumpAndSettle();

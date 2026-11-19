@@ -20,7 +20,9 @@ import 'package:clipforge/media/processed_sound_cache.dart';
 import 'package:clipforge/ui/editor/editor_screen.dart';
 import 'package:clipforge/ui/editor/preview_view.dart';
 import 'package:clipforge/ui/editor/timeline_view.dart';
+import 'package:clipforge/ui/editor/tools.dart' show InspectorPanel, ToolBar;
 import 'package:clipforge/ui/app_prefs.dart';
+import 'package:clipforge/ui/app_settings.dart';
 import 'package:clipforge/ui/help/tour.dart';
 import 'package:clipforge/ui/help/tour_sample.dart';
 import 'package:clipforge/core/music/openverse.dart';
@@ -498,7 +500,12 @@ class Fakes {
 
   /// App settings. The tour question counts as answered, so that it does
   /// not pop up in tests about other things.
-  final MemoryAppPrefs prefs = MemoryAppPrefs(answered: true);
+  final MemoryAppPrefs prefs = MemoryAppPrefs(answered: true)
+    // Tests about other things: no "What moved" note, no "Updated to"
+    // line and no suggestions (the tests of those turn them back on).
+    ..flags.addAll({kWhatMovedSeenFlag, kSuggestionsOffFlag})
+    ..texts[kLastRunVersionText] = BuildInfo.current.version
+    ..texts[kUpdatedLineSeenText] = BuildInfo.current.version;
 
   /// The build the app says it is (About, version line).
   BuildInfo buildInfo = BuildInfo.current;
@@ -542,7 +549,19 @@ class Fakes {
   /// [home] inside the app theme with every service replaced by a fake.
   /// [menuBar]: with the app's menu bar around it, as in the real app
   /// (shown on macOS, Windows and Linux only).
-  Widget app(Widget home, {bool menuBar = false, HelpMenuActions? help}) =>
+  Widget app(Widget home, {bool menuBar = false, HelpMenuActions? help}) {
+    // The pretend build counts as the one that ran last (no "Updated to"
+    // line), unless the test set these itself.
+    if (prefs.texts[kLastRunVersionText] == BuildInfo.current.version) {
+      prefs.texts[kLastRunVersionText] = buildInfo.version;
+    }
+    if (prefs.texts[kUpdatedLineSeenText] == BuildInfo.current.version) {
+      prefs.texts[kUpdatedLineSeenText] = buildInfo.version;
+    }
+    return _app(home, menuBar: menuBar, help: help);
+  }
+
+  Widget _app(Widget home, {bool menuBar = false, HelpMenuActions? help}) =>
       ProviderScope(
         overrides: [
           projectStoreProvider.overrideWith((ref) => store),
@@ -883,6 +902,65 @@ Future<void> closeSheet(WidgetTester tester, Size size) async {
 
 List<String> clipIds(Project p) => [for (final c in p.clips) c.id];
 
+/// Starts adding something: [label] is the side panel's button ('Add
+/// media', 'Music', 'Overlay', 'Title', 'Caption'). On a phone the same
+/// thing is in the Add sheet (the Add button of the tool bar, or the +
+/// next to Play while something is selected).
+Future<void> tapAdd(WidgetTester tester, String label) async {
+  final onPhone = find.byType(ToolBar).evaluate().isNotEmpty;
+  if (!onPhone) {
+    // By its icon: "Music" and "Title" are also headings of the panel.
+    final icon = switch (label) {
+      'Add media' => Icons.add_photo_alternate_outlined,
+      'Music' => Icons.library_music_outlined,
+      'Overlay' => Icons.picture_in_picture_alt,
+      'Title' => Icons.title,
+      _ => Icons.closed_caption_outlined,
+    };
+    final button = find.descendant(
+        of: find.byType(InspectorPanel), matching: find.byIcon(icon));
+    await tester.ensureVisible(button.first);
+    await tester.tap(button.first);
+    await tester.pumpAndSettle();
+    return;
+  }
+  final add = find.byKey(const ValueKey('tool-add'));
+  await tester.tap(add.evaluate().isNotEmpty
+      ? add
+      : find.byKey(const ValueKey('transport-add')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.descendant(
+      of: find.byKey(const ValueKey('add-sheet')),
+      matching: find.text(switch (label) {
+        'Add media' => 'Videos or photos',
+        'Music' => 'Music or sound',
+        'Overlay' => 'Overlay (picture-in-picture)',
+        _ => label,
+      })));
+  await tester.pumpAndSettle();
+}
+
+/// Phones: opens More (the tool bar) and taps the line with [key], which
+/// may be further down the sheet.
+Future<void> tapMore(WidgetTester tester, String key) async {
+  await tester.tap(find.byKey(const ValueKey('tool-more')));
+  await tester.pumpAndSettle();
+  final line = find.byKey(ValueKey(key));
+  await tester.ensureVisible(line);
+  await tester.pumpAndSettle();
+  await tester.tap(line);
+  await tester.pumpAndSettle();
+}
+
+/// Phones: opens the project menu (the three dots at the top) and taps
+/// [item] ('Shape and size', 'Fade in and out', 'History', ...).
+Future<void> tapProjectMenu(WidgetTester tester, String item) async {
+  await tester.tap(find.byKey(const ValueKey('project-menu')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(item).last);
+  await tester.pumpAndSettle();
+}
+
 bool undoEnabled(WidgetTester tester) =>
     tester
         .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.undo))
@@ -892,8 +970,8 @@ bool undoEnabled(WidgetTester tester) =>
 /// Zooms the timeline out twice (to 26.67 px per second) so that the whole
 /// sample project fits on a phone.
 Future<void> zoomOutTwice(WidgetTester tester) async {
-  await tester.tap(find.byTooltip('Zoom out timeline'));
-  await tester.tap(find.byTooltip('Zoom out timeline'));
+  await tester.tap(find.byTooltip('Zoom out'));
+  await tester.tap(find.byTooltip('Zoom out'));
   await tester.pumpAndSettle();
 }
 

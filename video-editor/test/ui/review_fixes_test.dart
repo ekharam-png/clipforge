@@ -309,9 +309,11 @@ void main() {
       fakes.engine.infos['/in/new.mp4'] = video60;
       fakes.files.media = const [PickedFile('/in/new.mp4', 'new.mp4')];
       if (size == phone) {
-        await tester.tap(find.byTooltip('Add videos, photos, music or text'));
+        // A clip is selected: Add is the + next to Play.
+        await tester.tap(find.byKey(const ValueKey('transport-add')));
         await tester.pumpAndSettle();
-        expect(find.text('Go in after the selected clip'), findsOneWidget);
+        expect(find.textContaining('go in after the selected clip'),
+            findsOneWidget);
         await fakes.screenshot(tester, 'editor_phone_add');
         await tester.tap(find.text('Videos or photos'));
       } else {
@@ -390,7 +392,9 @@ void main() {
     await seekTo(tester, 2000, zoom: zoomedOut); // back onto the first video
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
-    expect(find.text('Freeze frame'), findsNothing); // a photo is selected
+    // A photo is selected and the playhead is on a video: "Freeze frame"
+    // acts at the playhead, so it is offered.
+    expect(find.text('Freeze frame'), findsOneWidget);
     await closeSheet(tester, phone);
     await tester.tap(find.text('Split'));
     await tester.pumpAndSettle();
@@ -626,8 +630,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
     expect(find.textContaining('0:18.0 / 0:18.0'), findsOneWidget);
-    await tester.tap(find.text('Title'));
-    await tester.pumpAndSettle();
+    await tapAdd(tester, 'Title');
     expect(find.text('Edit title'), findsOneWidget);
     expect(find.text('Text size'), findsOneWidget);
     expect(find.text('Text colour'), findsOneWidget);

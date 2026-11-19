@@ -18,6 +18,39 @@
 
 import '../model/project.dart';
 
+/// "Lower music under speech" for the whole project, as ONE truth (1.15):
+/// the per-track switches ([SoundTrack.duck]) are what the export uses, and
+/// the project-level control only reports and sets them.
+enum LowerMusic {
+  /// No track that can be lowered is.
+  none,
+
+  /// Some are, some are not (set by hand in the track menus).
+  some,
+
+  /// Every track that is not a speech track is.
+  all,
+}
+
+/// The tracks "Lower music under speech" is about: every sound track that
+/// does not count as speech.
+List<SoundTrack> lowerableTracks(Project p) =>
+    [for (final t in p.soundTracks) if (!t.speech) t];
+
+/// What the project-level "Lower music under speech" shows. A project
+/// without such a track yet shows the default for the next music track
+/// ([Project.duckMusic]).
+LowerMusic lowerMusicState(Project p) {
+  final music = lowerableTracks(p);
+  if (music.isEmpty) return p.duckMusic ? LowerMusic.all : LowerMusic.none;
+  final on = music.where((t) => t.duck).length;
+  return on == 0
+      ? LowerMusic.none
+      : on == music.length
+          ? LowerMusic.all
+          : LowerMusic.some;
+}
+
 /// Start and end (timeline ms) of the sound clips on [trackId] other than
 /// [ignoreId], in timeline order.
 List<({int start, int end})> busyRanges(Project p, String trackId,

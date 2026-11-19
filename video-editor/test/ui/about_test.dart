@@ -175,6 +175,8 @@ void main() {
   testWidgets('Windows and Linux: Help > About ClipForge and Copy version info',
       (tester) async {
     var about = 0, copy = 0;
+    // Wide enough for all nine menus (the test font is wide).
+    useScreen(tester, desktop);
     await tester.pumpWidget(MaterialApp(
       builder: (context, child) => AppMenuBar(
         controller: AppMenuController(),
@@ -220,8 +222,13 @@ void main() {
     first.onSelected!();
     expect(about, 1);
     final help = menus.last as PlatformMenu;
-    expect([for (final m in help.menus) m.label],
-        contains('Copy version info'));
+    // (Since 1.15 the Help menu is in groups, with About in it as well.)
+    final items = [
+      for (final m in help.menus)
+        if (m is PlatformMenuItemGroup) ...m.members else m,
+    ];
+    expect([for (final m in items) m.label],
+        containsAll(['Copy version info', 'About ClipForge', "What's new"]));
   });
 
   test('aboutInMenuBar is false on phones', () {

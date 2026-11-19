@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-# Writes "Read me first.html": the guide that travels inside the Windows and
-# macOS downloads (next to the app) and is also a release asset
-# (ClipForge-readme-windows.html, ClipForge-readme-macos.html).
+# Writes "Read me first.html": the guide that is PART of the Windows and
+# macOS downloads - installed by ClipForge-Setup.exe (and offered on its
+# last page), and beside ClipForge.app inside ClipForge-macos.zip. Since
+# 1.15 it is not a separate download any more.
 #
 #   python3 tool/ci/make_readme_html.py --platform windows|macos \
 #       --version 1.14.1 --build 123 --date 2026-11-19T07:20:00Z \
@@ -46,21 +47,15 @@ PLATFORMS = {
     "windows": {
         "system": "Windows",
         "routes": [
-            ("With the installer (recommended)", [
+            (None, [
                 "Open the downloaded <b>ClipForge-Setup.exe</b>.",
                 SMARTSCREEN,
                 "Click through the installer. It needs no administrator password "
                 "and puts ClipForge in the Start menu.",
+                "On the last page, leave <b>Show the read-me</b> ticked if you would "
+                "like the short guide. It is installed with ClipForge and is also in "
+                'the Start menu, as "ClipForge read me".',
                 "Open the <b>Start menu</b> and choose <b>ClipForge</b>.",
-            ]),
-            ("Or with the zip (nothing is installed)", [
-                "Right-click the downloaded <b>ClipForge-windows.zip</b> and choose "
-                "<b>Extract All</b>.",
-                "Inside is a folder called <b>ClipForge</b>. Move it to where you want "
-                "to keep it, for example Documents.",
-                "Keep the folder named <b>ClipForge</b>, with no version number: "
-                "ClipForge updates itself inside this folder.",
-                "Open the folder and double-click <b>clipforge.exe</b>. " + SMARTSCREEN,
             ]),
         ],
         "notes": [
@@ -75,7 +70,8 @@ PLATFORMS = {
         "routes": [
             (None, [
                 "Double-click the downloaded <b>ClipForge-macos.zip</b> to unzip it. "
-                "A folder appears with ClipForge in it.",
+                "A folder appears with <b>ClipForge</b> and the short guide "
+                "<b>Read me first</b> in it (these same steps, to keep).",
                 "Drag <b>ClipForge</b> into your <b>Applications</b> folder.",
                 "<b>macOS 15 or newer:</b> open ClipForge once. macOS says it cannot open it: "
                 "close that message. Then open <b>System Settings</b>, choose "

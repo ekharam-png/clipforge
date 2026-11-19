@@ -109,8 +109,13 @@ void main() {
 
     testWidgets('$label: Help from the editor', (tester) async {
       final fakes = await openEditor(tester, size);
-      await tester.tap(find.byTooltip('Help'));
-      await tester.pumpAndSettle();
+      if (size == phone) {
+        // Phones: Help is in the project menu.
+        await tapProjectMenu(tester, 'Help');
+      } else {
+        await tester.tap(find.byTooltip('Help'));
+        await tester.pumpAndSettle();
+      }
       expect(find.byType(HelpScreen), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
@@ -194,7 +199,12 @@ void main() {
 
       testWidgets('$label: Shape', (tester) async {
         final fakes = await openEditor(tester, size);
-        await tester.tap(find.textContaining('Shape'));
+        if (size == phone) {
+          await tapProjectMenu(tester, 'Shape and size');
+          await tester.ensureVisible(find.text('Which shape should I use?'));
+        } else {
+          await tester.tap(find.textContaining('Shape'));
+        }
         await tester.pumpAndSettle();
         await tester.tap(find.text('Which shape should I use?'));
         await tester.pumpAndSettle();

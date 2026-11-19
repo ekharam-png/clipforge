@@ -4,6 +4,35 @@ Newest first. The version you have is in Help > About ClipForge (and at the
 bottom of the project list). This file is also the "What's new" page in the
 app's Help.
 
+## 1.15.0 – 19 November 2026
+
+This version is about finding things. Nothing was removed, no editing tool was added, and every keyboard shortcut works as before. The first time it starts, a short note lists what moved.
+
+- The menus on a computer are sorted by what you want to do: File, Edit, **Add**, **Clip**, **Sound**, **Text and speech**, **View**, Playback, Help.
+  - **Add** has everything you can put into a video: **Videos or photos…**, **Music or sound…**, **Voice recording…**, **Title**, **Caption…**, **Subtitle file (.srt)…**, **Overlay video or photo…**, **Good moment marker**.
+  - **Clip** has **Split**, **Start at playhead**, **End at playhead**, **Freeze frame**, **Remove silences…**, **Crop and position…**, **Rotate right**, **Move earlier**, **Move later** and the shorts.
+  - **Sound** has everything about sound, **Text and speech** has the **Text window** and the speech tools, **View** has **Zoom in**, **Zoom out**, **Snap to playhead and edges**, **Show sound waves**, the shape and the video size.
+  - An item you cannot use right now stays where it is and says why: "Fit music to video (select a music clip)".
+  - Right-click a clip, a sound, a title, an overlay, a marker or an empty part of the timeline: a small menu with what you can do with it.
+- **Settings…**: one page for all the settings (computer: the File menu, or Ctrl+comma, Cmd+comma on a Mac; phone: the three dots on the project list and in a project).
+  - Editing: **Snap to playhead and edges**, **Show sound waves**, and on a phone **Smooth preview**. Phones can turn snapping off now.
+  - Where the Text window opens, **Use graphics card (faster)** (now remembered between exports), **Show suggestions**, **Check for updates automatically**, **Check now**, Claude, **About ClipForge**, **Copy version info**, **What's new**, **Licences**.
+  - The switches in the View menu and in the Export window are the same switches, so they always agree.
+- Suggestions: one quiet line with a button when ClipForge sees something it can help with, for example "The music is longer than the video." with **Fit to video**. One at a time, never while the video plays. The cross closes it for this project, **Don't show again** turns that one off, and **Show suggestions** in Settings turns them all off.
+  - It can suggest: **Fit to video**, **Line up with the picture** for a voice that was added as music, **Use 1080p** when the first clip is small, **Fill**, **Blur** or **Crop…** for a clip of another shape, **Remove silences…**, **Lower the music**, **Open Text**, **Captions from speech…** and **See who is speaking**.
+  - The Export window says in one line when an upright video is longer than a short, and what the graphics card is for the first time you export.
+  - After an update the project list says "Updated to" the new version, with **What's new** one tap away. **What's new** is also in the Help menu now.
+- **Lower music under speech** is one thing now. Each track's own switch is what counts; the switch for the whole project (side panel and Sound menu) shows whether all, some or none of the music tracks are lowered, and sets them all.
+- On a phone:
+  - The bar at the bottom starts with **Add**, **Text**, **Split** and **More**. **Add** opens one list of everything you can add.
+  - With something selected the bar shows its most used tools and **More**, which is grouped like the menus on a computer: Clip, Sound, Text. It has **Trim start to here** and **Trim end to here**.
+  - One menu at the top of a project (the three dots): **Shape and size**, **Fade in and out**, **Publishing notes**, **Text**, **History**, **Markers**, **Settings** and **Help**.
+  - Hold a clip, a sound or a title on the timeline: the same list as a right-click on a computer. Holding and dragging a clip still moves it.
+  - A tablet, or a phone held sideways, gets the layout of a computer with the panel at the side.
+- The same words everywhere: "captions" for the text on the picture and "subtitle file (.srt)" for the file, "Text" for the window, **Same as the first clip** for the video size, **Pause** for the K key, **Go to start**, "sound" instead of "audio".
+- New help pages: "Settings" and "Suggestions". "Menus: where everything is" is rewritten, and every page that named a moved item says where it is now.
+- Downloads: there are three now, one for Windows (the installer), one for Mac and one for Android. The short guide "Read me first" comes with the Windows and Mac downloads instead of being a separate file. The version for old 32-bit Android phones is no longer made.
+
 ## 1.14.1 – 19 November 2026
 
 Updates on Windows did not finish on real PCs: the new version stayed in a folder ending in ".update-new" next to the old one. This version fixes that.

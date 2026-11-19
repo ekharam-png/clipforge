@@ -11,7 +11,8 @@ media_kit (mpv) and exports use FFmpeg.
   drag to reorder, delete. Tapping a clip selects it and shows it in the
   preview. New clips go in after the selected clip (or after the clip under
   the playhead).
-- **Shape** (the button next to Export): keep the original shape or make the
+- **Shape** (the button next to Export; on a phone the three dots at the
+  top > Shape and size): keep the original shape or make the
   video upright (9:16, 4:5), wide (16:9) or square. Each clip can fit, fill
   or sit on a blurred copy of itself.
 - **Crop and position**: crop each clip with handles on the preview (free
@@ -59,7 +60,8 @@ media_kit (mpv) and exports use FFmpeg.
 - **Text window** (1.13): everything said or written in the video as one
   readable page - the captions (whatever made them), the transcript, the
   titles - grouped by speaker, with search; click a sentence to go there,
-  double-click a caption to fix a word. On phones under More > Text.
+  double-click a caption to fix a word. On phones: the Text button at the
+  bottom.
 - **Sound waves and who is speaking** (1.13): every sound on the timeline
   shows its waveform; on the Voice rows each speaker's talk is bright in
   that speaker's colour and the pauses are dim, and Ctrl+Left / Right jump
@@ -79,7 +81,8 @@ media_kit (mpv) and exports use FFmpeg.
   export draws them.
 - **Snapping**: on the timeline, dragged edges snap to the playhead and to
   the edges of clips, titles, sounds and overlays (yellow line); hold Alt /
-  Option to place freely; can be turned off in the Playback menu.
+  Option to place freely; can be turned off in Settings (computers also:
+  the View menu).
 - **Export** in full quality or as a small file for messaging apps, at the
   frame rate of the clips or 24 / 25 / 30 / 60 frames a second, or the
   sound only as M4A or MP3. Before it starts,
@@ -90,15 +93,59 @@ media_kit (mpv) and exports use FFmpeg.
   not let you leave without asking.
 
 Keyboard shortcuts (computer; Cmd instead of Ctrl on a Mac): Space
-play/pause, J / K / L backwards / stop / forwards (backwards jumps in small
+play/pause, J / K / L backwards / pause / forwards (backwards jumps in small
 steps), S split at the playhead, I / O start / end the selected clip at the
 playhead, Delete or Backspace delete the selection, Ctrl+D duplicate,
 Ctrl+Shift+C / Ctrl+Shift+V copy / paste clip settings, Ctrl+Z undo,
 Ctrl+Shift+Z or Ctrl+Y redo, Ctrl+Shift+H history, Ctrl+E export, + / -
 timeline zoom, Left/Right one frame of the clip shown (with Shift one
-second), Home/End jump to the start/end, F1 (Cmd+? on a Mac) help. They are
-off while you type in a text field. Every editor command is also in the
-menu bar (macOS menu bar; on Windows and Linux at the top of the window).
+second), Home/End jump to the start/end, M a good-moment marker, Ctrl+F find
+in the text, Ctrl+Shift+T the Text window, Ctrl+comma Settings, F1 (Cmd+? on
+a Mac) help. They are off while you type in a text field.
+
+### Where everything is (1.15)
+
+Every editor command is in the menu bar (macOS menu bar; on Windows and
+Linux at the top of the window), sorted by what you want to do:
+
+| Menu | What is in it |
+| --- | --- |
+| **File** | New project, Open project file…, Rename project…, Publishing notes…, Back to projects, Export…, Export several…, Export subtitles (.srt)…, Settings…, Quit / Exit |
+| **Edit** | Undo, Redo, History, Duplicate, Copy settings, Paste settings, Delete, Find in the text… |
+| **Add** | Videos or photos…, Music or sound…, Voice recording…, Title, Caption…, Subtitle file (.srt)…, Overlay video or photo…, Good moment marker |
+| **Clip** | Split, Start at playhead, End at playhead, Freeze frame, Remove silences…, Crop and position…, Rotate right, Move earlier, Move later, Make a short from here…, Make shorts from markers…, Good moments… |
+| **Sound** | Fit music to video, Line up voice with video, Separate sound…, Put sound back, Add sound track, Lower music under speech, Copy music credits |
+| **Text and speech** | Text window; on computers with speech to text: Transcribe speech…, Captions from speech…, Remove filler words…, Automatic cuts… |
+| **View** | Zoom in, Zoom out, Snap to playhead and edges, Show sound waves, Shape, Video size |
+| **Playback** | Play/Pause, Play backwards, Pause, Play forwards, Go to start, Go to end, Previous / Next frame, Previous / Next speech start |
+| **Help** | ClipForge Help, Keyboard shortcuts, Show the tour, What's new, Connect to Claude…, Check for updates…, Copy version info, About ClipForge |
+
+- An item that cannot be used right now stays in its place, greyed out, and
+  its label says why: "Fit music to video (select a music clip)".
+- **Right-click** a clip, a sound, a title, an overlay, a marker or an empty
+  part of the timeline for a menu of what can be done with it. On a phone,
+  **hold** the item: the same list.
+- **Settings** is one page: File > Settings… (Ctrl+comma); on a phone the
+  three dots on the project list or at the top of a project. Editing
+  (snapping, sound waves, smooth preview on phones), where the Text window
+  opens, Use graphics card (remembered between exports), Suggestions,
+  Updates, Claude, About.
+- **Suggestions**: one quiet line with a button when ClipForge sees
+  something it can help with (music longer than the video, a voice added as
+  music, a small first clip, a clip of another shape, pauses, music over
+  speech, captions without the Text window, speech without captions). One
+  at a time, never while the video plays; ✕ closes it for the project,
+  "Don't show again" for good, Settings turns them all off.
+- **On a phone** the bar at the bottom has Add, Text, Split and More; with
+  something selected, that item's most used tools and More (grouped Clip /
+  Sound / Text, with "Trim start to here" and "Trim end to here"). The three
+  dots at the top of a project have Shape and size, Fade in and out,
+  Publishing notes, Text, History, Markers, Settings and Help. From 840 dp
+  wide (a tablet, or a phone held sideways) the layout is the computer's,
+  with the panel at the side.
+- "Lower music under speech" is set per track; the switch for the whole
+  project (side panel, Sound menu) shows all / some / none and sets them
+  all.
 
 ### Moving a project between phone and computer
 
@@ -139,7 +186,8 @@ purpose (at the end you can keep it or delete it). **Not now** is fine too:
 the question is not asked again, and the tour is always in Help.
 
 - **Help** is the **?** at the top of the project list and of the editor
-  (on a Mac also in the menu bar: Help > ClipForge Help, Help > Show the
+  (on a phone: the three dots at the top of a project > Help; on a
+  computer also in the menu bar: Help > ClipForge Help, Help > Show the
   tour). It has about 45 short articles (including **What's new**, made from
   `CHANGELOG.md`) and a search box that finds what
   you mean even with typos ("musci", "vocie", "trascirpe"). It works
@@ -184,11 +232,16 @@ a test build that is not released yet:
 
 | File | For |
 | --- | --- |
-| `ClipForge-<version>-build<n>-android.apk` | Android phones and tablets |
-| `ClipForge-<version>-build<n>-android-old-32bit-phones.apk` | Only if the first one refuses to install (very old phones) |
-| `ClipForge-<version>-build<n>-windows-setup.exe` | Windows 10 / 11 (64-bit): the installer (recommended; 1.14.1) |
-| `ClipForge-<version>-build<n>-windows.zip` | Windows 10 / 11 (64-bit): the same app as a zip, no install |
+| `ClipForge-<version>-build<n>-android.apk` | Android phones and tablets (64-bit; the APK for old 32-bit phones is not built since 1.15) |
+| `ClipForge-<version>-build<n>-windows-setup.exe` | Windows 10 / 11 (64-bit): the installer |
 | `ClipForge-<version>-build<n>-macos.zip` | Mac (macOS 12 or newer) |
+| `ClipForge-<version>-build<n>-windows.zip` | Not a download for people: the app as a folder, which the app's own Update button uses on Windows |
+
+A published release (the download page) has exactly three downloads under
+fixed names, `ClipForge-Setup.exe`, `ClipForge-macos.zip` and
+`ClipForge-android.apk`, plus two files only the app's Update button reads,
+`ClipForge-windows.zip` and `latest.json` (`tool/ci/release_assets.py` is
+the list; the release job fails on any other set of files).
 
 For example `ClipForge-1.4.0-build21-macos.zip`: version 1.4.0, made by run 21.
 The Windows and Mac downloads also hold `Read me first.html` (1.14.1; it
@@ -197,9 +250,9 @@ system, first steps, where projects are, updates, Claude, and what changed
 in that version. It sits next to `clipforge.exe` (zip and installer; the
 installer adds a Start-menu entry "ClipForge read me") and next to
 `ClipForge.app` in the Mac zip. It is written by
-`tool/ci/make_readme_html.py` (test: `tool/ci/make_readme_html_test.py`),
-and a release carries the two pages as `ClipForge-readme-windows.html` and
-`ClipForge-readme-macos.html`. Downloads are kept for 90 days; after that, run the workflow again.
+`tool/ci/make_readme_html.py` (test: `tool/ci/make_readme_html_test.py`).
+It is part of the install, not a separate download (1.15). Downloads of a
+workflow run are kept for 90 days; after that, run the workflow again.
 
 ## Updates
 
@@ -207,8 +260,9 @@ From version 1.12 on ClipForge looks for a newer version by itself, at most
 once a day when it starts, and shows "Version … is available" on the project
 list with **What's new**, **Update** and **Later** (**Skip this version**
 and **Open the download page** are under the three dots). **Help > Check for
-updates…** asks right now; **Check for updates automatically** switches the
-daily check off (phones: the three dots on the project list).
+updates…** (or Settings > **Check now**; phones: the three dots on the
+project list) asks right now; **Check for updates automatically** in
+Settings switches the daily check off.
 
 Privacy: the check reads one small file, `latest.json`, from the newest
 GitHub Release. That is the only request the app makes by itself; nothing
@@ -276,8 +330,6 @@ file**. See "Keeping projects across updates" below.
 
 ### Windows
 
-The installer (recommended, 1.14.1):
-
 1. Download `ClipForge-Setup.exe` and open it. Windows shows a blue "Windows
    protected your PC" box because the app is not signed: click **More
    info**, then **Run anyway**.
@@ -285,27 +337,19 @@ The installer (recommended, 1.14.1):
    `%LOCALAPPDATA%\Programs\ClipForge`, and adds ClipForge to the Start
    menu. To remove it: Settings > Apps > ClipForge > Uninstall. Projects
    (`Documents\ClipForge`) stay.
+3. The last page offers to show the short guide ("Show the read-me"); it is
+   installed with ClipForge and is in the Start menu as "ClipForge read me".
 
-Or the zip (nothing is installed):
-
-1. Download `ClipForge-windows.zip`, right-click it and choose **Extract All**.
-2. Inside is a folder called `ClipForge`. Move that folder to where you want
-   to keep it and keep the folder named `ClipForge`, without a version
-   number: the app updates itself inside this folder. (A folder that is
-   already called "ClipForge-1.12.0" keeps working; it can be renamed to
-   "ClipForge" while the app is closed.)
-3. Open the `ClipForge` folder and double-click `clipforge.exe`. Keep all the
-   other files in that folder next to it. The zip makes no shortcuts.
-4. Windows shows the same "Windows protected your PC" box: **More info**,
-   then **Run anyway**.
-5. Do not start ClipForge from a folder whose name ends in `.update-new`:
-   that is a download waiting to be put in place. If it happened anyway,
-   ClipForge offers to tidy up.
+(Until 1.14 there was also a zip to unpack by hand. It is no longer a
+download; a ClipForge that was installed that way keeps working and keeps
+updating itself. If ClipForge ever runs from a folder whose name ends in
+`.update-new`, it offers to tidy up.)
 
 ### macOS
 
 1. Download `ClipForge-macos.zip` and double-click it. It unpacks to a
-   folder holding `ClipForge.app`. Drag `ClipForge.app` into
+   folder holding `ClipForge.app` and the short guide `Read me first.html`
+   (these steps, first steps, updates, what is new). Drag `ClipForge.app` into
    **Applications** (updates from inside the app need it there, not left in
    Downloads).
 2. The first time, right-click (or Control-click) the app and choose **Open**,
@@ -466,8 +510,8 @@ into the helper and served by its `get_guide` tool, so it always matches the
 installed version. Its source is `claude/guide/*.md`
 (`dart run tool/gen_guide.dart` after changing it; a test fails otherwise).
 
-The skill (`claude/skill/clipforge-editing`, `ClipForge-claude-skill.zip`)
-is now only a short pointer: it helps Claude notice that a request is about
+The skill (`claude/skill/clipforge-editing`; not a release download since
+1.15) is only a short pointer: it helps Claude notice that a request is about
 ClipForge and tells it to call `get_guide`. Uploading it (Claude >
 **Customize** > **Skills** > **Upload a skill**) is optional and never has
 to be repeated. `claude/CLAUDE.md` is the same pointer for Claude Code.
@@ -572,7 +616,7 @@ from this folder:
 ```sh
 flutter pub get
 flutter run                      # run on the connected device or desktop
-flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+flutter build apk --release --split-per-abi --target-platform android-arm64
 flutter build windows --release  # on Windows, needs Visual Studio with C++
 flutter build macos --release    # on a Mac, needs Xcode and CocoaPods
 flutter build linux --release    # needs libgtk-3-dev libmpv-dev libjson-glib-dev
@@ -618,7 +662,8 @@ flutter test
 The export tests in `test/media/` run real exports and need `ffmpeg` and
 `ffprobe` on the PATH; without them they are skipped.
 
-The tests in `test/ui/` drive the screens at phone size (390 × 844) and
+The tests in `test/ui/` drive the screens at phone size (390 × 844, and
+360 × 760 and a 900 × 600 tablet for the 1.15 layout) and
 desktop size (1280 × 800) with the players, the exporter and the file dialogs
 replaced by fakes. They can also write the pictures in `docs/screenshots/`:
 

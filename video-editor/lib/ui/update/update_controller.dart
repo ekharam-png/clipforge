@@ -90,7 +90,7 @@ class RealUpdatePlatform implements UpdatePlatform {
     try {
       is64 = await _channel.invokeMethod<bool>('is64Bit') ?? true;
     } catch (_) {}
-    return updatePlatformKey(os, android32: !is64);
+    return updatePlatformKey(os, only32Bit: !is64);
   }
 
   @override

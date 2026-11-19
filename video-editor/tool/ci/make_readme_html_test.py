@@ -118,7 +118,7 @@ class ReadmeTest(unittest.TestCase):
     def test_each_platform_has_its_own_steps_only(self):
         win, mac = self.page("windows"), self.page("macos")
         for step in ("ClipForge-Setup.exe", "Windows protected your PC", "More info",
-                     "Run anyway", "Start menu", "Extract All", "clipforge.exe",
+                     "Run anyway", "Start menu", "Show the read-me",
                      "Install on Windows"):
             self.assertIn(step, win)
         for step in ("Applications", "System Settings", "Privacy &amp; Security",
@@ -257,7 +257,11 @@ class ReadmeTest(unittest.TestCase):
                 for step in steps:
                     self.assertIn(words(step), site_text,
                                   "site/index.html does not have this %s step" % platform)
-            self.assertIn("ClipForge-readme-%s.html" % platform, open(site, encoding="utf-8").read())
+            # The guide is part of the download since 1.15, not a link.
+            self.assertNotIn("ClipForge-readme-%s.html" % platform,
+                             open(site, encoding="utf-8").read())
+        # The zip is only for the app's own updater now.
+        self.assertNotIn("Extract All", self.page("windows"))
 
 
 if __name__ == "__main__":

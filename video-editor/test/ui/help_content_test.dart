@@ -50,6 +50,11 @@ const kNotAppLabels = {
   'Alt+F4', 'Ctrl+Q', 'Cmd+Q',
   // Keys (1.13).
   'Ctrl+Shift+T', 'Ctrl+F', 'Ctrl+Left', 'Ctrl+Right', 'Enter', 'Shift+Enter',
+  // Keys (1.15).
+  'Ctrl+comma', 'Cmd+comma',
+  // What these were called before 1.15 (older entries of What's new).
+  'Mark a good moment', 'Save as subtitle file (.srt)…',
+  'Add overlay video or photo…',
 };
 
 void main() {

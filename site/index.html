@@ -99,9 +99,6 @@ header { padding: 56px 0 28px; }
   box-shadow: inset 0 -18px 30px rgba(0,0,0,.18);
   transition: transform .15s ease, filter .15s ease;
 }
-.lane.two { display: grid; grid-template-columns: 2fr 1fr; gap: 4px; }
-.lane.two .clip { width: auto; margin-left: 0; }
-.clip.alt { opacity: .86; }
 .clip:hover { filter: brightness(1.12); }
 .clip:active { transform: translateY(1px); }
 .clip:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
@@ -147,7 +144,6 @@ footer p { margin: 0 0 6px; max-width: 46em; }
   .row { grid-template-columns: 1fr; gap: 4px; }
   .ruler { padding-left: 0; }
   .win, .mac, .and { width: 100%; margin-left: 0; }
-  .lane.two { grid-template-columns: 1fr; }
   .playhead { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .clip { transition: none; } }
@@ -164,12 +160,9 @@ footer p { margin: 0 0 6px; max-width: 46em; }
     <span class="playhead" aria-hidden="true"></span>
     <div class="row" data-os="windows">
       <span class="label">Windows</span>
-      <div class="lane two"><a class="clip win" href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-Setup.exe">
+      <div class="lane"><a class="clip win" href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-Setup.exe">
         <span class="top"><span>ClipForge-Setup.exe</span><span>Windows 10 and 11</span></span>
-        <span class="act">Installer (recommended)</span></a>
-        <a class="clip win alt" href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-windows.zip">
-        <span class="top"><span>ClipForge-windows.zip</span><span>no install</span></span>
-        <span class="act">Zip</span></a></div>
+        <span class="act">Download for Windows</span></a></div>
     </div>
     <div class="row" data-os="mac">
       <span class="label">Mac</span>
@@ -184,10 +177,10 @@ footer p { margin: 0 0 6px; max-width: 46em; }
         <span class="act">Download for Android</span></a></div>
     </div>
   </div>
-  <p class="small">Very old Android phone? If the app does not install, use the <a href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-android-old-32bit-phones.apk">version for old 32-bit phones</a>. All files and past versions: <a href="https://github.com/ekharam-png/clipforge/releases">releases page</a>.</p>
+  <p class="small">Three downloads, one for each kind of device. The short guide comes with the download: the Windows installer shows it at the end, and on a Mac it sits next to the app. Past versions: <a href="https://github.com/ekharam-png/clipforge/releases">releases page</a>.</p>
 
   <figure class="shot">
-    <img src="editor.png" width="2560" height="1600" alt="The ClipForge editor: a video preview, a panel with Add media, Music, Overlay, Title, Captions and Split, and a timeline with video, music and title tracks.">
+    <img src="editor.png" width="2560" height="1600" alt="The ClipForge editor: a video preview, a panel with Add media, Music, Overlay, Title, Caption and Split, and a timeline with video, music and title tracks.">
     <figcaption>The editor on a computer. The phone version has the same tools.</figcaption>
   </figure>
 </header>
@@ -199,33 +192,24 @@ footer p { margin: 0 0 6px; max-width: 46em; }
     <div class="steps">
       <div style="--c: var(--clip-win)">
         <h3>Windows</h3>
-        <h4>With the installer (recommended)</h4>
         <ol>
           <li>Open the downloaded <b>ClipForge-Setup.exe</b>.</li>
           <li>If you see "Windows protected your PC", click <b>More info</b>, then <b>Run anyway</b>.</li>
           <li>Click through the installer. It needs no administrator password and puts ClipForge in the Start menu.</li>
+          <li>On the last page, leave <b>Show the read-me</b> ticked if you would like the short guide. It is installed with ClipForge and is also in the Start menu, as "ClipForge read me".</li>
           <li>Open the <b>Start menu</b> and choose <b>ClipForge</b>.</li>
         </ol>
-        <h4>Or with the zip (nothing is installed)</h4>
-        <ol>
-          <li>Right-click the downloaded <b>ClipForge-windows.zip</b> and choose <b>Extract All</b>.</li>
-          <li>Inside is a folder called <b>ClipForge</b>. Move it to where you want to keep it, for example Documents.</li>
-          <li>Keep the folder named <b>ClipForge</b>, with no version number: ClipForge updates itself inside this folder.</li>
-          <li>Open the folder and double-click <b>clipforge.exe</b>. If you see "Windows protected your PC", click <b>More info</b>, then <b>Run anyway</b>.</li>
-        </ol>
-        <p class="hint">Do not start ClipForge from a folder whose name ends in <b>.update-new</b>: that is a download waiting to be put in place.</p>
-        <p class="hint"><a href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-readme-windows.html">Full guide for Windows</a> (a small page to download and open; the same page is inside the download as "Read me first").</p>
+        <p class="hint">This warning is shown once, because ClipForge is not signed by Microsoft.</p>
       </div>
       <div style="--c: var(--clip-mac)">
         <h3>Mac</h3>
         <ol>
-          <li>Double-click the downloaded <b>ClipForge-macos.zip</b> to unzip it. A folder appears with ClipForge in it.</li>
+          <li>Double-click the downloaded <b>ClipForge-macos.zip</b> to unzip it. A folder appears with <b>ClipForge</b> and the short guide <b>Read me first</b> in it (these same steps, to keep).</li>
           <li>Drag <b>ClipForge</b> into your <b>Applications</b> folder.</li>
           <li><b>macOS 15 or newer:</b> open ClipForge once. macOS says it cannot open it: close that message. Then open <b>System Settings</b>, choose <b>Privacy &amp; Security</b>, scroll down, click <b>Open Anyway</b> next to the line about ClipForge, and confirm.</li>
           <li><b>Older macOS:</b> right-click ClipForge, choose <b>Open</b>, then <b>Open</b> again.</li>
         </ol>
         <p class="hint">This is needed once, because ClipForge is not signed by Apple. After that it opens like any other app.</p>
-        <p class="hint"><a href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-readme-macos.html">Full guide for Mac</a> (a small page to download and open; the same page is inside the download as "Read me first").</p>
       </div>
       <div style="--c: var(--clip-and)">
         <h3>Android</h3>
@@ -275,9 +259,7 @@ footer p { margin: 0 0 6px; max-width: 46em; }
     <div class="extra">
       <p>Claude can edit your ClipForge projects for you: cut silences, add titles, captions and music, and export. You do not need this to use ClipForge.</p>
       <p>You connect it once, from inside the app: <b>Help</b>, then <b>Connect to Claude…</b>. ClipForge keeps the connection up to date by itself after that. <a href="claude-setup.html">How to connect Claude to ClipForge</a></p>
-      <ul>
-        <li>The same files, if you prefer to download them: the Claude Desktop extension for <a href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-claude-windows.mcpb">Windows</a> or <a href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-claude-macos.mcpb">Mac</a>, and the optional <a href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-claude-skill.zip">ClipForge skill</a>.</li>
-      </ul>
+      <p>There is nothing extra to download for this: what Claude needs is inside ClipForge.</p>
     </div>
   </section>
 

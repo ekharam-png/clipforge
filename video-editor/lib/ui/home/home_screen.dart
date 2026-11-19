@@ -13,6 +13,10 @@ import '../format.dart';
 import '../help/help_screen.dart';
 import '../help/tour.dart';
 import '../help/whats_new.dart' show kWhatsNewId;
+import '../help/what_moved.dart';
+import '../app_settings.dart';
+import '../settings/settings_screen.dart';
+import 'dart:async';
 import '../help/tour_sample.dart';
 import '../services.dart';
 import '../theme.dart';
@@ -82,8 +86,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       await updates.onAppStart();
       if (updates.lastResult != null && mounted) {
+        // The quiet "Updated to X" line on the list says it already.
+        await _updatedKnown.future
+            .timeout(const Duration(seconds: 2), onTimeout: () {});
+        if (!mounted) return;
         await showUpdateOutcome(context, updates,
+            quietSuccess: _updatedTo != null,
             whatsNew: () {
+          _closeUpdatedLine();
           if (mounted) openHelp(context, articleId: kWhatsNewId);
         });
       }
@@ -121,6 +131,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     } catch (_) {
       answered = true;
     }
+    await _versionNotes(existingUser: answered);
     if (answered || !mounted || _tour.active) return;
     final yes = await showFirstLaunchOffer(context);
     try {
@@ -133,6 +144,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _say('You can take the tour any time: tap ? (Help) at the top, then '
           '"Show the tour".');
     }
+  }
+
+  /// The version that just started is not the one that ran last: say so
+  /// in one quiet line ("Updated to 1.15.0 · What's new"), and, the first
+  /// time a version from 1.15 on runs after an older one, show "What
+  /// moved" once. A first install sees neither.
+  String? _updatedTo;
+
+  /// Done once it is known whether the "Updated to" line shows.
+  final Completer<void> _updatedKnown = Completer<void>();
+
+  Future<void> _versionNotes({required bool existingUser}) async {
+    final prefs = ref.read(appPrefsProvider);
+    final current = ref.read(buildInfoProvider).version;
+    try {
+      final previous = await prefs.text(kLastRunVersionText);
+      if (previous != current) {
+        await prefs.setText(kLastRunVersionText, current);
+      }
+      final updated = previous == null ? existingUser : previous != current;
+      if (updated && await prefs.text(kUpdatedLineSeenText) != current) {
+        if (mounted) setState(() => _updatedTo = current);
+      }
+      if (!_updatedKnown.isCompleted) _updatedKnown.complete();
+      if (await prefs.flag(kWhatMovedSeenFlag)) return;
+      await prefs.setFlag(kWhatMovedSeenFlag);
+      if (!existingUser || !olderThan115(previous) || olderThan115(current)) {
+        return;
+      }
+      if (!mounted || _tour.active) return;
+      await showWhatMoved(context);
+    } catch (_) {
+      // Notes are never in the way of using the app.
+    } finally {
+      if (!_updatedKnown.isCompleted) _updatedKnown.complete();
+    }
+  }
+
+  void _closeUpdatedLine() {
+    final version = _updatedTo;
+    if (version == null) return;
+    setState(() => _updatedTo = null);
+    ref
+        .read(appPrefsProvider)
+        .setText(kUpdatedLineSeenText, version)
+        .catchError((Object _) {});
   }
 
   void _startTour() {
@@ -599,22 +656,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               tooltip: 'More',
               icon: const Icon(Icons.more_vert, semanticLabel: 'More'),
               onSelected: (choice) => switch (choice) {
+                _HomeMore.settings => openSettings(context),
+                _HomeMore.whatsNew =>
+                  openHelp(context, articleId: kWhatsNewId),
                 _HomeMore.about => showAboutClipForge(context),
                 _HomeMore.copyVersion => copyVersionInfo(context),
                 _HomeMore.checkUpdates => checkForUpdatesNow(context),
-                _HomeMore.autoUpdates => () {
-                    final updates = ref.read(updateControllerProvider);
-                    return updates.setAutoCheck(!updates.autoCheck);
-                  }(),
               },
               itemBuilder: (context) => [
                 const PopupMenuItem(
+                    key: ValueKey('home-more-settings'),
+                    value: _HomeMore.settings,
+                    child: Text('Settings')),
+                const PopupMenuItem(
+                    value: _HomeMore.whatsNew, child: Text("What's new")),
+                const PopupMenuItem(
                     value: _HomeMore.checkUpdates,
                     child: Text('Check for updates')),
-                CheckedPopupMenuItem(
-                    value: _HomeMore.autoUpdates,
-                    checked: ref.read(updateControllerProvider).autoCheck,
-                    child: const Text('Check automatically')),
                 const PopupMenuDivider(),
                 const PopupMenuItem(
                     value: _HomeMore.about, child: Text('About ClipForge')),
@@ -631,6 +689,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           children: [
             // "Version X is available" (nothing when there is no update).
             const UpdateBanner(),
+            // "Updated to 1.15.0 · What's new" (once per new version).
+            if (_updatedTo != null)
+              UpdatedLine(
+                version: _updatedTo!,
+                onWhatsNew: () {
+                  _closeUpdatedLine();
+                  openHelp(context, articleId: kWhatsNewId);
+                },
+                onClose: _closeUpdatedLine,
+              ),
             Expanded(child: body),
           ],
         ),
@@ -655,7 +723,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-enum _HomeMore { about, copyVersion, checkUpdates, autoUpdates }
+enum _HomeMore { settings, whatsNew, about, copyVersion, checkUpdates }
 
 class _Message extends StatelessWidget {
   const _Message({

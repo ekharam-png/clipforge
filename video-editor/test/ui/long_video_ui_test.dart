@@ -190,7 +190,7 @@ void main() {
     scroll.jumpTo(scroll.position.maxScrollExtent / 2);
     await tester.pumpAndSettle();
     for (var i = 0; i < 6; i++) {
-      await tester.tap(find.byTooltip('Zoom in timeline'));
+      await tester.tap(find.byTooltip('Zoom in'));
       await tester.pump();
     }
     await tester.pumpAndSettle();

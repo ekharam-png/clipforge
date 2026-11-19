@@ -13,7 +13,8 @@
 #   windows   -> ClipForge-windows.zip
 #   macos     -> ClipForge-macos.zip
 #   android   -> ClipForge-android.apk
-#   android32 -> ClipForge-android-old-32bit-phones.apk
+# (No 32-bit Android file since 1.15: such a phone finds no entry and the
+# app offers the download page.)
 # The address is the file inside THIS release (releases/download/<tag>/...),
 # not "latest": the size and fingerprint belong to exactly this file.
 # Standard library only.
@@ -28,7 +29,6 @@ FILES = {
     "windows": "ClipForge-windows.zip",
     "macos": "ClipForge-macos.zip",
     "android": "ClipForge-android.apk",
-    "android32": "ClipForge-android-old-32bit-phones.apk",
 }
 
 

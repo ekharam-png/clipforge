@@ -400,15 +400,23 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
 
-    // The Playback menu on a computer.
+    // The Playback and View menus on a computer.
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     try {
       await open(tester, desktop, fakes: fakes, menuBar: true);
       await tester.tap(find.widgetWithText(SubmenuButton, 'Playback'));
       await tester.pumpAndSettle();
-      expect(find.text('Previous speech start'), findsOneWidget);
-      expect(find.text('Next speech start'), findsOneWidget);
+      // Greyed out, and they say why.
+      expect(find.text('Previous speech start (no speech found yet)'),
+          findsOneWidget);
+      expect(find.text('Next speech start (no speech found yet)'),
+          findsOneWidget);
       expect(tester.widget<MenuItemButton>(key('menu-next-speech')).onPressed, isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      // "Show sound waves" is in the View menu since 1.15.
+      await tester.tap(find.widgetWithText(SubmenuButton, 'View'));
+      await tester.pumpAndSettle();
       await tester.tap(key('menu-waves'));
       await tester.pumpAndSettle();
       expect(fakes.prefs.flags.contains(kSoundWavesOffFlag), isFalse);
@@ -425,8 +433,8 @@ void main() {
     }
   });
 
-  testWidgets('phone: waves on the timeline; More has the switch and the '
-      'speech starts', (tester) async {
+  testWidgets('phone: waves on the timeline; More has the speech starts, '
+      'Settings the switch', (tester) async {
     final fakes = await open(tester, phone);
     final s = session(tester);
     expect(key('wave-v1'), findsOneWidget);
@@ -436,19 +444,29 @@ void main() {
     await tester.tap(find.text('More').last);
     await tester.pumpAndSettle();
     expect(key('more-speech-starts'), findsOneWidget);
+    await tester.ensureVisible(key('more-next-speech'));
+    await tester.pumpAndSettle();
     await tester.tap(key('more-next-speech'));
     await tester.pumpAndSettle();
     expect(s.playback.positionMs, 1000);
-    expect(key('more-sound-waves'), findsOneWidget);
-    await tester.ensureVisible(key('more-sound-waves'));
-    await tester.tap(key('more-sound-waves'));
-    await tester.pumpAndSettle();
-    expect(fakes.prefs.flags.contains(kSoundWavesOffFlag), isTrue);
-    expect(s.showWaves.value, isFalse);
-    expect(key('more-speech-starts'), findsNothing);
+    // The switch is a setting: Settings (the project menu), not More.
+    expect(key('more-sound-waves'), findsNothing);
     await tester.tapAt(const Offset(200, 60));
     await tester.pumpAndSettle();
+    await tapProjectMenu(tester, 'Settings');
+    await tester.ensureVisible(key('settings-sound-waves'));
+    await tester.pumpAndSettle();
+    await tester.tap(key('settings-sound-waves'));
+    await tester.pumpAndSettle();
+    expect(fakes.prefs.flags.contains(kSoundWavesOffFlag), isTrue);
+    // The editor behind the page follows at once.
+    expect(s.showWaves.value, isFalse);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     expect(key('wave-v1'), findsNothing);
+    await tester.tap(find.text('More').last);
+    await tester.pumpAndSettle();
+    expect(key('more-speech-starts'), findsNothing);
   });
 
   testWidgets('many captions, zoomed out: slim marks, and the caption under '

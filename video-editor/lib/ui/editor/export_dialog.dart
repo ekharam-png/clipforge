@@ -14,6 +14,8 @@ import '../../media/export_estimate.dart';
 import '../../media/export_kit.dart';
 import '../../media/media_api.dart';
 import '../../media/video_encoder.dart' show encoderDescription, encoderLabel;
+import '../../core/publish/shorts.dart' show kShortMaxSeconds;
+import '../app_settings.dart';
 import '../format.dart';
 import '../help/help_screen.dart';
 import '../long_jobs.dart';
@@ -40,6 +42,7 @@ Future<void> showExportDialog(
   Future<Project?> Function(Project variant, String name)? onKeepCopy,
   SpeakerTurns Function()? turns,
   bool several = false,
+  AppSettings? settings,
 }) {
   return showDialog<void>(
     context: context,
@@ -56,7 +59,8 @@ Future<void> showExportDialog(
         onNotes: onNotes,
         onKeepCopy: onKeepCopy,
         turns: turns,
-        several: several),
+        several: several,
+        settings: settings),
   );
 }
 
@@ -202,8 +206,14 @@ class ExportDialog extends StatefulWidget {
     this.onKeepCopy,
     this.turns,
     this.several = false,
+    this.settings,
   });
   final Project project;
+
+  /// The app's settings: "Use graphics card" is remembered there, and the
+  /// two notes of this window (first export, long upright video) follow
+  /// "Show suggestions". Null (tests): nothing is remembered.
+  final AppSettings? settings;
 
   /// The kit folder, the share sheet, "Show in folder" and the sites'
   /// upload pages (1.14). Null: none of that is offered.
@@ -344,9 +354,102 @@ class _ExportDialogState extends State<ExportDialog> {
   @override
   void initState() {
     super.initState();
+    _useGpu = widget.settings?.graphicsCard ?? true;
     _lookForFastVideo();
     _lookForGraphicsCard();
+    _loadNotes();
   }
+
+  /// The first export on this device: one line next to "Use graphics
+  /// card" says what it is.
+  bool _firstExport = false;
+
+  /// "This upright video is longer than a short" was closed (for this
+  /// project) or turned off.
+  bool _longNoteClosed = true;
+
+  static const String _longNoteId = 'long-upright';
+
+  Future<void> _loadNotes() async {
+    final settings = widget.settings;
+    if (settings == null) return;
+    try {
+      final prefs = settings.prefs;
+      final first = !await prefs.flag(kExportedOnceFlag);
+      final closed = await prefs.flag(hintOffFlag(_longNoteId)) ||
+          await prefs.flag(hintProjectFlag(_longNoteId, widget.project.id));
+      if (!mounted) return;
+      setState(() {
+        _firstExport = first;
+        _longNoteClosed = closed;
+      });
+    } catch (_) {}
+  }
+
+  void _noteExportStarted() {
+    widget.settings?.prefs
+        .setFlag(kExportedOnceFlag)
+        .catchError((Object _) {});
+  }
+
+  /// A phone-shaped video that is longer than a short: one line, not a
+  /// question in the way.
+  bool get _showLongNote {
+    if (_longNoteClosed || !(widget.settings?.suggestions ?? false)) {
+      return false;
+    }
+    final canvas = _project.canvasSize;
+    return canvas.height > canvas.width &&
+        _project.durationMs > kShortMaxSeconds * 1000;
+  }
+
+  Widget _longNote(TextTheme text) => Padding(
+        key: const ValueKey('export-long-upright-note'),
+        padding: const EdgeInsets.only(top: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 2, right: 8),
+              child: Icon(Icons.lightbulb_outline,
+                  size: 16, color: AppColors.textDim),
+            ),
+            Expanded(
+              child: Text(
+                'This upright video is ${formatLength(_project.durationMs)} '
+                'long. Shorts and Reels work best under '
+                '$kShortMaxSeconds seconds: "Make a short from here…" cuts '
+                'one out of it.',
+                style: text.bodySmall?.copyWith(color: AppColors.textDim),
+              ),
+            ),
+            IconButton(
+              key: const ValueKey('export-long-upright-close'),
+              tooltip: 'Close this note',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.close,
+                  size: 16, semanticLabel: 'Close this note'),
+              onPressed: () {
+                setState(() => _longNoteClosed = true);
+                widget.settings?.prefs
+                    .setFlag(hintProjectFlag(_longNoteId, widget.project.id))
+                    .catchError((Object _) {});
+              },
+            ),
+          ],
+        ),
+      );
+
+  Widget _firstExportNote(TextTheme text) => Padding(
+        key: const ValueKey('export-first-note'),
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Text(
+          'Your first export: with a graphics card it is usually several '
+          'times quicker. The switch is remembered, and is also in '
+          'Settings.',
+          style: text.bodySmall?.copyWith(color: AppColors.textDim),
+        ),
+      );
 
   /// The first time this takes a second or two (a tiny test encode); the
   /// answer is then remembered for the run of the app.
@@ -430,6 +533,7 @@ class _ExportDialogState extends State<ExportDialog> {
     // Off only when the user turned it off; while the check is still
     // running the engine decides by itself.
     final useGpu = _gpuAvailable == false || _useGpu;
+    _noteExportStarted();
     final options = ExportOptions(
         quality: _quality,
         fps: _exportFps,
@@ -590,6 +694,7 @@ class _ExportDialogState extends State<ExportDialog> {
     if (choices.isEmpty || publish == null) return;
     final desktop = widget.files.canChooseSaveLocation;
     final useGpu = _gpuAvailable == false || _useGpu;
+    _noteExportStarted();
     final plan = planKit(_project, choices,
         fps: _exportFps,
         useHardwareEncoder: useGpu,
@@ -1011,10 +1116,13 @@ class _ExportDialogState extends State<ExportDialog> {
           ..._destinationPicker(text),
           ..._presetDetails(text),
           if (!audio && _gpuAvailable != null) _encoderPlan(text),
+          if (!audio && _gpuAvailable == true && _firstExport)
+            _firstExportNote(text),
           _sizeLine(text),
           const SizedBox(height: 4),
           Text(_lengthLine(audio),
               style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+          if (_showLongNote) _longNote(text),
           _notesRow(text),
         ],
       );
@@ -1113,13 +1221,20 @@ class _ExportDialogState extends State<ExportDialog> {
               style: text.bodySmall?.copyWith(color: AppColors.textDim),
             ),
             value: _useGpu,
-            onChanged: (v) => setState(() => _useGpu = v),
+            onChanged: (v) {
+              setState(() => _useGpu = v);
+              // Remembered between exports (Settings > Export).
+              widget.settings?.setGraphicsCard(v);
+            },
           ),
+        if (!audio && _gpuAvailable == true && _firstExport)
+          _firstExportNote(text),
         if (!audio) _encoderPlan(text),
         _sizeLine(text),
         const SizedBox(height: 4),
         Text(_lengthLine(audio),
             style: text.bodySmall?.copyWith(color: AppColors.textDim)),
+        if (_showLongNote) _longNote(text),
         _notesRow(text),
       ],
     );
@@ -1797,9 +1912,9 @@ class _ExportDialogState extends State<ExportDialog> {
   }
 }
 
-/// "As first clip", "720p", "1080p", "4K".
+/// "Same as the first clip", "720p", "1080p", "4K".
 String videoSizeLabel(VideoSize s) => switch (s) {
-      VideoSize.matchFirstClip => 'As first clip',
+      VideoSize.matchFirstClip => 'Same as the first clip',
       VideoSize.p720 => '720p',
       VideoSize.p1080 => '1080p',
       VideoSize.p2160 => '4K',

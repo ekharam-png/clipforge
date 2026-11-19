@@ -28,9 +28,9 @@ void main() {
       await fakes.screenshot(tester, 'editor_${label}_clip_selected');
 
       // The playhead on the missing clip shows the notice, not a crash.
-      await tester.tap(find.byTooltip('Zoom out timeline'));
+      await tester.tap(find.byTooltip('Zoom out'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Zoom out timeline'));
+      await tester.tap(find.byTooltip('Zoom out'));
       await tester.pumpAndSettle();
       await seekTo(tester, 10000, zoom: 60 / 1.5 / 1.5);
       await tester.pumpAndSettle();
@@ -194,8 +194,7 @@ void main() {
       PickedFile('/in/pic.PNG', 'pic.PNG'),
       PickedFile('/in/broken.mov', 'broken.mov'),
     ];
-    await tester.tap(find.text('Add media'));
-    await tester.pumpAndSettle();
+    await tapAdd(tester, 'Add media');
     expect(find.text('A file could not be added'), findsOneWidget);
     expect(find.textContaining('broken.mov'), findsOneWidget);
     await tester.tap(find.text('OK'));
@@ -230,8 +229,7 @@ void main() {
     fakes.engine.infos['/in/tune.mp3'] = const MediaInfo(
         durationMs: 9000, width: 0, height: 0, hasVideo: false, hasAudio: true);
     fakes.files.audio = const [PickedFile('/in/tune.mp3', 'tune.mp3')];
-    await tester.tap(find.text('Music'));
-    await tester.pumpAndSettle();
+    await tapAdd(tester, 'Music');
     // 1.10: "What is this sound?" - Music is chosen for a song.
     expect(find.text('What is this sound?'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('sound-role-add')));
@@ -246,8 +244,7 @@ void main() {
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Title'));
-    await tester.pumpAndSettle();
+    await tapAdd(tester, 'Title');
     await tester.enterText(find.byType(TextField), 'Hello');
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Dark box behind text'));
@@ -278,13 +275,13 @@ void main() {
 
   testWidgets('aspect menu and rename', (tester) async {
     final fakes = await openEditor(tester, phone);
-    // The control says what it is.
-    await tester.tap(find.text('Shape'));
-    await tester.pumpAndSettle();
+    // Phones: the project menu has "Shape and size".
+    await tapProjectMenu(tester, 'Shape and size');
     expect(find.textContaining('Original'), findsOneWidget);
     expect(find.text('4:5 upright'), findsOneWidget);
     await tester.tap(find.text('9:16 upright'));
     await tester.pumpAndSettle();
+    await closeSheet(tester, phone);
     await fakes.screenshot(tester, 'editor_phone_9x16');
 
     await tester.tap(find.text('Summer trip'));
@@ -303,11 +300,11 @@ void main() {
   testWidgets('zoom buttons change the timeline scale', (tester) async {
     await openEditor(tester, phone);
     final before = tester.getSize(block('clip-a')).width;
-    await tester.tap(find.byTooltip('Zoom in timeline'));
+    await tester.tap(find.byTooltip('Zoom in'));
     await tester.pumpAndSettle();
     expect(tester.getSize(block('clip-a')).width, closeTo(before * 1.5, 0.01));
-    await tester.tap(find.byTooltip('Zoom out timeline'));
-    await tester.tap(find.byTooltip('Zoom out timeline'));
+    await tester.tap(find.byTooltip('Zoom out'));
+    await tester.tap(find.byTooltip('Zoom out'));
     await tester.pumpAndSettle();
     expect(tester.getSize(block('clip-a')).width, closeTo(before / 1.5, 0.01));
   });

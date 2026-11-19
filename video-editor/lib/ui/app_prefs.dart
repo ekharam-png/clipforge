@@ -31,7 +31,7 @@ abstract class AppPrefs {
 }
 
 /// [AppPrefs.flag] that turns the automatic update check off (it is on by
-/// default; Help > Check for updates automatically).
+/// default; Settings > Updates > Check for updates automatically).
 const String kUpdateCheckOffFlag = 'updateCheckOff';
 
 /// [AppPrefs.text]: when updates were last checked (ISO 8601, UTC).
@@ -122,6 +122,18 @@ class FileAppPrefs implements AppPrefs {
 /// [AppPrefs] kept in memory (tests, and the end-to-end runs).
 class MemoryAppPrefs implements AppPrefs {
   MemoryAppPrefs({this.answered = false});
+
+  /// A device that has run this version before and wants no notes: the
+  /// tour question is answered, "What moved" was seen, no "Updated to"
+  /// line, and (unless [suggestions]) no suggestion line. For runs that
+  /// are about something else.
+  MemoryAppPrefs.settled(String version, {bool suggestions = false})
+      : answered = true {
+    flags.add('whatMoved115Seen');
+    if (!suggestions) flags.add('suggestionsOff');
+    texts['lastRunVersion'] = version;
+    texts['updatedLineSeen'] = version;
+  }
   bool answered;
 
   @override

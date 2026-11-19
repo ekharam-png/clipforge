@@ -2,7 +2,11 @@
 
 Read this first in a new session. It records what was built, why, how it fits
 together, how to build and test it, and what is still open. Last updated
-19 November 2026 (1.14.1: the Windows update never finished on the owner's
+19 November 2026 (1.15.0: finding things - the menus by task, ONE Settings
+page, suggestions, the phone layout, the timeline's context menu, one truth
+for "Lower music under speech", and three downloads instead of six; see
+"Finding things (1.15.0)" and "Three downloads (1.15.0)". Before that
+1.14.1: the Windows update never finished on the owner's
 real PC - the script now replaces the folder's contents instead of
 renaming the folder, must report in before the app closes, leaves a log,
 and there is a tidy-up and an installer; see "Updates that finish on real
@@ -85,7 +89,7 @@ shared with a few friends later.
   `lib/ui/editor/publishing_panel.dart`, `shorts_actions.dart`,
   `lib/mcp/tools_publish.dart`, `lib/core/claude/connect.dart` +
   `lib/ui/claude/claude_connect.dart`, `lib/mcp/heartbeat.dart`.
-- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1796 tests (1.14.0; 1690 at 1.13.0, 1611 at 1.12.0, 1516 at 1.11.0).
+- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1888 tests (1.15.0; 1827 at 1.14.1, 1796 at 1.14.0, 1690 at 1.13.0, 1611 at 1.12.0, 1516 at 1.11.0).
   `integration_test/real_app_test.dart` — drives the real app on Linux.
 
 ## What was built, and why
@@ -1512,7 +1516,8 @@ three "once".
 
 ### Decisions
 - **latest.json** keeps `version`, `build`, `date`, `notes_url` and gains
-  `platforms.{windows,macos,android,android32}.{url,size,sha256}`. The url
+  `platforms.{windows,macos,android}.{url,size,sha256}` (1.15: no
+  `android32` any more, see "Three downloads"). The url
   is the fixed-name file of THAT release (`releases/download/<tag>/…`), not
   `latest/…`, so size and hash always belong to the file. The release job
   also checks that latest.json carries the hashes of the files it uploads.
@@ -1550,7 +1555,8 @@ three "once".
 - **Android**: the APK goes to `<cache>/updates/`, is checked, then
   `ACTION_VIEW` with a FileProvider uri; Android's own dialogs do the rest
   (the "allow from this source" prompt is explained before it appears).
-  32-bit devices get `android32`.
+  A 32-bit device has no entry since 1.15 (`updatePlatformKey(..., only32Bit:
+  true)` is null): the app offers the download page.
 - **Claude helper**: built BEFORE the app in CI, packed into the .mcpb,
   and the .mcpb is an app asset (`assets/claude/ClipForge-claude.mcpb`,
   not in git). The app unpacks `server/` from it into
@@ -2257,6 +2263,345 @@ so neither class could show.
   remove list with non-ASCII paths in the cmd script (CI uses ASCII
   there); the 15 s wait on a slow PC with a scanner.
 
+## Finding things (1.15.0, 19 Nov 2026)
+
+Owner (non-technical, compares to CapCut) approved a reorganisation after a
+read-only audit of the menus and settings: "this version is about finding
+things", "think about mobile as well". NO new editing feature; every
+keyboard shortcut and every action of 1.14.1 still works.
+
+### The menu tree (`lib/ui/app_menu.dart`)
+
+ONE tree, `buildMenuTree(editor, help:, home:, platform:)` -> `MenuNode`s,
+drawn twice: `buildAppMenus` (macOS `PlatformMenuBar`: adds the app menu
+with About / Services / Hide / Quit, and Window before Help) and
+`WindowMenuBar` (Windows / Linux, `MenuBar` in the window). They cannot
+drift apart any more. `describeMenuTree` turns the tree into text;
+`test/ui/menu_tree_snapshot.txt` is the full snapshot for macOS, Windows
+and Linux (regenerate: `UPDATE_MENU_SNAPSHOT=1 flutter test
+test/ui/menu_tree_test.dart`).
+
+```
+File            New project (Ctrl/Cmd+N) · Open project file… (Ctrl/Cmd+O) |
+                Rename project… · Publishing notes… · Back to projects |
+                Export… (Ctrl/Cmd+E) · Export several… · Export subtitles (.srt)… |
+                Settings… (Ctrl/Cmd+,) | Quit (Linux Ctrl+Q) / Exit (Windows Alt+F4)
+                (macOS: Quit is in the app menu, as on every Mac)
+Edit            Undo · Redo · History (Ctrl/Cmd+Shift+H) | Duplicate (Ctrl/Cmd+D) ·
+                Copy settings · Paste settings (Ctrl/Cmd+Shift+C / V) · Delete |
+                Find in the text… (Ctrl/Cmd+F)
+Add             Videos or photos… · Music or sound… · Voice recording… · Title ·
+                Caption… · Subtitle file (.srt)… · Overlay video or photo… ·
+                Good moment marker (M)
+Clip            Split (S) · Start at playhead (I) · End at playhead (O) ·
+                Freeze frame · Remove silences… · Crop and position… ·
+                Rotate right · Move earlier · Move later |
+                Make a short from here… · Make shorts from markers… · Good moments…
+Sound           Fit music to video · Line up voice with video · Separate sound… ·
+                Put sound back · Add sound track · Lower music under speech ·
+                Copy music credits
+Text and speech Text window (Ctrl/Cmd+Shift+T) · Transcribe speech… ·
+                Captions from speech… · Remove filler words… · Automatic cuts…
+                (the four speech items only where a speech service exists)
+View            Zoom in (+) · Zoom out (-) · Snap to playhead and edges ·
+                Show sound waves | Shape ▸ · Video size ▸
+Playback        Play/Pause (Space) · Play backwards (J) · Pause (K) ·
+                Play forwards (L) | Go to start (Home) · Go to end (End) ·
+                Previous frame (Left) · Next frame (Right) |
+                Previous speech start · Next speech start (Ctrl+Left / Right shown
+                on Windows / Linux only)
+Help            ClipForge Help (F1 / Cmd+?) · Keyboard shortcuts · Show the tour ·
+                What's new | Connect to Claude… · Check for updates… |
+                Copy version info · About ClipForge
+```
+
+Where the items the owner did not list went: **Publishing notes…** and
+**Export several…** in File (next to Rename and Export); **Make shorts
+from markers…** and **Good moments…** (the markers list) in Clip, under
+"Make a short from here…"; **Subtitle file (.srt)…** (was "Import
+subtitles") in Add; "Check for updates automatically" left the Help menu
+for Settings; the phone's "Smooth preview" and "Show sound waves" left
+More for Settings. "Play" / "Pause" (one item that changed its name) is
+"Play/Pause", because K is "Pause" now.
+
+Keys: `windowMenuShortcuts` handles only what nothing else does (Ctrl+N,
+Ctrl+O, Ctrl+E, Ctrl+Shift+H, Ctrl+Shift+T, Ctrl+comma, F1, Ctrl+Q on
+Linux); every other key shown is done by the editor's own `_onKey`
+(unchanged). `menu_tree_test.dart` keeps a list of every shortcut the
+1.14.1 menus showed and fails when one is gone or shown twice.
+
+### One source for "can it be done, and why not" (`lib/ui/editor/`)
+
+- `acts.dart`: `enum Act` (every action of the editor), `actLabel`,
+  `actIcon`, `actHint`, and `ActionEntry` (label, icon, `reason`, `checked`,
+  `mixed`, `onTap`). No heavy imports: the menu bar uses it.
+- `editor_actions.dart`: `EditorActions(session)` with `whyNot(act)` (null:
+  possible; else a short lower-case reason without a full stop, e.g.
+  "select a music clip"), `checked`, `mixed`, `entry(context, act)` and
+  `run(context, act)`. ALL enable conditions live here. Also the helpers
+  that used to be private to the editor screen (`toggleTextWindow`,
+  `findInTextWindow`, `toggleHistory`, `openCrop`, `openPublishingNotes`,
+  `deleteSelection`, `frameStepFor`).
+- What only the screen can do (export needs the autosaver, rename needs the
+  store, play backwards has a timer) goes through `EditorSession.hooks`
+  (`EditorHooks`, set in `_load`).
+- Users of the source: the menu bar (`_updateMenu` builds
+  `EditorMenuActions(entries: {Act: ActionEntry})`; a disabled item's label
+  is "<label> (<reason>)" on both bars), the side panel and phone tool bar
+  (`buildToolActions`; a greyed button's tooltip is "<label>: <reason>"),
+  the phone sheets (`ActionTile`: second line "Not now: <reason>") and the
+  context menu.
+- `EditorSession.playheadClip` (a ValueNotifier<int>) tells the bars and
+  the menu when the playhead moves onto another clip ("Freeze frame" needs
+  a video there) without listening to every frame.
+- On the project list the editor's items are greyed without a reason (a
+  whole greyed menu explains itself; nine menus of "(open a project
+  first)" would be noise).
+- To add an action: a value in `Act` + its label / icon (the switches are
+  exhaustive, the compiler lists the places), its condition in `whyNot`,
+  its effect in `run`, and a line in `buildMenuTree` (then update the
+  snapshot).
+
+### Timeline context menu (`action_sheets.dart`, `timeline_view.dart`)
+
+`contextActs(TimelineTarget, session)` is THE list per kind (clip / sound /
+title or caption / overlay / marker / empty place);
+`showTimelineContextMenu` selects the item first (so the reasons are about
+it) and shows a popup menu at the pointer in a wide window, a sheet in a
+narrow one. Triggers: `onSecondaryTapUp` everywhere; `onLongPressStart` on
+lane blocks, markers and the background; a clip keeps "hold and drag to
+move" - a long press that is let go without moving 10 px opens the menu
+instead (`_pressStart/_pressUpdate/_pressEnd`). "Edit" is in the list only
+in a narrow window (computers have the side panel).
+
+### "Lower music under speech": one truth
+
+`lowerMusicState(project)` in `lib/core/editor/sound_tracks.dart` ->
+`LowerMusic.none / some / all` over the sound tracks that are not speech.
+The per-track switches (`SoundTrack.duck`, the track menu and the selected
+sound's panel) are what the export uses. The project-level control (side
+panel `DuckMusicSwitch`, Sound menu, context menu) only shows that state
+and sets every such track (`setDuckMusic`; from "some" it turns all on).
+`Project.duckMusic` is still stored but is now just the default for music
+tracks made later, kept equal to "all" by `_editTrack` (so Claude's
+`duck_music` reads the same thing). Tests: `test/core/lower_music_test.dart`,
+`test/ui/v115_actions_test.dart`.
+
+### Settings (`lib/ui/app_settings.dart`, `lib/ui/settings/settings_screen.dart`)
+
+`AppSettings` (a ChangeNotifier over `AppPrefs`, `appSettingsProvider`) is
+the single live source; the Settings page, the View menu (through
+`EditorHooks.setSnapping / setSoundWaves`), the editor (`_onSettings`
+copies it into the session's notifiers at once) and the Export window all
+use it. The automatic update check stays in `UpdateController`
+(`autoCheck` / `setAutoCheck`), which Settings shows.
+
+Keys in `settings.json` (all "off" flags, so a missing file means the
+defaults):
+
+| Key | Kind | Meaning |
+|---|---|---|
+| `snappingOff` | flag | Snap to playhead and edges off |
+| `soundWavesOff` | flag | Show sound waves off |
+| `smoothPreviewOff` | flag | Smooth preview off (phones) |
+| `textDock` | text | `right` / `below` (Text window position) |
+| `textWidth`, `textHeight` | text | Size of the Text window |
+| `graphicsCardOff` | flag | Use graphics card off (1.15: remembered) |
+| `suggestionsOff` | flag | Show suggestions off |
+| `hint.<id>.off` | flag | "Don't show again" for one suggestion |
+| `hintsOff` | text | The ids with `.off`, comma separated (for "Show hidden suggestions again") |
+| `hint.<id>.<projectId>` | flag | Closed or used in this project |
+| `hint.<id>.ever` | flag | A once-ever suggestion was closed or used |
+| `textOpened` | flag | The Text window was opened at least once |
+| `exportedOnce` | flag | An export was started at least once |
+| `whatMoved115Seen` | flag | The "What moved" note was shown (or not needed) |
+| `lastRunVersion` | text | The version that ran last |
+| `updatedLineSeen` | text | The version whose "Updated to" line was closed |
+| `updateCheckOff`, `updateLastCheck`, `updateSkipBuild` | | as before |
+
+`openSettings(context)`: a dialog from 700 px wide, a page below. Sections:
+Editing, Text window (not on phones), Export, Suggestions, Updates, Claude
+(only where `claudeHelperProvider.supported`), About (About ClipForge, Copy
+version info, What's new, Licences = Flutter's licence page). "Default
+export destination remembered" from the proposal was NOT built (optional;
+the destination is chosen per export).
+
+### Suggestions (`lib/ui/editor/suggestions.dart`)
+
+`kSuggestions` is the registry: `Suggestion(id, priority, scope, icon,
+when, message, buttons)`. `SuggestionController` (one per open editor)
+listens to the editor, playback, the sound pictures, the selection and the
+settings, waits 400 ms, and picks the highest priority whose `when` is true
+and which is not closed. It changes nothing while the video plays or while
+the editor's route is not the current one (a dialog or sheet is open), and
+`current` is null during playback. `SuggestionBar`: computer - a 30 px bar
+under the top bar; phone - a line above the tool bar inside a `Dismissible`
+(48 dp buttons, on a second line under the words).
+
+| id | priority | scope | when | button -> action |
+|---|---|---|---|---|
+| `voice-as-music` | 90 | project | a sound that is not linked to a clip and whose name or length says "voice" (`guessSoundRole`) | Line up with the picture -> `lineUpVoice` |
+| `fit-music` | 80 | project | music (>= 10 s, not looped) ends > 2 s after the video, or starts at the start and ends > 3 s before it | Fit to video -> `fitMusic` |
+| `lower-music` | 70 | project | >= 3 s of music on a track that is not lowered overlaps known speech, and the state is not "all" | Lower the music -> `setDuckMusic(true)` |
+| `small-first-clip` | 60 | project | video size "Same as the first clip" and the first clip's short side < 700 | Use 1080p -> `setVideoSize` |
+| `clip-shape` | 50 | project | a clip whose shape differs > 2 % from the canvas, fit = fit, framing untouched | Fill / Blur -> `setClipFit`; Crop… -> `openCrop` |
+| `remove-silences` | 40 | project | a video clip >= 60 s with speech and >= 10 s of pauses > 1.5 s | Remove silences… |
+| `captions-from-speech` | 30 | project | a speech service, `canTranscribe`, no captions, >= 5 s of known speech | Captions from speech… |
+| `open-text` | 20 | ever | captions exist and `textOpened` is not set | Open Text |
+| `who-is-speaking` | 10 | ever | a voice clip exists | See who is speaking -> help article |
+
+"Known speech" is `session.pictures.speakers` (the sound pictures of
+1.13), i.e. only what was already worked out; with "Show sound waves" off
+the three speech-based suggestions never fire. A trigger must never start
+an analysis.
+
+Three more lines are not in the registry because they are not in the bar:
+the long-upright-video note and the first-export line in the Export window
+(`_longNote`, `_firstExportNote`; `hint.long-upright.<projectId>`,
+`exportedOnce`; shown only with a non-null `settings`), and "Updated to X ·
+What's new" on the project list (`UpdatedLine`, driven by `lastRunVersion`;
+the 1.14 outcome snack is skipped when the line shows, unless it carries
+the folder note).
+
+**To add a suggestion**: add one `Suggestion` to `kSuggestions` (a new id
+that never changes, a priority that is not taken, a cheap `when` over
+`SuggestionContext`, the message, one or a few `SuggestionButton`s), add
+its line to the "suggestions" help article and to the table above, and a
+test in `test/ui/v115_suggestions_test.dart` (the first test lists the ids
+in priority order, so it fails until updated).
+
+### Phone layout (`tools.dart`, `action_sheets.dart`, `editor_screen.dart`)
+
+- Bottom bar, nothing selected: Add (`tool-add`), Text (`tool-text`),
+  Split, More (`tool-more`). `showAddSheet`: `kAddActs` as `ActionTile`s.
+- Selected: that item's tools + More. Clip: Done, Split, Speed, Look,
+  Sound, More, Delete (7 x 48 dp fits 360). Sound: Done, Edit, Fit, More,
+  Delete. Title: Done, Edit, Duplicate, More, Delete. While something is
+  selected, the + next to Play (`transport-add`) opens the Add sheet, so
+  adding "after the selected clip" stays possible.
+- `showMoreSheet`: `moreGroups(session)` -> headings Clip / Edit / Sound /
+  Text with `ActionTile`s; phone words where they differ (`_phoneLabel`:
+  "Trim start to here" = Start at playhead).
+- Top bar (narrow): Back, name, save sign, Undo, Redo, Export and ONE
+  `PopupMenuButton` (`project-menu`): Shape and size (`showShapeAndSizeSheet`),
+  Fade in and out, Publishing notes, Text, History, Markers (the good
+  moments list), Settings, and Help (added: the "?" had no other place).
+  The Shape button and "?" are in the top bar only in the wide layout.
+- `kWideLayoutWidth` is 840 (was 900): tablets and landscape phones get
+  the side panel. Below 960 the Text window docks under the preview even
+  when set to "right" (no room).
+- `ToolBar`: buttons >= 48 x 60; when they do not fit it scrolls and shows
+  a fade with a chevron at the right (`tool-bar-more-to-the-right`).
+
+### What moved, tour, words
+
+- `lib/ui/help/what_moved.dart`: `showWhatMoved` once, from
+  `_versionNotes` in the home screen: an existing user (tour answered)
+  whose `lastRunVersion` is older than 1.15 or missing. A first install
+  gets neither this nor the "Updated to" line. Buttons: What's new, Show
+  me Settings, OK.
+- Tour: step 3 (`add-media`) points at the phone's Add button and says
+  what it lists; step 7 (`shape`) points at the project menu on phones
+  (the Shape button on computers) and mentions Settings. Anchors are
+  unchanged ids (`TourIds.addMedia`, `TourIds.shape`), `tour_test.dart`
+  still checks them at 390x844 and 1280x800.
+- `test/words_test.dart`: a list of banned variants ("As first clip",
+  "Back to start", "Move clip earlier", "Check automatically", "Import
+  subtitles", "audio" in a sentence, old menu paths ...) checked in the
+  strings of `lib/ui`, the help and the Claude guide.
+
+### Tests (new in 1.15)
+
+`test/ui/menu_tree_test.dart` (+ snapshot), `v115_actions_test.dart`,
+`v115_settings_test.dart` (page <-> prefs, What moved, Updated line),
+`v115_suggestions_test.dart`, `v115_phone_layout_test.dart` (360x760,
+900x600 tablet, context menus), `test/core/lower_music_test.dart`,
+`test/words_test.dart`, `tool/ci/release_assets_test.py`. Test helpers in
+`test/ui/fakes.dart`: `tapAdd`, `tapMore`, `tapProjectMenu`; the harness
+prefs start "settled" (no What moved, no Updated line, suggestions off) so
+tests about other things are not disturbed. The Linux e2e gained step 4b
+(the nine menus, a greyed item's reason, Settings <-> the editor's
+snapping, the context menu, a suggestion).
+
+### Not built / not verified (1.15)
+
+- Not on real devices: the phone layout, long press vs. hold-and-drag on a
+  real touch screen, the macOS menu bar (only its tree is tested), a
+  right-click with a real trackpad.
+- macOS cannot show a tooltip or a dimmed second line in a native menu, so
+  the reason is part of the label on both bars (same words everywhere).
+- "Default export destination remembered" (optional in the proposal).
+- The suggestion for missing files from the audit: the editor already says
+  so before an export and on the clip ("Find file").
+
+## Three downloads (1.15.0, 19 Nov 2026)
+
+Owner: "the small HTML guide should be part of the install and not
+separate; let's not have 6 files, let's have 3 - Mac, Windows, APK for
+Android - and no need for the old one (32-bit phones) as well."
+
+- `tool/ci/release_assets.py` is THE list: `DOWNLOADS` =
+  `ClipForge-Setup.exe`, `ClipForge-macos.zip`, `ClipForge-android.apk`;
+  `UPDATER_ONLY` = `ClipForge-windows.zip`, `latest.json`. `--check-dir`
+  (the release job: the publish folder must hold exactly these five) and
+  `--check-links` (the check job: `site/index.html` has exactly the three
+  download links, and no `releases/latest/download/<name>` anywhere on the
+  site, in `lib/`, `assets/`, the READMEs, the Claude files or the
+  installer script names a file outside the list). Test:
+  `tool/ci/release_assets_test.py`.
+- The release job copies the five files into `$RUNNER_TEMP/publish` under
+  their fixed names and uploads exactly those by name (no globs). No
+  versioned duplicates (the version is in the release title, in
+  latest.json and inside the files), no `ClipForge-readme-*.html`, no
+  `.mcpb`, no skill zip. A run without the installer no longer publishes
+  (it was a warning before): `ClipForge-Setup.exe` is the Windows download.
+  The workflow's artifacts are unchanged otherwise (the read-mes, the
+  `.mcpb`s and the skill zip are still uploaded as run artifacts for
+  debugging, and the `.mcpb` is still built because the app bundles it).
+- The guide: installed by the installer (and offered on its last page,
+  Start menu "ClipForge read me"), and beside `ClipForge.app` in the Mac
+  zip (the release job checks it is in there). `make_readme_html.py` now
+  has one Windows route (the installer); its test still fails when its
+  steps and `site/index.html` drift apart.
+- No 32-bit Android: the workflow builds `android-arm64` only (and fails
+  if an armeabi APK appears), `make_latest_json.py` has no `android32`,
+  `updatePlatformKey('android', only32Bit: true)` is null. A 32-bit phone
+  that still runs 1.14 finds no `android32` entry in the new latest.json:
+  its "Update" opens the download page, where the 64-bit APK will not
+  install. That is the accepted end of the line for those phones.
+- `site/index.html`: three rows, three links; the zip alternative, the
+  32-bit link, the two "Full guide" links and the Claude extension / skill
+  links are gone (one sentence says Claude is connected from inside the
+  app, with the link to `claude-setup.html`). `claude-setup.html` (site and
+  docs) no longer points at downloads of the `.mcpb` or the skill zip; the
+  skill's folder stays in the repository (`claude/skill/clipforge-editing`).
+- **`ClipForge-windows.zip` must stay in every release for now**: installed
+  1.12 - 1.15 apps on Windows update from it (latest.json names it).
+
+### Next step (evaluated, NOT done): update Windows from the installer
+
+Letting the in-app update run `ClipForge-Setup.exe /VERYSILENT` when the
+app was installed by the installer would make the zip unnecessary one day.
+It was not small or safe enough for 1.15:
+
+- The app must know it was installed by the installer (Inno Setup leaves
+  `unins000.exe` next to `clipforge.exe`; a registry key
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{AppId}_is1`
+  is the reliable sign) and must fall back to the zip for unpacked folders.
+- latest.json needs a `windows-setup` entry (size + SHA-256), and the app
+  must check it like the zip.
+- The installer has to wait for the app to close, install silently
+  (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS`), start
+  the app again and report into `update-log.txt` / the result file the app
+  reads at the next start; a failed or cancelled install must leave the old
+  version working (the zip route has a safety copy; Inno Setup does not
+  roll back by itself).
+- None of this can be tested in this container; it needs the Windows CI
+  job (silent install / update / uninstall exist there since 1.14.1) plus a
+  run on a real PC, which is where 1.14.0's update failed.
+- Only after a version that updates from the installer has been out long
+  enough may the zip leave the release.
+
 ## One-click Claude install, the skill, test documents (17 Nov 2026, no app change)
 
 (1.12 changed this: the extension is installed once and hands over to the
@@ -2433,9 +2778,11 @@ show us around, and will have a help file that we can search". All in
   screen. Taps on the app are blocked while it runs; Esc skips; reduced
   motion makes the spotlight jump. 8 steps (`buildTourSteps`):
   1 New project (desktop text adds drag-and-drop), 2 Open project file,
-  then the sample project opens: 3 Add media, 4 timeline, 5 Split (first
+  then the sample project opens: 3 Add media (1.15, phones: the Add
+  button and what it lists), 4 timeline, 5 Split (first
   clip selected), 6 clip tools — phone: the Speed/Look/Sound tool-bar
-  buttons; desktop: the side panel with Sound open — 7 Shape, 8 save sign +
+  buttons; desktop: the side panel with Sound open — 7 Shape (1.15,
+  phones: the project menu, which has Shape and size) , 8 save sign +
   Export. End card: keep or delete the sample. Skip deletes it. The home
   screen and the sample's editor attach `TourHomeHooks` / `TourEditorHooks`.
   "Show the tour" from Help or the macOS menu closes an open editor (saving)
@@ -2452,8 +2799,9 @@ show us around, and will have a help file that we can search". All in
   string alignment distance, 1 edit for 4–5 letters, 2 for 6–8, 3 above),
   title x3, keywords x2.5, text x1, stop words ignored, a known word is not
   also read as a typo; "Did you mean" + popular topics when nothing is
-  found. Entry points: "?" on the home and editor app bars, macOS menu Help
-  > ClipForge Help / Show the tour, and `HelpHint` "?" buttons next to
+  found. Entry points: "?" on the home and editor app bars (1.15: on a
+  phone the editor's is in the project menu, the three dots), the Help
+  menu > ClipForge Help / Show the tour / What's new, and `HelpHint` "?" buttons next to
   Clean up sound, Voice focus, Sound from, Lower music under speech, Remove
   silences, Fit to frame, Use graphics card, plus "Which shape should I
   use?" in the Shape menu (sheet on phones, dialog on computers).
@@ -2724,8 +3072,9 @@ building** until they report results. Read the checklist marks first.
 export PATH=/opt/sdk/flutter/bin:$PATH ANDROID_HOME=/opt/sdk/android
 cd video-editor
 flutter analyze
-flutter test                                   # all tests (1827)
+flutter test                                   # all tests (1888)
 flutter build apk --release --split-per-abi --target-platform android-arm64
+python3 tool/ci/release_assets_test.py && python3 tool/ci/release_assets.py --check-links
 dart run bin/build_mcp.dart -o build/clipforge-mcp
 # real app on Linux:
 E2E_OUT=/tmp/e2e E2E_NULL_AO=1 LIBGL_ALWAYS_SOFTWARE=1 \

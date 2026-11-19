@@ -182,11 +182,12 @@ List<TourStep> buildTourSteps({required bool wide, required bool canDrop}) => [
     inEditor: true,
     setup: TourSetup.nothingSelected,
     title: 'Add videos and photos',
-    body:
-        '"Add media" puts videos and photos into your video, after the '
-        'selected clip or at the end.'
-        '${wide ? '' : ' The + next to Play adds music, titles and '
-                  'captions too.'}',
+    body: wide
+        ? '"Add media" puts videos and photos into your video, after the '
+            'selected clip or at the end. The Add menu at the top lists '
+            'everything else you can add.'
+        : '"Add" lists everything you can put into your video: videos '
+            'and photos, music, a voice recording, titles and captions.',
   ),
   const TourStep(
     id: 'timeline',
@@ -222,15 +223,19 @@ List<TourStep> buildTourSteps({required bool wide, required bool canDrop}) => [
         '"Voice focus" makes speech clearer, and "Hear a sample" lets '
         'you listen before you export.',
   ),
-  const TourStep(
+  TourStep(
     id: 'shape',
-    anchors: [TourIds.shape],
+    anchors: const [TourIds.shape],
     inEditor: true,
     setup: TourSetup.nothingSelected,
-    title: 'Shape',
-    body:
-        'Make the whole video upright for phones (9:16), wide (16:9) '
-        'or square.',
+    title: wide ? 'Shape' : 'Shape, and the project menu',
+    body: wide
+        ? 'Make the whole video upright for phones (9:16), wide (16:9) '
+            'or square. The same choices are in the View menu; '
+            'File > Settings… has the app\'s settings.'
+        : 'The three dots open the project menu. "Shape and size" makes '
+            'the whole video upright for phones (9:16), wide (16:9) or '
+            'square. History, Text and Settings are here too.',
   ),
   const TourStep(
     id: 'save-export',

@@ -19,6 +19,7 @@ import '../services.dart' show ThumbnailCache;
 import '../speaker_colors.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'action_sheets.dart';
 import 'clip_panels.dart';
 import 'long_project_note.dart';
 import 'session.dart';
@@ -418,6 +419,46 @@ class _TimelineViewState extends State<TimelineView> {
     return box is RenderBox ? box.globalToLocal(global).dx : null;
   }
 
+  /// The context menu of [target]: a small menu at the pointer after a
+  /// right-click, a sheet after a long press ([touch]).
+  void _openContext(TimelineTarget target, Offset global,
+      {required bool touch}) {
+    if (!mounted) return;
+    if (touch) HapticFeedback.selectionClick();
+    // Narrow windows (phones) get a sheet, wide ones a menu at the pointer.
+    showTimelineContextMenu(context, _s, target, position: global);
+  }
+
+  // A long press on a clip picks it up to move it; a long press that is
+  // let go without moving opens the clip's context menu instead.
+  Offset? _pressAt;
+  bool _pressMoved = false;
+
+  void _pressStart(Clip clip, Offset global) {
+    _pressAt = global;
+    _pressMoved = false;
+    _reorderStart(clip, global);
+  }
+
+  void _pressUpdate(Offset global) {
+    final at = _pressAt;
+    if (at != null && (global - at).distance > 10) _pressMoved = true;
+    _reorderUpdate(global);
+  }
+
+  void _pressEnd(Clip clip) {
+    final at = _pressAt;
+    final moved = _pressMoved;
+    _pressAt = null;
+    if (!moved && at != null) {
+      _reorderEnd(cancelled: true);
+      _openContext(TimelineTarget.item(ItemKind.clip, clip.id), at,
+          touch: true);
+      return;
+    }
+    _reorderEnd();
+  }
+
   void _reorderStart(Clip clip, Offset global) {
     final x = _contentX(global);
     final index = _s.project.clips.indexWhere((c) => c.id == clip.id);
@@ -740,6 +781,14 @@ class _TimelineViewState extends State<TimelineView> {
             _s.clearSelection();
             _s.playback.seek(_ms(d.localPosition.dx));
           },
+          // Right-click / long press on an empty place: what can be added
+          // there.
+          onSecondaryTapUp: (d) => _openContext(
+              TimelineTarget.empty(_ms(d.localPosition.dx)), d.globalPosition,
+              touch: false),
+          onLongPressStart: (d) => _openContext(
+              TimelineTarget.empty(_ms(d.localPosition.dx)), d.globalPosition,
+              touch: true),
         ),
       ),
       for (var row = 0; row < audioRows; row++)
@@ -793,6 +842,12 @@ class _TimelineViewState extends State<TimelineView> {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () => _s.playback.seek(m.ms),
+                onSecondaryTapUp: (d) => _openContext(
+                    TimelineTarget.marker(m.id, m.ms), d.globalPosition,
+                    touch: false),
+                onLongPressStart: (d) => _openContext(
+                    TimelineTarget.marker(m.id, m.ms), d.globalPosition,
+                    touch: true),
                 child: const Align(
                   alignment: Alignment.bottomCenter,
                   child: Icon(Icons.flag, size: 15, color: Color(0xFFFFC56B)),
@@ -857,6 +912,12 @@ class _TimelineViewState extends State<TimelineView> {
         visibleFrom: (winStart - left).clamp(0.0, w).toDouble(),
         visibleTo: (winEnd - left).clamp(0.0, w).toDouble(),
         onTap: () => _s.selectClipAndShow(clip.id),
+        onContext: (global) => _openContext(
+            TimelineTarget.item(ItemKind.clip, clip.id), global,
+            touch: false),
+        onPressStart: (global) => _pressStart(clip, global),
+        onPressUpdate: _pressUpdate,
+        onPressEnd: () => _pressEnd(clip),
         onReorderStart: (global) => _reorderStart(clip, global),
         onReorderUpdate: _reorderUpdate,
         onReorderEnd: _reorderEnd,
@@ -988,6 +1049,9 @@ class _TimelineViewState extends State<TimelineView> {
                 : null,
             selected: selected,
             onTap: () => _s.select(ItemKind.audio, a.id),
+            onContext: (global, touch) => _openContext(
+                TimelineTarget.item(ItemKind.audio, a.id), global,
+                touch: touch),
             onDragStart: () => _startDrag(a),
             onDragUpdate: (dx, global) => _dragAudio(_Edge.body, dx, global),
             onDragEnd: _endDrag,
@@ -1023,6 +1087,9 @@ class _TimelineViewState extends State<TimelineView> {
               : null,
           selected: selected,
           onTap: () => _s.selectOverlayAndShow(o.id),
+          onContext: (global, touch) => _openContext(
+              TimelineTarget.item(ItemKind.overlay, o.id), global,
+              touch: touch),
           onDragStart: () => _startDrag(o),
           onDragUpdate: (dx, _) => _dragOverlay(_Edge.body, dx),
           onDragEnd: _endDrag,
@@ -1055,6 +1122,9 @@ class _TimelineViewState extends State<TimelineView> {
           width: w,
           selected: selected,
           onTap: () => _s.select(ItemKind.title, t.id),
+          onContext: (global, touch) => _openContext(
+              TimelineTarget.item(ItemKind.title, t.id), global,
+              touch: touch),
           onDragStart: () => _startDrag(t),
           onDragUpdate: (dx, _) => _dragTitle(_Edge.body, dx),
           onDragEnd: _endDrag,
@@ -1347,11 +1417,24 @@ class _ClipBlock extends StatelessWidget {
     required this.visibleFrom,
     required this.visibleTo,
     this.onTap,
+    this.onContext,
+    this.onPressStart,
+    this.onPressUpdate,
+    this.onPressEnd,
     this.onReorderStart,
     this.onReorderUpdate,
     this.onReorderEnd,
     this.onReorderCancel,
   });
+
+  /// Right-click: the clip's context menu.
+  final ValueChanged<Offset>? onContext;
+
+  /// A long press (finger or mouse): picks the clip up; let go without
+  /// moving, it opens the context menu.
+  final ValueChanged<Offset>? onPressStart;
+  final ValueChanged<Offset>? onPressUpdate;
+  final VoidCallback? onPressEnd;
   final Clip clip;
   final double width;
   final bool selected;
@@ -1390,13 +1473,15 @@ class _ClipBlock extends StatelessWidget {
       button: true,
       child: GestureDetector(
         onTap: onTap,
-        onLongPressStart: onReorderStart == null
+        onSecondaryTapUp:
+            onContext == null ? null : (d) => onContext!(d.globalPosition),
+        onLongPressStart: onPressStart == null
             ? null
-            : (d) => onReorderStart!(d.globalPosition),
-        onLongPressMoveUpdate: onReorderUpdate == null
+            : (d) => onPressStart!(d.globalPosition),
+        onLongPressMoveUpdate: onPressUpdate == null
             ? null
-            : (d) => onReorderUpdate!(d.globalPosition),
-        onLongPressEnd: onReorderEnd == null ? null : (_) => onReorderEnd!(),
+            : (d) => onPressUpdate!(d.globalPosition),
+        onLongPressEnd: onPressEnd == null ? null : (_) => onPressEnd!(),
         onLongPressCancel: onReorderCancel,
         child: GestureDetector(
           // A mouse does not scroll the timeline by dragging, so it can
@@ -1699,6 +1784,7 @@ class _LaneBlock extends StatelessWidget {
     required this.onDragStart,
     required this.onDragUpdate,
     required this.onDragEnd,
+    this.onContext,
     this.dimFrom,
     this.marks = const [],
     this.background,
@@ -1706,6 +1792,10 @@ class _LaneBlock extends StatelessWidget {
     this.tooltip,
   });
   final Color color;
+
+  /// Right-click (touch false) or long press (touch true): the item's
+  /// context menu.
+  final void Function(Offset global, bool touch)? onContext;
 
   /// Drawn behind the label (the waveform).
   final Widget? background;
@@ -1753,6 +1843,12 @@ class _LaneBlock extends StatelessWidget {
   Widget _block(bool roomy) {
     return GestureDetector(
         onTap: onTap,
+        onSecondaryTapUp: onContext == null
+            ? null
+            : (d) => onContext!(d.globalPosition, false),
+        onLongPressStart: onContext == null
+            ? null
+            : (d) => onContext!(d.globalPosition, true),
         dragStartBehavior: DragStartBehavior.down,
         onHorizontalDragStart: selected ? (_) => onDragStart() : null,
         onHorizontalDragUpdate: selected

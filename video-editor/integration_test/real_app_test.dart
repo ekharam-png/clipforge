@@ -32,6 +32,7 @@ import 'package:clipforge/ui/app.dart';
 import 'package:clipforge/ui/claude/claude_helper.dart';
 import 'package:clipforge/ui/update/update_controller.dart';
 import 'package:clipforge/ui/app_prefs.dart';
+import 'package:clipforge/ui/app_settings.dart';
 import 'package:clipforge/ui/editor/preview_view.dart';
 import 'package:clipforge/media/processed_sound_cache.dart';
 import 'package:clipforge/ui/editor/session.dart';
@@ -43,7 +44,9 @@ import 'package:clipforge/ui/publish_service.dart';
 import 'package:clipforge/ui/services.dart';
 import 'package:clipforge/ui/speech/speech_service.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/gestures.dart' show kSecondaryButton;
+import 'package:flutter/services.dart'
+    show LogicalKeyboardKey, rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -264,7 +267,9 @@ void main() {
         publishServiceProvider.overrideWithValue(KitFolder(kitDir)),
         playerBackendProvider.overrideWithValue(backend),
         // The first-launch tour question counts as answered.
-        appPrefsProvider.overrideWithValue(MemoryAppPrefs(answered: true)),
+        // No "What moved" note, and suggestions off until step 4b turns
+        // them on (their line would move what the other steps aim at).
+        appPrefsProvider.overrideWithValue(MemoryAppPrefs.settled('1.11.0')),
         // Processed clip sound goes to the run's folder, not the user's.
         processedSoundCacheProvider.overrideWithValue(FileProcessedSoundCache(
             () async => p.join(out.path, 'media'))),
@@ -536,7 +541,7 @@ void main() {
       await tester.tap(find.byTooltip('Play'));
     }
 
-    await tester.tap(find.byTooltip('Back to start'));
+    await tester.tap(find.byTooltip('Go to start'));
     await wait(800);
     log('before play: pos=${pb.positionMs} player=${fp().state.position} '
         '${fp().state.width}x${fp().state.height} '
@@ -722,6 +727,80 @@ void main() {
     await wait(1000);
     await shot('06-landscape-on-9x16');
     s.editor.setAspect(CanvasAspect.original);
+    await wait(300);
+
+    // 4b. 1.15: the nine menus, Settings, the context menu, suggestions ------
+    for (final m in [
+      'File', 'Edit', 'Add', 'Clip', 'Sound', 'Text and speech', 'View', //
+      'Playback', 'Help',
+    ]) {
+      expect(find.widgetWithText(SubmenuButton, m), findsOneWidget,
+          reason: 'menu $m');
+    }
+    Future<void> openMenu(String m) async {
+      await tester.tap(find.widgetWithText(SubmenuButton, m));
+      await wait(400);
+    }
+
+    await openMenu('Clip');
+    expect(find.byKey(const ValueKey('menu-split')), findsOneWidget);
+    await shot('06a-menu-clip');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await wait(300);
+    await openMenu('Sound');
+    // Nothing selected: greyed out, and it says why.
+    expect(find.textContaining('Fit music to video (select a music clip)'),
+        findsOneWidget);
+    await shot('06b-menu-sound');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await wait(300);
+    // File > Settings…: the one page; its Snap switch is the editor's.
+    await openMenu('File');
+    await tester.tap(find.byKey(const ValueKey('menu-settings')));
+    await waitFor(
+        () => find
+            .byKey(const ValueKey('settings-dialog'))
+            .evaluate()
+            .isNotEmpty,
+        'the Settings window');
+    await shot('06c-settings');
+    expect(s.snapping.value, isTrue);
+    await tester.tap(find.byKey(const ValueKey('settings-snapping')));
+    await wait(300);
+    expect(s.snapping.value, isFalse, reason: 'Settings > Snap off');
+    await tester.tap(find.byKey(const ValueKey('settings-snapping')));
+    await wait(300);
+    expect(s.snapping.value, isTrue);
+    // Suggestions on: one quiet line may show under the top bar.
+    await tester.ensureVisible(
+        find.byKey(const ValueKey('settings-suggestions')));
+    await wait(200);
+    await tester.tap(find.byKey(const ValueKey('settings-suggestions')));
+    await wait(300);
+    await tester.tap(find.byTooltip('Close'));
+    await wait(1200);
+    final hint = find.byKey(const ValueKey('suggestion-text'));
+    log('suggestion: ${hint.evaluate().isEmpty ? 'none' : tester.widget<Text>(hint).data}');
+    await shot('06d-suggestion');
+    // Right-click the first clip: its context menu.
+    final firstClip = find.byKey(ValueKey('clip-${s.project.clips.first.id}'));
+    await tester.tapAt(tester.getTopLeft(firstClip) + const Offset(12, 12),
+        buttons: kSecondaryButton);
+    await waitFor(
+        () => find
+            .byKey(const ValueKey('context-split'))
+            .evaluate()
+            .isNotEmpty,
+        'the context menu of a clip');
+    await shot('06e-context-menu');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await wait(400);
+    expect(find.byKey(const ValueKey('context-split')), findsNothing);
+    s.clearSelection();
+    // Off again: the line would move what the later steps aim at.
+    await ProviderScope.containerOf(tester.element(find.byType(PreviewView)))
+        .read(appSettingsProvider)
+        .setSuggestions(false);
     await wait(300);
 
     // 5. Export ---------------------------------------------------------------

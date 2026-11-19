@@ -5,7 +5,7 @@
 // logins and uploads nothing.
 //
 // Reached from the Export window and from the project menu (File >
-// Publishing notes…; phones: More). A dialog on computers, a full-screen
+// Publishing notes…; phones: the project menu). A dialog on computers, a full-screen
 // page on phones.
 
 import 'package:flutter/services.dart';

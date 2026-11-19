@@ -173,11 +173,11 @@ void main() {
           'windows': {'url': 'http://example.org/a.zip', 'size': 5, 'sha256': 'a' * 64},
           'macos': {'url': 'https://example.org/b.zip', 'size': 5, 'sha256': 'zz'},
           'android': {'url': 'https://example.org/c.apk', 'size': 0, 'sha256': 'b' * 64},
-          'android32': {'url': 'https://example.org/d.apk', 'size': 7, 'sha256': 'C' * 64},
+          'windows-extra': {'url': 'https://example.org/d.apk', 'size': 7, 'sha256': 'C' * 64},
         },
       }));
-      expect(info.platforms.keys, ['android32']);
-      expect(info.platforms['android32']!.sha256, 'c' * 64);
+      expect(info.platforms.keys, ['windows-extra']);
+      expect(info.platforms['windows-extra']!.sha256, 'c' * 64);
       expect(info.notesUrl, isNull);
     });
 
@@ -234,7 +234,8 @@ void main() {
       expect(updatePlatformKey('windows'), 'windows');
       expect(updatePlatformKey('macos'), 'macos');
       expect(updatePlatformKey('android'), 'android');
-      expect(updatePlatformKey('android', android32: true), 'android32');
+      // No 32-bit Android file since 1.15: the download page instead.
+      expect(updatePlatformKey('android', only32Bit: true), isNull);
       expect(updatePlatformKey('linux'), isNull, reason: 'download page only');
     });
   });

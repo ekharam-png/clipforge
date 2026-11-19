@@ -41,7 +41,7 @@ related: getting-started, timeline, where-files-go, music
 
 Tap **Add media** and choose one or more videos or photos. They go in after the selected clip, or at the end when no clip is selected.
 
-On a phone you can also tap the **+** next to the play button and choose **Videos or photos**. The phone's own picker opens: choose from your gallery or your files.
+On a phone, tap **Add** in the bar at the bottom and choose **Videos or photos**. On a computer the same is in the **Add** menu. The phone's own picker opens: choose from your gallery or your files.
 
 ## Drag and drop (computer)
 
@@ -64,7 +64,7 @@ The timeline at the bottom shows your clips in order. The white line is the play
 
 - **Select**: tap a clip. The preview jumps to it and the tools for that clip appear. Tap **Done** to go back.
 - **Trim**: select a clip, then drag its left or right end to make it shorter.
-- **Move**: hold a clip and drag it to a new place. You can also use **Move earlier** and **Move later** (on a phone, under **More**).
+- **Move**: hold a clip and drag it to a new place. You can also use **Move earlier** and **Move later** (computer: the **Clip** menu or the side panel; phone: **More**, under Clip).
 - **Delete**: select the clip and tap **Delete**.
 - **Zoom**: the magnifier buttons next to the time make the timeline bigger or smaller.
 
@@ -106,7 +106,7 @@ related: undo-and-saving, keyboard-shortcuts
 **History** lists every change you made since you opened the project, newest at the top, each with a short name ("Speed 1.25× on clip 2", "Removed 12 silences", "Voice focus 85% on clip 1") and the time.
 
 - On a computer: click the clock-arrow button at the top, or choose **Edit** > **History** in the menu bar (Ctrl+Shift+H, on a Mac Cmd+Shift+H). The list opens on the right.
-- On a phone: tap **More** in the bar at the bottom, then **History**.
+- On a phone: the three dots at the top of the project, then **History** (it is also under **More**).
 
 Tap a step to go back to just after it. The step you are on is highlighted. Later steps stay in the list (in grey) until you make a new change, so you can jump forward again. Dragging a slider counts as one step.
 
@@ -163,7 +163,7 @@ section: Picture
 keywords: crop, cut edges, trim picture, rotate, turn, sideways, upside down, flip, mirror, position, move picture, pan, reframe, keep person in shot, vertical, portrait, tiktok, reels, 9:16, aspect, straighten
 related: fit-fill-blur, shape, look, overlay
 
-Select a clip and open **Crop**. On a computer it is a section of the panel on the right; on a phone tap **More**, then **Crop and position**. The whole picture shows on the preview with a frame over it.
+Select a clip and open **Crop**. On a computer it is a section of the panel on the right; on a phone tap **More**, then **Crop and position**. On a computer it is also **Crop and position…** in the **Clip** menu. The whole picture shows on the preview with a frame over it.
 
 - Drag the corners or sides of the frame to cut away what you do not want. Drag inside the frame to move it.
 - The buttons **Free**, **Original**, **16:9**, **9:16**, **1:1** and **4:5** keep the frame in that shape while you drag.
@@ -189,7 +189,7 @@ related: crop-position, timeline, volume-and-mute
 An overlay is a video or photo shown over your video, on its own row above the main clips.
 
 1. Move the playhead to where it should start.
-2. Tap **Overlay** (on a phone: the **+** next to Play, then **Overlay (picture-in-picture)**) and pick a video or photo.
+2. Tap **Overlay** (on a phone: **Add**, then **Overlay (picture-in-picture)**; in the menu bar: **Add** > **Overlay video or photo…**) and pick a video or photo.
 
 It starts as a small picture in the bottom right corner. Select it to change it:
 
@@ -425,7 +425,7 @@ Music from **Find free music** remembers its title, artist, licence and where it
 - **Copy credits** copies a line for each piece of music (with links) to paste into your post's description.
 - **Add credits at the end** puts a small caption with the credits over the last 4 seconds of your video. Edit it like any title.
 
-CC BY and CC BY-SA music must be credited wherever you share the video. CC0 and public domain music needs no credit, but it is kind to give one. On a computer, **Copy music credits** is also in the Sound menu (Edit menu).
+CC BY and CC BY-SA music must be credited wherever you share the video. CC0 and public domain music needs no credit, but it is kind to give one. On a computer, **Copy music credits** is also in the **Sound** menu.
 
 === lower-music
 title: Lower music under speech
@@ -435,7 +435,9 @@ related: music, voice-focus, volume-and-mute, sound-tracks
 
 Lowering under speech makes a sound track quieter while someone talks: while the video clips have their own sound, or while a track that holds speech (the Voice track) plays. When they stop, the track comes back up.
 
-It is set per track. Select a piece of music and switch on Lower Music under speech, or open the track's menu (tap its name on the left of the timeline) and switch on **Lower this track under speech**. With nothing selected, **Lower music under speech** switches it for every track except the Voice track.
+It is set per track. Select a piece of music and switch on Lower Music under speech, or open the track's menu (tap its name on the left of the timeline) and switch on **Lower this track under speech**. With nothing selected, **Lower music under speech** (the side panel, or the **Sound** menu) switches it for every track that is not speech.
+
+The track switches are what counts. The switch for the whole project only shows them together: on when every music track is lowered, off when none is, and "on for some tracks" when you set them differently by hand. Turning it on then lowers them all.
 
 **This track is speech** in the track menu decides which tracks count as someone talking. A Voice track does from the start.
 
@@ -497,7 +499,7 @@ If the camera has no sound, or the two sounds are too different, ClipForge says 
 - Voice starts later than the camera, or ends earlier: there is simply silence where the voice file has nothing.
 - If two recorders run at slightly different speeds, the voice slowly drifts. ClipForge tells you and picks the best average; it does not stretch sound.
 - **Unlink** leaves the voice where it is, but it no longer follows the picture.
-- A sound that is already in the project as music: select it and choose **This is a voice: line up with the video**. On a computer: Edit, Sound, **Add voice recording…** and **Line up with the video**.
+- A sound that is already in the project as music: select it and choose **This is a voice: line up with the video**. On a computer: **Add** > **Voice recording…**, and **Sound** > **Line up voice with video**.
 
 === titles
 title: Titles
@@ -521,14 +523,14 @@ section: Text
 keywords: captions, subtitles, subtitle, srt, srt file, import srt, export srt, words at the bottom, closed captions
 related: titles, text-window, auto-subtitles, other-languages
 
-Captions are lines of subtitles at the bottom of the picture.
+Captions are lines of text at the bottom of the picture that say what is being said.
 
-Tap **Captions**. Type what is being said and tap **Add**. It appears at the playhead for a moment; stretch it on the timeline.
+Tap **Caption** (on a phone: **Add**, then **Caption**; in the menu bar: **Add** > **Caption…**). Type what is being said and tap **Add**. It appears at the playhead for a moment; stretch it on the timeline.
 
 In the same box:
 
-- **Import subtitles (.srt)** adds all the lines of a subtitle file at once.
-- **Export subtitles (.srt)** saves your captions as a subtitle file, for example for YouTube.
+- **Add a subtitle file (.srt)** adds all the lines of a subtitle file at once, as captions (menu bar: **Add** > **Subtitle file (.srt)…**).
+- **Export subtitles (.srt)** saves your captions as a subtitle file, for example for YouTube (menu bar: **File** > **Export subtitles (.srt)…**).
 
 With many captions, the **Text** window shows them all as one readable page: read, search, fix a word (see Read and search the text). When the timeline is zoomed out so far that caption blocks are too narrow for their words, a thin line above them shows the caption under the playhead, and pointing at a block shows its text.
 
@@ -562,7 +564,7 @@ When you are happy, tap **Export** at the top right.
 - **Frames per second**: 30 by default; choose 60 for fast movement filmed at a high frame rate (the window says when). See Sound only and frames per second.
 - **Where is it going?**: ready-made choices for YouTube, Shorts / Reels / TikTok, Instagram, WhatsApp and podcast audio, and **Export several…** for more than one at once. See Export for YouTube, Shorts, WhatsApp….
 - **Use graphics card (faster)**: shows up on computers that can use it.
-- **Video size**: **As first clip** keeps the size of the first clip. If that clip is small (for example sent through a chat app), choose **1080p** so the whole video is not small. The same choice is in the **Shape** menu.
+- **Video size**: **Same as the first clip** keeps the size of the first clip. If that clip is small (for example sent through a chat app), choose **1080p** so the whole video is not small. The same choice is in the **Shape** button at the top, in the **View** menu, and on a phone under the three dots > **Shape and size**.
 
 Keep the app open until it finishes. You can tap **Cancel export** to stop.
 
@@ -653,7 +655,7 @@ related: graphics-card, storage, crashes
 
 If playing your video in the editor stutters on a phone:
 
-- **More** (on the tool bar) > **Smooth preview** is on by default on phones. It makes the preview decode video in a lighter way: the picture may look a little softer while you edit. The exported video is not affected.
+- **Settings** > **Smooth preview** is on by default on phones. It makes the preview decode video in a lighter way: the picture may look a little softer while you edit. The exported video is not affected.
 - Overlays (picture-in-picture) play a second video at the same time, which is the heaviest thing for a phone. If the preview struggles, check the overlay with a short play, then export.
 - Very large files (4K, HDR) are harder to play on a phone than to export.
 
@@ -669,7 +671,7 @@ On a Mac use **Cmd** where this says Ctrl. Every shortcut is also in the menu ba
 
 ## Playing
 - **Space**: play or pause.
-- **J**: play backwards, **K**: stop, **L**: play forwards. Playing backwards jumps back in small steps, because video players cannot play smoothly in reverse.
+- **J**: play backwards, **K**: pause, **L**: play forwards. Playing backwards jumps back in small steps, because video players cannot play smoothly in reverse.
 - **Left** and **Right**: one frame back or forward (a frame of the clip under the playhead, so 25 or 60 a second if that is how it was filmed). With **Shift**: one second.
 - **Home** and **End**: go to the start or the end.
 - **Ctrl+Left** and **Ctrl+Right**: where speech last started, where it next starts (see See who is speaking).
@@ -691,6 +693,7 @@ On a Mac use **Cmd** where this says Ctrl. Every shortcut is also in the menu ba
 ## Everywhere
 - **F1** (Windows and Linux) or **Cmd+?** (Mac): this help.
 - **Ctrl+N** and **Ctrl+O** on the project list: new project, open a project file.
+- **Ctrl+comma** (Mac: **Cmd+comma**): Settings.
 - Quit: **Alt+F4** on Windows, **Ctrl+Q** on Linux, **Cmd+Q** on a Mac.
 - **Esc**: closes the tour.
 
@@ -705,7 +708,7 @@ related: transitions, music, menus
 A fade makes the picture come up from black, or go down to black, and the sound comes up or goes down with it.
 
 ## The whole video
-With nothing selected, the side panel (on a phone: **More** at the bottom, then **Fade in and out**) has **Fade in from black** and **Fade out to black**. They work on the finished video: titles, overlays and all sound fade too.
+With nothing selected, the side panel (on a phone: the three dots at the top, then **Fade in and out**) has **Fade in from black** and **Fade out to black**. They work on the finished video: titles, overlays and all sound fade too.
 
 ## One clip
 Select a clip and open **Transition and fades**. **Fade in from black** and **Fade out to black** fade that clip's picture and its own sound. On the first clip this is how you start the video from black (a transition needs a clip before it).
@@ -762,7 +765,7 @@ When you drag the end of a clip, a title, a sound or an overlay on the timeline,
 
 - On speech tracks it also catches where talk starts and ends (see See who is speaking).
 - Hold **Alt** (Option on a Mac) while dragging to place it freely.
-- To switch it off for good, untick **Snap to playhead and edges** in the **Playback** menu (computer).
+- To switch it off for good, turn off **Snap to playhead and edges** in **Settings** (computer: also the **View** menu). This works on a phone too.
 
 === export-options
 title: Sound only and frames per second
@@ -781,19 +784,88 @@ On a phone the finished sound file can be sent to another app with **Send to ano
 **Frames per second** (video only): **As clips** uses the frame rate the clips were filmed at; 30 suits most videos, 25 is the European TV rate, 24 looks like cinema, and 60 keeps fast sport movement smooth (the file gets bigger).
 
 === menus
-title: Menus
+title: Menus: where everything is
 section: Computer
-keywords: menu, menus, menu bar, file menu, edit menu, playback menu, help menu, where is, find a command
-related: keyboard-shortcuts, snapping, duplicate-copy
+keywords: menu, menus, menu bar, file menu, edit menu, add menu, clip menu, sound menu, view menu, text and speech, playback menu, help menu, where is, find a command, moved, right click, context menu, greyed out, grey, disabled, why can't I
+related: keyboard-shortcuts, settings, suggestions, snapping, duplicate-copy
 
-On a computer the menu bar has every command of the editor. On a Mac it is at the top of the screen; on Windows and Linux at the top of the window. A grey item cannot be used right now (for example **Paste settings** before anything was copied).
+On a computer the menu bar has every command of the editor. On a Mac it is at the top of the screen; on Windows and Linux at the top of the window.
 
-- **File**: new project, open a project file, add media and music, import and export subtitles, rename the project, export, quit.
-- **Edit**: undo, redo, history; the **Text window** and **Find in the text…**; duplicate, copy and paste settings, delete; split, start or end a clip at the playhead, freeze frame, remove silences, move a clip earlier or later; crop and position, rotate; add a title, caption or overlay; the **Sound**, **Shape** and **Video size** menus.
-- **Playback**: play, play backwards, stop, play forwards, go to the start or end, step a frame, zoom the timeline, **Snap to playhead and edges**, the previous and next speech start, and **Show sound waves**.
-- **Help**: this help, **Keyboard shortcuts**, the tour, the version and About ClipForge.
+- **File**: **New project**, **Open project file…**, **Rename project…**, **Publishing notes…**, **Back to projects**, **Export…**, **Export several…**, **Export subtitles (.srt)…**, **Settings…** and Quit (Windows: Exit; on a Mac, Quit is in the ClipForge menu).
+- **Edit**: **Undo**, **Redo**, **History**; **Duplicate**, **Copy settings**, **Paste settings**, **Delete**; **Find in the text…**.
+- **Add**: **Videos or photos…**, **Music or sound…**, **Voice recording…**, **Title**, **Caption…**, **Subtitle file (.srt)…**, **Overlay video or photo…**, **Good moment marker**.
+- **Clip**: **Split**, **Start at playhead**, **End at playhead**, **Freeze frame**, **Remove silences…**, **Crop and position…**, **Rotate right**, **Move earlier**, **Move later**; **Make a short from here…**, **Make shorts from markers…**, **Good moments…**.
+- **Sound**: **Fit music to video**, **Line up voice with video**, **Separate sound…**, **Put sound back**, **Add sound track**, **Lower music under speech**, **Copy music credits**.
+- **Text and speech**: **Text window**, and on a computer with speech to text: **Transcribe speech…**, **Captions from speech…**, **Remove filler words…**, **Automatic cuts…**.
+- **View**: **Zoom in**, **Zoom out**, **Snap to playhead and edges**, **Show sound waves**, Shape, Video size.
+- **Playback**: **Play/Pause**, **Play backwards**, **Pause**, **Play forwards**, **Go to start**, **Go to end**, **Previous frame**, **Next frame**, **Previous speech start**, **Next speech start**.
+- **Help**: this help, **Keyboard shortcuts**, **Show the tour**, **What's new**, **Connect to Claude…**, **Check for updates…**, **Copy version info** and About ClipForge.
 
-The shortcut of each item is shown next to it.
+The shortcut of each item is shown next to it. Every shortcut from earlier versions still works.
+
+## Greyed-out items say why
+
+An item that cannot be used right now stays in its place and its label says why, for example "Fit music to video (select a music clip)" or "Paste settings (copy settings first)". Do what it says and the item can be used.
+
+## Right-click on the timeline
+
+Right-click a clip, a sound, a title or caption, an overlay, a marker or an empty part of the timeline: a small menu lists what you can do with it. On a phone, hold the item instead: the same list opens.
+
+## On a phone
+
+There is no menu bar. With nothing selected the bar at the bottom has **Add**, **Text**, **Split** and **More**. With something selected it shows that item's most used tools and **More**, which lists the rest under the same names as the menus: Clip, Sound, Text. The three dots at the top of a project have **Shape and size**, **Fade in and out**, **Publishing notes**, **Text**, **History**, **Markers** and **Settings**.
+
+=== settings
+title: Settings
+section: Getting started
+keywords: settings, preferences, options, configure, snapping, sound waves, smooth preview, text window position, graphics card, suggestions, updates, automatic update, claude, about, version, licences, where are the settings
+related: menus, suggestions, snapping, who-is-speaking, updates
+
+All the app's settings are on one page.
+
+- Computer: **File** > **Settings…** (Ctrl+comma; Mac: Cmd+comma).
+- Phone: the three dots at the top right of the project list, or the three dots at the top of a project, then **Settings**.
+
+What is there:
+
+- **Editing**: **Snap to playhead and edges**, **Show sound waves**, and on a phone **Smooth preview**. The first two are also in the **View** menu; it is the same switch.
+- **Text window** (computer): whether it opens at the right or below the picture.
+- **Export**: **Use graphics card (faster)**. It is remembered between exports; the switch in the Export window is the same one.
+- **Suggestions**: **Show suggestions**, and a button that brings back the ones you told not to show again.
+- **Updates**: **Check for updates automatically**, **Check now**, and which version you have.
+- **Claude** (computer): whether the helper for Claude is on this computer, and **Connect…**.
+- **About**: **About ClipForge**, **Copy version info**, **What's new** and **Licences**.
+
+Settings belong to the app on this device, not to a project.
+
+=== suggestions
+title: Suggestions
+section: Getting started
+keywords: suggestion, suggestions, tip, tips, hint, hints, advice, blue line, don't show again, turn off tips, lightbulb, recommend
+related: settings, fit-music, voice-recorded-separately, lower-music, remove-silences, text-window, captions-from-speech, export
+
+Now and then ClipForge shows one quiet line with a tip and a button, for example "The music is longer than the video." with **Fit to video**. On a computer it is a thin bar under the top bar; on a phone a thin line just above the tools.
+
+- The button does what it says. You can always take it back with **Undo**.
+- The cross closes the line for this project. On a phone you can also swipe it away.
+- **Don't show again** turns that one suggestion off for good (on a phone: the three dots on the line).
+- Only one is shown at a time, and never while the video plays or while a window is open.
+
+What it can suggest:
+
+- Music that is longer or shorter than the video: **Fit to video**.
+- A sound added as music that looks like a voice recording: **Line up with the picture**.
+- A small first clip while the video size is **Same as the first clip**: **Use 1080p**.
+- A clip with another shape than the video: **Fill**, **Blur** or **Crop…**.
+- A long clip with pauses in the talking: **Remove silences…**.
+- Music playing while someone talks: **Lower the music**.
+- Captions, and the Text window never opened: **Open Text**.
+- Talking and no captions (computer with speech to text): **Captions from speech…**.
+- The first voice track: **See who is speaking**.
+
+The Export window has two more lines of this kind: a note when an upright video is longer than a short, and one line about the graphics card the first time you export. After an update the project list says "Updated to" the new version, with **What's new**.
+
+To turn all suggestions off, or to bring back the ones you hid: **Settings** > **Show suggestions** and **Show hidden suggestions again**.
 
 === claude-control
 title: Claude control (computer only)
@@ -941,15 +1013,15 @@ Your projects and videos are not touched. Unpacking the zip makes no desktop or 
 ## If an update does not work
 
 - The message says why and has **Copy details**. Paste that into your message when you report the problem.
-- **Copy version info** (Help menu) also copies the folder ClipForge runs from and the last lines of the update log.
+- **Copy version info** (Help menu, and Settings) also copies the folder ClipForge runs from and the last lines of the update log.
 - ClipForge writes every step of an update into a plain text file called update-log.txt. The message shows where it is.
 - "ClipForge could not start the small helper": this PC does not let ClipForge's update helper run. ClipForge stays open and nothing was changed. Use **Open the download page** and install the new version from there (on Windows: ClipForge-Setup.exe).
 
 ## Checking
 
-ClipForge looks for a newer version by itself, at most once a day, when it starts. To ask right now: **Help** > **Check for updates…** (on a phone: the three dots at the top right of the project list > **Check for updates**).
+ClipForge looks for a newer version by itself, at most once a day, when it starts. To ask right now: **Help** > **Check for updates…**, or **Settings** > **Check now** (on a phone: the three dots at the top right of the project list > **Check for updates**).
 
-To switch the automatic check off, untick **Check for updates automatically** in the same menu (on a phone: **Check automatically**).
+To switch the automatic check off, turn off **Check for updates automatically** in **Settings** (computer: **File** > **Settings…**; phone: the three dots > **Settings**).
 
 ## Privacy
 
@@ -1021,7 +1093,7 @@ related: captions-from-speech, remove-filler-words, text-window, voice-recorded-
 
 ClipForge can turn what is said in a video into text, with the time of every word. That text is used for captions, for removing "um" and "uh", for the transcript you can read and search, and it lets Claude find good moments for you. It happens on your computer; nothing is sent anywhere. It is not on phones.
 
-1. Select a video clip, open **Sound** and click **Transcribe speech…** (also in the Edit menu, under Speech).
+1. Select a video clip, open **Sound** and click **Transcribe speech…** (also in the **Text and speech** menu).
 2. Choose the language. Choosing it is more reliable than Automatic.
 3. Click **Transcribe**. A long recording takes a while; you can press **Stop** at any time.
 
@@ -1053,7 +1125,7 @@ related: transcribe-speech, captions, text-styles, text-window
 
 After **Transcribe speech…**, ClipForge can write the captions for you.
 
-1. Click **Captions from speech…** (in the clip's **Sound** panel, or Edit > Speech).
+1. Click **Captions from speech…** (in the clip's **Sound** panel, or the **Text and speech** menu).
 2. Choose one or two lines and the longest line.
 3. Click **Add captions**.
 
@@ -1069,7 +1141,7 @@ related: transcribe-speech, remove-silences, history, text-window
 
 After **Transcribe speech…**, **Remove filler words…** finds "um", "uh" and the like and cuts them out. It is gentle on purpose: too many cuts make a video jumpy.
 
-1. Click **Remove filler words…** (in the clip's **Sound** panel, or Edit > Speech).
+1. Click **Remove filler words…** (in the clip's **Sound** panel, or the **Text and speech** menu).
 2. Look at the list: each filler with its time, its length and how the picture changes across the cut (smooth, slight or jumpy). The play button lets you hear the spot.
 3. Tick or untick what you like, then click **Remove**.
 
@@ -1083,7 +1155,7 @@ Where the person moved, the cut would jump: such fillers are left in on Light an
 
 ## Putting cuts back
 
-Every automatic cut is remembered, also those of **Remove silences**. **Automatic cuts…** (in the **Sound** panel or Edit > Speech) lists them; **Put back** returns one piece to the video, **Put back all** returns everything. **Undo** works too.
+Every automatic cut is remembered, also those of **Remove silences**. **Automatic cuts…** (in the **Sound** panel or the **Text and speech** menu) lists them; **Put back** returns one piece to the video, **Put back all** returns everything. **Undo** works too.
 
 ## Good to know
 
@@ -1098,15 +1170,15 @@ related: captions, transcribe-speech, captions-from-speech, who-is-speaking, key
 
 The **Text** window shows everything said or written in the video as one readable page, instead of small blocks on the timeline.
 
-- Computer: the **Text** button at the top, or Edit > **Text window** (Ctrl+Shift+T).
-- Phone: **More** at the bottom, then **Text**.
+- Computer: the **Text** button at the top, or **Text and speech** > **Text window** (Ctrl+Shift+T).
+- Phone: **Text** in the bar at the bottom.
 
 ## What it shows
 - **Captions**: every caption on the timeline, whatever made it: a subtitle file you imported, captions from speech, or ones you typed.
 - **Transcript**: what was heard by **Transcribe speech…** (computer only).
 - **Titles**: the titles.
 
-When the video has more than one of these, a switch at the top chooses. No text yet? The window says how to get some: **Transcribe speech…**, **Import subtitles…** or **Add caption…**.
+When the video has more than one of these, a switch at the top chooses. No text yet? The window says how to get some: **Transcribe speech…**, **Subtitle file (.srt)…** or **Add caption…**.
 
 ## Reading
 The lines of one speaker are joined into paragraphs, with the time at the side. A caption that starts with a name and a colon ("Sam: …") is that speaker's; the name is shown once, in the speaker's colour, and the captions after it belong to the same speaker until another name comes. Hebrew and Arabic read from right to left.
@@ -1121,10 +1193,10 @@ Type in **Find in the text…** (Ctrl+F puts the cursor there). Every place is m
 Double-click a caption (or click it, then **Edit**), change the text and press **Enter** (**Save**). The caption's name, if it has one, is part of the text you edit. **Delete caption** removes it; on a computer, click one caption and Shift-click another to select everything between them and delete them together. Each of these is one step for **Undo**. Transcripts and titles cannot be changed here.
 
 ## Cutting a part out of the video
-On a computer, select the captions or phrases of the part you do not want and click **Cut this part out of the video…**. ClipForge shows from when to when and how long, and asks first. The picture and its sound are removed, with the captions on that part. **Undo** brings everything back; later, Edit > Speech > **Automatic cuts…** > **Put back** returns the picture and the sound (not the captions).
+On a computer, select the captions or phrases of the part you do not want and click **Cut this part out of the video…**. ClipForge shows from when to when and how long, and asks first. The picture and its sound are removed, with the captions on that part. **Undo** brings everything back; later, **Text and speech** > **Automatic cuts…** > **Put back** returns the picture and the sound (not the captions).
 
 ## Copying and saving
-The three dots have **Copy all text**, **Copy with times and names**, **Save as text file…** and **Save as subtitle file (.srt)…**.
+The three dots have **Copy all text**, **Copy with times and names**, **Save as text file…** and **Export subtitles (.srt)…**.
 
 ## Where the window sits (computer)
 At the right, or under the preview: the three dots, **Show at the right** or **Show under the preview**. Drag its edge to make it wider or taller; ClipForge remembers.
@@ -1144,12 +1216,12 @@ When two people were recorded at the same time, each microphone also hears the o
 
 ## Cutting by hand
 - Dragging on the timeline snaps to where talk starts and ends (see Snapping on the timeline).
-- **Next speech start** and **Previous speech start**: the double arrows next to Play, Ctrl+Right and Ctrl+Left (Cmd on a Mac), or the Playback menu. With a voice selected they follow that speaker; with nothing selected they stop wherever the speaker changes. On a phone they are under **More**.
+- **Next speech start** and **Previous speech start**: the double arrows next to Play, Ctrl+Right and Ctrl+Left (Cmd on a Mac), or the Playback menu. With a voice selected they follow that speaker; with nothing selected they stop wherever the speaker changes. On a phone they are under **More**, in the Text group.
 - Then **Split** there, as usual.
 
 ## Good to know
 - It tells loud from quiet, not speech from music or laughter, and it cannot tell two people on one microphone apart.
-- On a slow phone, turn the waves off: **More** > **Show sound waves** (computer: Playback > **Show sound waves**). Nothing else changes.
+- On a slow phone, turn the waves off: **Settings** > **Show sound waves** (computer: **View** > **Show sound waves**, or Settings). Nothing else changes.
 
 === voice-separation
 title: Separating voice and music
@@ -1232,7 +1304,7 @@ section: Export and files
 keywords: publishing notes, title, description, hashtags, tags, chapters, timestamps, youtube chapters, copy, paste, text file, post, upload, caption for post, credits, short title
 related: export-destinations, export, titles, captions, music-credits
 
-**Publishing notes…** keeps the text that goes with your video when you post it: a title, a description, hashtags and a list of chapters. Open it from the Export window, from the File menu, or on a phone from **More**.
+**Publishing notes…** keeps the text that goes with your video when you post it: a title, a description, hashtags and a list of chapters. Open it from the Export window, from the **File** menu, or on a phone from the three dots at the top of the project.
 
 Every field has a copy button. **Copy title and description** copies everything in one go. Nothing is posted from here: you paste the text on the site yourself.
 
@@ -1266,11 +1338,11 @@ In the Text window, select the sentences you want and choose **Make a short from
 
 ## From the playhead
 
-**Make a short from here…** takes 30, 45 or 60 seconds starting where the playhead is. Computer: the Edit menu, under Shorts, or the panel at the right when nothing is selected. Phone: **More**, then **Shorts and good moments**.
+**Make a short from here…** takes 30, 45 or 60 seconds starting where the playhead is. Computer: the **Clip** menu, or the panel at the right when nothing is selected. Phone: **More**, then **Shorts and good moments** (or the three dots > **Markers**).
 
 ## Good moments
 
-While you watch, press M on a computer (phone: **More**, then **Mark a good moment**) each time something good happens. A small flag appears on the time ruler. **Good moments…** lists them, and **Make shorts from markers…** makes one short around each: about 20 seconds before to 25 seconds after.
+While you watch, press M on a computer (or **Add** > **Good moment marker**; phone: **Add**, then **Good moment marker**) each time something good happens. A small flag appears on the time ruler. **Good moments…** lists them, and **Make shorts from markers…** makes one short around each: about 20 seconds before to 25 seconds after.
 
 ## What you can choose
 

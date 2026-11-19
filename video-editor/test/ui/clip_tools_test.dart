@@ -423,13 +423,12 @@ void main() {
         (tester) async {
       final fakes = await openEditor(tester, size);
       await seekTo(tester, 5000);
-      await tester.tap(find.text('Captions'));
-      await tester.pumpAndSettle();
+      await tapAdd(tester, 'Caption');
       expect(find.text('Export subtitles (.srt)'), findsNothing);
       await tester.enterText(find.byType(TextField), 'Look at  that!');
       await tester.pumpAndSettle();
       await fakes.screenshot(tester, 'editor_${label}_caption_entry');
-      await tester.tap(find.text('Add'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Add'));
       await tester.pumpAndSettle();
 
       // It is on the timeline, selected, and editable like a title.
@@ -438,8 +437,10 @@ void main() {
         await tester.tap(find.text('Edit'));
         await tester.pumpAndSettle();
       }
+      // (On a computer "Caption" is the panel's heading and its Add
+      // button.)
       expect(find.text(size == phone ? 'Edit caption' : 'Caption'),
-          findsOneWidget);
+          size == phone ? findsOneWidget : findsNWidgets(2));
       await tester.enterText(find.byType(TextField), 'Look at this!');
       await tester.pumpAndSettle();
       await closeSheet(tester, size);
@@ -451,9 +452,8 @@ void main() {
         ..pick = const PickedFile('/in/subs.srt', 'subs.srt')
         ..texts['/in/subs.srt'] = '1\n00:00:01,000 --> 00:00:02,500\nHello\n\n'
             '2\n00:00:08,000 --> 00:00:10,000\nSecond line\n';
-      await tester.tap(find.text('Captions'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Import subtitles (.srt)'));
+      await tapAdd(tester, 'Caption');
+      await tester.tap(find.text('Add a subtitle file (.srt)'));
       await tester.pumpAndSettle();
       expect(find.text('Added 2 captions.'), findsOneWidget);
       expect(find.text('Second line'), findsOneWidget);
@@ -465,8 +465,7 @@ void main() {
       await tester.tap(find.byTooltip('Redo'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Captions'));
-      await tester.pumpAndSettle();
+      await tapAdd(tester, 'Caption');
       await tester.tap(find.text('Export subtitles (.srt)'));
       await tester.pumpAndSettle();
       final srt = fakes.documents.savedTexts['Summer trip.srt']!;
@@ -510,19 +509,17 @@ void main() {
       (tester) async {
     final fakes = await openEditor(tester, phone);
     fakes.documents.pick = const PickedFile('/in/none.srt', 'none.srt');
-    await tester.tap(find.text('Captions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Import subtitles (.srt)'));
+    await tapAdd(tester, 'Caption');
+    await tester.tap(find.text('Add a subtitle file (.srt)'));
     await tester.pumpAndSettle();
     expect(find.textContaining('could not be read'), findsOneWidget);
     await waitForMessage(tester);
 
     fakes.documents.texts['/in/none.srt'] = 'not subtitles';
-    await tester.tap(find.text('Captions'));
+    await tapAdd(tester, 'Caption');
+    await tester.tap(find.text('Add a subtitle file (.srt)'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Import subtitles (.srt)'));
-    await tester.pumpAndSettle();
-    expect(find.text('No subtitles were found in that file.'), findsOneWidget);
+    expect(find.text('No captions were found in that file.'), findsOneWidget);
     expect(undoEnabled(tester), isFalse);
     await tester.pumpAndSettle(const Duration(seconds: 5));
   });
@@ -552,7 +549,14 @@ void main() {
     expect(find.text('Sound'), findsNothing);
     await tester.tap(find.text('More'));
     await tester.pumpAndSettle();
-    expect(find.text('Freeze frame'), findsNothing);
+    // Listed, greyed out, and it says why (1.15).
+    expect(
+        tester
+            .widget<ListTile>(find.widgetWithText(ListTile, 'Freeze frame'))
+            .enabled,
+        isFalse);
+    expect(find.text('Not now: move the playhead onto a video clip'),
+        findsOneWidget);
     expect(find.text('Transition and fades'), findsOneWidget);
   });
 
@@ -561,9 +565,11 @@ void main() {
     await tester.tap(block('clip-a'));
     await tester.pumpAndSettle();
     await seekTo(tester, 7000); // on the photo
-    await tester.tap(find.text('Freeze'));
+    // Greyed out, and its tooltip says why (1.15).
+    expect(find.byTooltip('Freeze: move the playhead onto a video clip'),
+        findsOneWidget);
+    await tester.tap(find.text('Freeze'), warnIfMissed: false);
     await tester.pumpAndSettle();
-    expect(find.textContaining('onto a video clip'), findsOneWidget);
     expect(fakes.engine.frames, isEmpty);
     await tester.pumpAndSettle(const Duration(seconds: 5));
   });
@@ -654,18 +660,17 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('More'));
       await tester.pumpAndSettle();
+      // The first clip cannot go earlier, and the line says why.
       expect(
           tester
-              .widget<OutlinedButton>(find.ancestor(
-                  of: find.text('Move earlier'),
-                  matching: find.byWidgetPredicate((w) => w is OutlinedButton)))
-              .onPressed,
-          isNull);
-      await tester.tap(find.text('Move later'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Move later'));
-      await tester.pumpAndSettle();
+              .widget<ListTile>(find.widgetWithText(ListTile, 'Move earlier'))
+              .enabled,
+          isFalse);
+      expect(find.text('Not now: it is already the first clip'),
+          findsOneWidget);
       await closeSheet(tester, phone);
+      await tapMore(tester, 'more-moveLater');
+      await tapMore(tester, 'more-moveLater');
       await back(tester);
       expect(clipIds(saved(fakes)), ['b', 'c', 'a', 'd']);
     });

@@ -3,6 +3,7 @@ import 'dart:ui' show AppExitResponse;
 
 import 'package:clipforge/core/model/project.dart';
 import 'package:clipforge/ui/app_menu.dart';
+import 'package:clipforge/ui/editor/acts.dart';
 import 'package:clipforge/ui/editor/clip_actions.dart';
 import 'package:clipforge/ui/editor/editor_screen.dart';
 import 'package:clipforge/ui/editor/leave_flow.dart';
@@ -432,9 +433,12 @@ void main() {
     test('without an editor the editing items are off', () {
       final menus = buildAppMenus(null);
       expect([for (final m in menus) m.label],
-          ['ClipForge', 'File', 'Edit', 'Playback', 'Window', 'Help']);
+          [
+        'ClipForge', 'File', 'Edit', 'Add', 'Clip', 'Sound', //
+        'Text and speech', 'View', 'Playback', 'Window', 'Help',
+      ]);
       for (final label in [
-        'Undo', 'Redo', 'Delete', 'Play', 'New project',
+        'Undo', 'Redo', 'Delete', 'Play/Pause', 'New project',
         'Open project file…', 'Back to projects', 'Export…',
       ]) {
         expect(item(menus, label).onSelected, isNull, reason: label);
@@ -446,22 +450,24 @@ void main() {
       final fakes = await openEditor(tester, desktop);
       final s = sessionOf(tester);
       var e = appMenu.editor!;
-      expect(e.canUndo, isFalse);
-      expect(e.canDelete, isFalse);
-      expect(e.canPlay, isTrue);
-      expect(item(buildAppMenus(e), 'Undo').onSelected, isNull);
+      expect(e.run(Act.undo), isNull);
+      expect(e.run(Act.delete), isNull);
+      expect(e.run(Act.playPause), isNotNull);
+      // Greyed out, and the label says why.
+      expect(item(buildAppMenus(e), 'Undo (nothing to undo)').onSelected,
+          isNull);
 
       // Select a photo and delete it from the menu.
       await tester.tap(block('clip-b'));
       await tester.pumpAndSettle();
       e = appMenu.editor!;
-      expect(e.canDelete, isTrue);
+      expect(e.run(Act.delete), isNotNull);
       item(buildAppMenus(e), 'Delete').onSelected!();
       await tester.pumpAndSettle();
       expect(s.project.clips.map((c) => c.id), ['a', 'c', 'd']);
 
       e = appMenu.editor!;
-      expect(e.canUndo, isTrue);
+      expect(e.run(Act.undo), isNotNull);
       item(buildAppMenus(e), 'Undo').onSelected!();
       await tester.pumpAndSettle();
       expect(s.project.clips, hasLength(4));
@@ -469,9 +475,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(s.project.clips, hasLength(3));
 
-      item(buildAppMenus(appMenu.editor), 'Play').onSelected!();
+      item(buildAppMenus(appMenu.editor), 'Play/Pause').onSelected!();
       await tester.pump();
       expect(s.playback.playing, isTrue);
+      expect(appMenu.editor!.playing, isTrue);
       expect(item(buildAppMenus(appMenu.editor), 'Pause').onSelected,
           isNotNull);
       s.playback.pause();

@@ -7,11 +7,13 @@
 # `dart compile exe` (see the comment in that file for why a wrapper).
 #
 # Connecting Claude without editing a config file (docs/claude-setup.html):
-# the Windows and macOS jobs also upload the Claude Desktop extension
+# the Windows and macOS jobs build the Claude Desktop extension
 # ClipForge-<version>-build<n>-claude-{windows,macos}.mcpb (manifest.json +
 # clipforge-mcp + title fonts, built by docs/tools/build_claude_bundles.py),
-# and the check job uploads the skill ClipForge-<version>-claude-skill.zip
-# (claude/skill/clipforge-editing).
+# and the check job builds the skill ClipForge-<version>-claude-skill.zip
+# (claude/skill/clipforge-editing). They are artifacts of the run (for
+# debugging); a release does not carry them (1.15): the app holds the
+# extension and saves it from Help > Connect to Claude.
 #
 # Since 1.12 the Claude helper travels INSIDE the desktop apps: clipforge-mcp
 # and the .mcpb are built BEFORE `flutter build`, and the .mcpb is put into
@@ -29,19 +31,29 @@
 # Windows installer (1.14.1): the Windows job also builds a per-user
 # installer with Inno Setup (windows/installer/clipforge.iss), installs,
 # updates and uninstalls it silently as a test, and the release publishes
-# it as ClipForge-Setup.exe next to the zip. latest.json keeps pointing
-# the app's own updater at the zip. When Inno Setup cannot be had on the
-# runner the installer steps are skipped with a warning and the release
-# has no ClipForge-Setup.exe (the download page links to it: check).
+# it as ClipForge-Setup.exe: THE Windows download. latest.json keeps
+# pointing the app's own updater at the zip. When Inno Setup cannot be had
+# on the runner the installer steps are skipped with a warning, and a
+# release then fails (it must have ClipForge-Setup.exe).
 #
 # "Read me first.html" (1.14.1): the Windows and macOS jobs write one
 # self-contained guide each (tool/ci/make_readme_html.py: install steps for
 # that system, first steps, updates, and what is new from CHANGELOG.md) and
 # put it next to the app: in the zip's "ClipForge" folder and in the
 # installer on Windows, beside ClipForge.app in the macOS zip. It replaces
-# "Release notes.txt". The release also carries the two files as
-# ClipForge-readme-windows.html and ClipForge-readme-macos.html (the
-# download page links to them). The check job runs the script's test.
+# "Release notes.txt". It is part of the install and not a separate
+# download (1.15). The check job runs the script's test.
+#
+# What a release publishes (1.15; tool/ci/release_assets.py is THE list):
+# three downloads, ClipForge-Setup.exe, ClipForge-macos.zip and
+# ClipForge-android.apk, plus two files only the app's Update button uses,
+# ClipForge-windows.zip and latest.json. No versioned duplicates (the
+# version is in the release title and inside the files), no 32-bit Android
+# APK (not built any more), no separate read-me, .mcpb or skill files. The
+# release job fails unless its folder holds exactly that list, and the
+# check job fails when the download page (site/index.html) does not offer
+# exactly the three downloads or when the site, the app or the docs link to
+# a release file that is not in the list.
 #
 # Version numbers (lib/core/build_info.dart): the version comes from
 # pubspec.yaml, the build number is this workflow's run number, and the
@@ -59,7 +71,7 @@
 # Releases: pushing a tag v<version> (it must match pubspec.yaml), or a
 # manual run on main with "publish" ticked, builds
 # Android, Windows and macOS and the "release" job publishes them as a
-# GitHub Release, with fixed-name copies (ClipForge-windows.zip, ...) so
+# GitHub Release under fixed names (ClipForge-Setup.exe, ...) so
 # releases/latest/download/<name> always gives the newest version, and
 # latest.json for the app's update check (Help > Check for updates).
 name: ClipForge builds
@@ -157,6 +169,13 @@ jobs:
               --date "${{ steps.version.outputs.build_time }}" \
               --changelog CHANGELOG.md --out "$RUNNER_TEMP/readme-$platform.html"
           done
+      # The download page offers exactly three downloads (Windows, Mac,
+      # Android), and nothing on the site, in the app or in the docs links
+      # to a release file that a release does not have.
+      - name: Check the download page and every link to a release file
+        run: |
+          python3 tool/ci/release_assets_test.py
+          python3 tool/ci/release_assets.py --check-links
       # Compile smoke test of the Claude control server (test/mcp/e2e_test.dart
       # above already drives a full editing session through it): the
       # single-file executable must build and answer the MCP handshake.
@@ -256,8 +275,8 @@ jobs:
             echo "keyAlias=$ANDROID_KEY_ALIAS"
             echo "keyPassword=$ANDROID_KEY_PASSWORD"
           } > android/key.properties
-      # One APK per CPU type: a single universal APK is about 260 MB, the
-      # 64-bit ARM one (every phone from roughly 2017 on) is about 72 MB.
+      # One APK, for 64-bit ARM (every phone from roughly 2017 on; about
+      # 72 MB). The APK for old 32-bit phones is not built since 1.15.
       # The build time, commit and channel for the app's About box
       # (--dart-define-from-file), and the release notes for this version
       # (its section of CHANGELOG.md) for the download.
@@ -278,10 +297,11 @@ jobs:
           grep -q "^## $CF_VERSION" "dist/$CF_NAME-release-notes.txt" || {
             echo "::error::CHANGELOG.md has no section for $CF_VERSION"; exit 1; }
       # versionName = the version; versionCode = the run number plus
-      # Flutter's per-CPU offset (2000 + run for 64-bit, 1000 + run for
-      # 32-bit), so each new run installs over the previous one.
+      # Flutter's per-CPU offset (2000 + run for 64-bit), so each new run
+      # installs over the previous one. (--split-per-abi keeps that offset
+      # and the file name the same as before 1.15.)
       - run: >-
-          flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
+          flutter build apk --release --split-per-abi --target-platform android-arm64
           --build-name=${{ env.CF_VERSION }} --build-number=${{ needs.check.outputs.build }}
           --dart-define-from-file=build/clipforge_build.json
       - name: Check the APK signature
@@ -296,19 +316,16 @@ jobs:
           fi
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      - name: Name the APKs
+      - name: Name the APK
         run: |
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "dist/$CF_NAME-android.apk"
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "dist/$CF_NAME-android-old-32bit-phones.apk"
+          if ls build/app/outputs/flutter-apk/*armeabi* >/dev/null 2>&1; then
+            echo "::error::a 32-bit APK was built; only the 64-bit one is wanted"; exit 1
+          fi
       - uses: actions/upload-artifact@v7
         with:
           path: video-editor/dist/${{ env.CF_NAME }}-android.apk
-          archive: false
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v7
-        with:
-          path: video-editor/dist/${{ env.CF_NAME }}-android-old-32bit-phones.apk
           archive: false
           if-no-files-found: error
 
@@ -581,7 +598,8 @@ jobs:
           path: video-editor/dist/${{ env.CF_NAME }}-claude-windows.mcpb
           archive: false
           if-no-files-found: error
-      # The guide by itself, for the release (ClipForge-readme-windows.html).
+      # The guide by itself: an artifact of the run only (a release does not
+      # carry it; it is inside the installer and the zip).
       - uses: actions/upload-artifact@v7
         with:
           path: video-editor/dist/${{ env.CF_NAME }}-readme-windows.html
@@ -728,7 +746,8 @@ jobs:
           path: video-editor/dist/${{ env.CF_NAME }}-claude-macos.mcpb
           archive: false
           if-no-files-found: error
-      # The guide by itself, for the release (ClipForge-readme-macos.html).
+      # The guide by itself: an artifact of the run only (a release does not
+      # carry it; it is inside the macOS zip).
       - uses: actions/upload-artifact@v7
         with:
           path: video-editor/dist/${{ env.CF_NAME }}-readme-macos.html
@@ -770,45 +789,52 @@ jobs:
           mkdir -p "$RUNNER_TEMP/release"
           find "$RUNNER_TEMP/artifacts" -type f -exec cp {} "$RUNNER_TEMP/release/" \;
           ls -l "$RUNNER_TEMP/release"
-      - name: Fixed-name copies, latest.json and release notes
+      # Only fixed-name files are published (tool/ci/release_assets.py is
+      # THE list): the three downloads people see and the two files the
+      # app's Update button uses. They are put in a folder of their own, so
+      # that nothing else of the run can slip into the release.
+      - name: The release files, latest.json and release notes
         working-directory: ${{ runner.temp }}/release
         run: |
           need() { test -f "$1" || { echo "::error::$1 is missing"; exit 1; }; }
-          copy() { need "$1"; cp "$1" "$2"; }
-          copy "$CF_NAME-windows.zip"             ClipForge-windows.zip
-          # The Windows installer (1.14.1), when this run could build it.
-          # latest.json does not name it: the app updates from the zip.
-          if [ -f "$CF_NAME-windows-setup.exe" ]; then
-            cp "$CF_NAME-windows-setup.exe" ClipForge-Setup.exe
-          else
-            echo "::warning::no Windows installer in this run: the release has no ClipForge-Setup.exe, and the first Windows button on the download page will not work"
+          out="$RUNNER_TEMP/publish"
+          mkdir -p "$out"
+          copy() { need "$1"; cp "$1" "$out/$2"; }
+          # What people download.
+          if [ ! -f "$CF_NAME-windows-setup.exe" ]; then
+            echo "::error::no Windows installer in this run (Inno Setup could not be had?): ClipForge-Setup.exe is THE Windows download, so there is no release without it"; exit 1
           fi
+          copy "$CF_NAME-windows-setup.exe"       ClipForge-Setup.exe
           copy "$CF_NAME-macos.zip"               ClipForge-macos.zip
           copy "$CF_NAME-android.apk"             ClipForge-android.apk
-          copy "$CF_NAME-android-old-32bit-phones.apk" ClipForge-android-old-32bit-phones.apk
-          copy "$CF_NAME-claude-windows.mcpb"     ClipForge-claude-windows.mcpb
-          copy "$CF_NAME-claude-macos.mcpb"       ClipForge-claude-macos.mcpb
-          copy "ClipForge-$CF_VERSION-claude-skill.zip" ClipForge-claude-skill.zip
-          # "Read me first" by itself (1.14.1), linked from the download
-          # page as "Full guide". latest.json does not name these.
-          copy "$CF_NAME-readme-windows.html"     ClipForge-readme-windows.html
-          copy "$CF_NAME-readme-macos.html"       ClipForge-readme-macos.html
+          # What only the app's own updater downloads (not on the page).
+          # Installed 1.12 - 1.15 apps on Windows update from this zip: it
+          # stays until they no longer need it.
+          copy "$CF_NAME-windows.zip"             ClipForge-windows.zip
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then tag="${GITHUB_REF#refs/tags/}"; else tag="v$CF_VERSION"; fi
           # latest.json: version, build, date, notes_url as before, plus
           # (1.12) per system the address, size and SHA-256 of the
           # fixed-name file, which the app checks before it uses a download.
           python3 "$GITHUB_WORKSPACE/video-editor/tool/ci/make_latest_json.py" \
-            --dir . --version "$CF_VERSION" --build "$CF_BUILD" \
-            --base-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --tag "$tag" --out latest.json
+            --dir "$out" --version "$CF_VERSION" --build "$CF_BUILD" \
+            --base-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --tag "$tag" --out "$out/latest.json"
           # The numbers in it must be those of the files that get uploaded.
           for file in ClipForge-windows.zip ClipForge-macos.zip ClipForge-android.apk; do
-            want="$(sha256sum "$file" | cut -d' ' -f1)"
-            grep -q "\"sha256\":\"$want\"" latest.json || { echo "::error::latest.json does not carry the SHA-256 of $file"; exit 1; }
+            want="$(sha256sum "$out/$file" | cut -d' ' -f1)"
+            grep -q "\"sha256\":\"$want\"" "$out/latest.json" || { echo "::error::latest.json does not carry the SHA-256 of $file"; exit 1; }
           done
+          if grep -q "android32\|32bit" "$out/latest.json"; then
+            echo "::error::latest.json still names a 32-bit Android file"; exit 1
+          fi
+          # Exactly the list: no more, no fewer.
+          python3 "$GITHUB_WORKSPACE/video-editor/tool/ci/release_assets.py" --check-dir "$out"
+          # The guide is part of the downloads: inside the Mac zip.
+          unzip -Z1 "$out/ClipForge-macos.zip" | grep -qx "Read me first.html" || {
+            echo "::error::Read me first.html is not in ClipForge-macos.zip"; exit 1; }
           awk -v v="$CF_VERSION" '/^## /{p = ($2 == v)} p' "$GITHUB_WORKSPACE/video-editor/CHANGELOG.md" > "$RUNNER_TEMP/notes.md"
           test -s "$RUNNER_TEMP/notes.md" || { echo "::error::CHANGELOG.md has no section for $CF_VERSION"; exit 1; }
       - name: Create the release
-        working-directory: ${{ runner.temp }}/release
+        working-directory: ${{ runner.temp }}/publish
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             tag="${GITHUB_REF#refs/tags/}"; how=(--verify-tag)
@@ -819,8 +845,8 @@ jobs:
               echo "::error::release $tag exists already: raise the version in pubspec.yaml first"; exit 1
             fi
           fi
-          files=(./*.zip ./*.apk ./*.mcpb latest.json ClipForge-readme-windows.html ClipForge-readme-macos.html)
-          if compgen -G "./*.exe" >/dev/null; then files+=(./*.exe); fi
+          # Exactly these five, by name (never a glob).
+          files=(ClipForge-Setup.exe ClipForge-macos.zip ClipForge-android.apk ClipForge-windows.zip latest.json)
           gh release create "$tag" -R "$GITHUB_REPOSITORY" \
             --title "ClipForge $CF_VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${how[@]}" \
             "${files[@]}"

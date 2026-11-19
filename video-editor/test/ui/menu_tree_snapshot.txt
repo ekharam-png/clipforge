@@ -1,0 +1,280 @@
+## TargetPlatform.macOS
+File > New project  [Cmd+N]
+File > Open project file…  [Cmd+O]
+File > ---
+File > Rename project…
+File > Publishing notes…
+File > Back to projects
+File > ---
+File > Export…  [Cmd+E]
+File > Export several…
+File > Export subtitles (.srt)…
+File > ---
+File > Settings…  [Cmd+,]
+Edit > Undo  [Cmd+Z]
+Edit > Redo  [Cmd+Shift+Z]
+Edit > History  [Cmd+Shift+H]
+Edit > ---
+Edit > Duplicate  [Cmd+D]
+Edit > Copy settings  [Cmd+Shift+C]
+Edit > Paste settings  [Cmd+Shift+V]
+Edit > Delete  [Backspace]
+Edit > ---
+Edit > Find in the text…  [Cmd+F]
+Add > Videos or photos…
+Add > Music or sound…
+Add > Voice recording…
+Add > Title
+Add > Caption…
+Add > Subtitle file (.srt)…
+Add > Overlay video or photo…
+Add > Good moment marker  [M]
+Clip > Split  [S]
+Clip > Start at playhead  [I]
+Clip > End at playhead  [O]
+Clip > Freeze frame
+Clip > Remove silences…
+Clip > Crop and position…
+Clip > Rotate right
+Clip > Move earlier
+Clip > Move later
+Clip > ---
+Clip > Make a short from here…
+Clip > Make shorts from markers…
+Clip > Good moments…
+Sound > Fit music to video
+Sound > Line up voice with video
+Sound > Separate sound…
+Sound > Put sound back
+Sound > Add sound track
+Sound > Lower music under speech
+Sound > Copy music credits
+Text and speech > Text window  [Cmd+Shift+T]
+Text and speech > Transcribe speech…
+Text and speech > Captions from speech…
+Text and speech > Remove filler words…
+Text and speech > Automatic cuts…
+View > Zoom in  [+]
+View > Zoom out  [-]
+View > Snap to playhead and edges
+View > Show sound waves
+View > ---
+View > Shape > Original (as the first clip)
+View > Shape > 9:16 upright
+View > Shape > 16:9 wide
+View > Shape > 1:1 square
+View > Shape > 4:5 upright
+View > Video size > Same as the first clip
+View > Video size > 720p
+View > Video size > 1080p (Full HD)
+View > Video size > 4K
+Playback > Play/Pause  [Space]
+Playback > Play backwards  [J]
+Playback > Pause  [K]
+Playback > Play forwards  [L]
+Playback > ---
+Playback > Go to start  [Home]
+Playback > Go to end  [End]
+Playback > Previous frame  [Left]
+Playback > Next frame  [Right]
+Playback > ---
+Playback > Previous speech start
+Playback > Next speech start
+Help > ClipForge Help  [Cmd+Shift+?]
+Help > Keyboard shortcuts
+Help > Show the tour
+Help > What's new
+Help > ---
+Help > Connect to Claude…
+Help > Check for updates…
+Help > ---
+Help > Copy version info
+Help > About ClipForge
+## TargetPlatform.windows
+File > New project  [Ctrl+N]
+File > Open project file…  [Ctrl+O]
+File > ---
+File > Rename project…
+File > Publishing notes…
+File > Back to projects
+File > ---
+File > Export…  [Ctrl+E]
+File > Export several…
+File > Export subtitles (.srt)…
+File > ---
+File > Settings…  [Ctrl+,]
+File > ---
+File > Exit  [Alt+F4]
+Edit > Undo  [Ctrl+Z]
+Edit > Redo  [Ctrl+Shift+Z]
+Edit > History  [Ctrl+Shift+H]
+Edit > ---
+Edit > Duplicate  [Ctrl+D]
+Edit > Copy settings  [Ctrl+Shift+C]
+Edit > Paste settings  [Ctrl+Shift+V]
+Edit > Delete  [Delete]
+Edit > ---
+Edit > Find in the text…  [Ctrl+F]
+Add > Videos or photos…
+Add > Music or sound…
+Add > Voice recording…
+Add > Title
+Add > Caption…
+Add > Subtitle file (.srt)…
+Add > Overlay video or photo…
+Add > Good moment marker  [M]
+Clip > Split  [S]
+Clip > Start at playhead  [I]
+Clip > End at playhead  [O]
+Clip > Freeze frame
+Clip > Remove silences…
+Clip > Crop and position…
+Clip > Rotate right
+Clip > Move earlier
+Clip > Move later
+Clip > ---
+Clip > Make a short from here…
+Clip > Make shorts from markers…
+Clip > Good moments…
+Sound > Fit music to video
+Sound > Line up voice with video
+Sound > Separate sound…
+Sound > Put sound back
+Sound > Add sound track
+Sound > Lower music under speech
+Sound > Copy music credits
+Text and speech > Text window  [Ctrl+Shift+T]
+Text and speech > Transcribe speech…
+Text and speech > Captions from speech…
+Text and speech > Remove filler words…
+Text and speech > Automatic cuts…
+View > Zoom in  [+]
+View > Zoom out  [-]
+View > Snap to playhead and edges
+View > Show sound waves
+View > ---
+View > Shape > Original (as the first clip)
+View > Shape > 9:16 upright
+View > Shape > 16:9 wide
+View > Shape > 1:1 square
+View > Shape > 4:5 upright
+View > Video size > Same as the first clip
+View > Video size > 720p
+View > Video size > 1080p (Full HD)
+View > Video size > 4K
+Playback > Play/Pause  [Space]
+Playback > Play backwards  [J]
+Playback > Pause  [K]
+Playback > Play forwards  [L]
+Playback > ---
+Playback > Go to start  [Home]
+Playback > Go to end  [End]
+Playback > Previous frame  [Left]
+Playback > Next frame  [Right]
+Playback > ---
+Playback > Previous speech start  [Ctrl+Left]
+Playback > Next speech start  [Ctrl+Right]
+Help > ClipForge Help  [F1]
+Help > Keyboard shortcuts
+Help > Show the tour
+Help > What's new
+Help > ---
+Help > Connect to Claude…
+Help > Check for updates…
+Help > ---
+Help > Copy version info
+Help > About ClipForge
+## TargetPlatform.linux
+File > New project  [Ctrl+N]
+File > Open project file…  [Ctrl+O]
+File > ---
+File > Rename project…
+File > Publishing notes…
+File > Back to projects
+File > ---
+File > Export…  [Ctrl+E]
+File > Export several…
+File > Export subtitles (.srt)…
+File > ---
+File > Settings…  [Ctrl+,]
+File > ---
+File > Quit  [Ctrl+Q]
+Edit > Undo  [Ctrl+Z]
+Edit > Redo  [Ctrl+Shift+Z]
+Edit > History  [Ctrl+Shift+H]
+Edit > ---
+Edit > Duplicate  [Ctrl+D]
+Edit > Copy settings  [Ctrl+Shift+C]
+Edit > Paste settings  [Ctrl+Shift+V]
+Edit > Delete  [Delete]
+Edit > ---
+Edit > Find in the text…  [Ctrl+F]
+Add > Videos or photos…
+Add > Music or sound…
+Add > Voice recording…
+Add > Title
+Add > Caption…
+Add > Subtitle file (.srt)…
+Add > Overlay video or photo…
+Add > Good moment marker  [M]
+Clip > Split  [S]
+Clip > Start at playhead  [I]
+Clip > End at playhead  [O]
+Clip > Freeze frame
+Clip > Remove silences…
+Clip > Crop and position…
+Clip > Rotate right
+Clip > Move earlier
+Clip > Move later
+Clip > ---
+Clip > Make a short from here…
+Clip > Make shorts from markers…
+Clip > Good moments…
+Sound > Fit music to video
+Sound > Line up voice with video
+Sound > Separate sound…
+Sound > Put sound back
+Sound > Add sound track
+Sound > Lower music under speech
+Sound > Copy music credits
+Text and speech > Text window  [Ctrl+Shift+T]
+Text and speech > Transcribe speech…
+Text and speech > Captions from speech…
+Text and speech > Remove filler words…
+Text and speech > Automatic cuts…
+View > Zoom in  [+]
+View > Zoom out  [-]
+View > Snap to playhead and edges
+View > Show sound waves
+View > ---
+View > Shape > Original (as the first clip)
+View > Shape > 9:16 upright
+View > Shape > 16:9 wide
+View > Shape > 1:1 square
+View > Shape > 4:5 upright
+View > Video size > Same as the first clip
+View > Video size > 720p
+View > Video size > 1080p (Full HD)
+View > Video size > 4K
+Playback > Play/Pause  [Space]
+Playback > Play backwards  [J]
+Playback > Pause  [K]
+Playback > Play forwards  [L]
+Playback > ---
+Playback > Go to start  [Home]
+Playback > Go to end  [End]
+Playback > Previous frame  [Left]
+Playback > Next frame  [Right]
+Playback > ---
+Playback > Previous speech start  [Ctrl+Left]
+Playback > Next speech start  [Ctrl+Right]
+Help > ClipForge Help  [F1]
+Help > Keyboard shortcuts
+Help > Show the tour
+Help > What's new
+Help > ---
+Help > Connect to Claude…
+Help > Check for updates…
+Help > ---
+Help > Copy version info
+Help > About ClipForge

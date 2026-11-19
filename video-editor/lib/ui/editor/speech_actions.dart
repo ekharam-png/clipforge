@@ -65,7 +65,7 @@ Future<bool> showTranscribeDialog(BuildContext context, EditorSession s,
   if (made == true && context.mounted) {
     final words =
         s.transcripts.value.values.fold<int>(0, (n, t) => n + t.wordCount);
-    _say(context, 'Speech transcribed: $words words. See it under Transcript.');
+    _say(context, 'Speech transcribed: $words words. Read it in the Text window.');
   }
   return made == true;
 }

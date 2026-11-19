@@ -67,10 +67,7 @@ void main() {
       final fakes = await openEditor(tester, size);
       final s = sessionOf(tester);
       if (size == phone) {
-        await tester.tap(find.text('More'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('more-fades')));
-        await tester.pumpAndSettle();
+        await tapProjectMenu(tester, 'Fade in and out');
       }
       await dragSlider(tester, const ValueKey('project-fade-in'), 80);
       await dragSlider(tester, const ValueKey('project-fade-out'), 40);
@@ -176,9 +173,7 @@ void main() {
       await tester.tap(block('clip-a'));
       await tester.pumpAndSettle();
       if (size == phone) {
-        await tester.tap(find.text('More'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byKey(const ValueKey('more-duplicate')));
+        await tapMore(tester, 'more-duplicate');
       } else {
         await tester.tap(find.text('Duplicate'));
       }
@@ -286,7 +281,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(s.project.clips, hasLength(5));
 
-    await open('Playback');
+    await open('View');
     await tester.tap(find.byKey(const ValueKey('menu-snapping')));
     await tester.pumpAndSettle();
     expect(s.snapping.value, isFalse);

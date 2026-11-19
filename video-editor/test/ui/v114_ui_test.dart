@@ -357,9 +357,8 @@ void main() {
       final f = await open(tester, size, talk(notes: false));
       final s = session(tester);
       if (isPhone) {
-        await tester.tap(find.text('More'));
-        await tester.pumpAndSettle();
-        await tapKey(tester, 'more-publishing-notes');
+        // Phones: the project menu.
+        await tapProjectMenu(tester, 'Publishing notes');
       } else {
         await tapKey(tester, 'panel-publishing-notes');
       }
@@ -414,9 +413,7 @@ void main() {
       final f = await open(tester, size, podcast());
       final s = session(tester);
       if (isPhone) {
-        await tester.tap(find.text('More'));
-        await tester.pumpAndSettle();
-        await tapKey(tester, 'more-text');
+        await tapKey(tester, 'tool-text');
         await tapInTextWindow(tester, 'And what did they say?');
         await tester.pumpAndSettle();
       } else {
@@ -571,11 +568,13 @@ void main() {
     expect(find.text('Export several'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Edit'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Shorts'));
+    await tester.tap(find.text('Add'));
     await tester.pumpAndSettle();
     expect(key('menu-mark-moment'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clip'));
+    await tester.pumpAndSettle();
     expect(key('menu-good-moments'), findsOneWidget);
     expect(key('menu-shorts-from-markers'), findsOneWidget);
     await tester.tap(key('menu-short-from-here'));

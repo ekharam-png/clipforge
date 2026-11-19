@@ -1125,7 +1125,14 @@ class ProjectEditor {
         final next = change(tracks[i]);
         if (_sameJson(next.toJson(), tracks[i].toJson())) return null;
         tracks[i] = next;
-        return p.copyWith(tracks: tracks);
+        // One truth for "Lower music under speech": the default for music
+        // tracks made later follows what the tracks say now.
+        final music = [for (final t in tracks) if (!t.speech) t];
+        return p.copyWith(
+            tracks: tracks,
+            duckMusic: music.isEmpty
+                ? p.duckMusic
+                : music.every((t) => t.duck));
       });
 
   // Separate sound -----------------------------------------------------------

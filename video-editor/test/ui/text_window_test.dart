@@ -484,7 +484,7 @@ void main() {
     await menu('Save as text file…');
     expect(fakes.documents.savedTexts['Bread talk.txt'], copied.last);
     expect(find.textContaining('Text saved: /out/Bread talk.txt'), findsOneWidget);
-    await menu('Save as subtitle file (.srt)…');
+    await menu('Export subtitles (.srt)…');
     expect(fakes.documents.savedTexts['Bread talk.srt'],
         contains('00:00:00,400 --> 00:00:01,900'));
   });
@@ -555,8 +555,12 @@ void main() {
       await open(tester, const Size(1280, 800), menuBar: true);
       await tester.tap(find.widgetWithText(SubmenuButton, 'Edit'));
       await tester.pumpAndSettle();
-      expect(find.text('Text window'), findsOneWidget);
       expect(find.text('Find in the text…'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(SubmenuButton, 'Text and speech'));
+      await tester.pumpAndSettle();
+      expect(find.text('Text window'), findsOneWidget);
       await tester.tap(key('menu-text'));
       await tester.pumpAndSettle();
       expect(key('text-panel'), findsOneWidget);
@@ -654,9 +658,8 @@ void main() {
       'to jump, edit a caption', (tester) async {
     final fakes = await open(tester, phone);
     expect(key('text-button'), findsNothing);
-    await tester.tap(find.text('More').last);
-    await tester.pumpAndSettle();
-    await tester.tap(key('more-text'));
+    // Text has its own button in the tool bar (and is under More too).
+    await tester.tap(key('tool-text'));
     await tester.pumpAndSettle();
     expect(key('text-panel'), findsOneWidget);
     final size = tester.getSize(key('text-panel'));

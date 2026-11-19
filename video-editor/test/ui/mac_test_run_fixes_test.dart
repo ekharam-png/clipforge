@@ -27,10 +27,10 @@ void main() {
       'Back to projects',
       'Undo',
       'Redo',
-      'Back to start',
+      'Go to start',
       'Play',
-      'Zoom out timeline',
-      'Zoom in timeline',
+      'Zoom out',
+      'Zoom in',
     ]) {
       expect(find.bySemanticsLabel(name), findsWidgets, reason: name);
     }

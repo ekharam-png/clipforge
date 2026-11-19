@@ -6,268 +6,64 @@ import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/model/project.dart';
+import 'editor/acts.dart';
 import 'theme.dart';
 
-/// What the menu bar can do in the open editor, and whether it can now.
+// The app's menus (1.15): ONE tree ([buildMenuTree]) that both menu bars
+// draw - the macOS menu bar ([buildAppMenus]) and the bar inside the window
+// on Windows and Linux ([WindowMenuBar]) - so they cannot drift apart.
+//
+//   File · Edit · Add · Clip · Sound · Text and speech · View · Playback ·
+//   Help
+//
+// An item that cannot be used now stays in its place, greyed out, and its
+// label says why: "Fit music to video (select a music clip)". The reason
+// comes from EditorActions (editor/editor_actions.dart), the same source
+// the side panel and the phone use.
+
+/// What the menu bar can do in the open editor: every action with whether
+/// it can be done now ([ActionEntry.reason]) and its tick.
 @immutable
 class EditorMenuActions {
   const EditorMenuActions({
-    required this.canUndo,
-    required this.canRedo,
-    required this.canDelete,
-    required this.canPlay,
-    required this.playing,
-    required this.undo,
-    required this.redo,
-    required this.delete,
-    required this.togglePlay,
-    this.canExport = false,
-    this.export,
-    this.backToProjects,
-    this.showHistory,
-    this.canCrop = false,
-    this.cropAndPosition,
-    this.rotateRight,
-    this.canAddOverlay = false,
-    this.addOverlay,
-    this.extra = const EditorMenuExtra(),
-  });
-
-  /// The items added in 1.7.
-  final EditorMenuExtra extra;
-
-  final bool canUndo;
-  final bool canRedo;
-
-  /// Something is selected on the timeline.
-  final bool canDelete;
-
-  /// The project has something to play.
-  final bool canPlay;
-  final bool playing;
-  final VoidCallback undo;
-  final VoidCallback redo;
-  final VoidCallback delete;
-  final VoidCallback togglePlay;
-
-  /// The project has something to export.
-  final bool canExport;
-
-  /// Opens the export dialog (File > Export…).
-  final VoidCallback? export;
-
-  /// Saves and goes back to the project list (File > Back to projects).
-  final VoidCallback? backToProjects;
-
-  /// Shows or hides the list of changes (Edit > History).
-  final VoidCallback? showHistory;
-
-  /// A clip or an overlay item is selected: its picture can be cropped and
-  /// turned.
-  final bool canCrop;
-
-  /// Opens "Crop and position" of the selection (Edit > Crop and
-  /// position…).
-  final VoidCallback? cropAndPosition;
-
-  /// Turns the selected picture a quarter turn clockwise (Edit > Rotate
-  /// right).
-  final VoidCallback? rotateRight;
-
-  /// The project has something to put an overlay over.
-  final bool canAddOverlay;
-
-  /// Picks videos or photos for the overlay track (Edit > Add overlay
-  /// video or photo…).
-  final VoidCallback? addOverlay;
-}
-
-/// The editor's menu items added in 1.7. Each action is null while it
-/// cannot be done now (the item is then greyed out).
-@immutable
-class EditorMenuExtra {
-  const EditorMenuExtra({
-    this.addMedia,
-    this.addMusic,
-    this.addTitle,
-    this.addCaption,
-    this.importSubtitles,
-    this.exportSubtitles,
-    this.renameProject,
-    this.split,
-    this.freezeFrame,
-    this.removeSilences,
-    this.moveEarlier,
-    this.moveLater,
-    this.startAtPlayhead,
-    this.endAtPlayhead,
-    this.duplicate,
-    this.copySettings,
-    this.pasteSettings,
-    this.separateSound,
-    this.putSoundBack,
-    this.addSoundTrack,
-    this.addVoice,
-    this.lineUpVoice,
-    this.fitMusic,
-    this.copyCredits,
-    this.lowerMusic,
-    this.lowerMusicOn = false,
+    required this.entries,
+    this.playing = false,
     this.shape,
     this.currentShape,
     this.videoSize,
     this.currentVideoSize,
-    this.goToStart,
-    this.goToEnd,
-    this.playBackwards,
-    this.pause,
-    this.playForwards,
-    this.previousFrame,
-    this.nextFrame,
-    this.zoomIn,
-    this.zoomOut,
-    this.toggleSnapping,
-    this.snapping = true,
-    this.showShortcuts,
-    this.speech,
-    this.showText,
-    this.textShown = false,
-    this.findInText,
-    this.toggleWaves,
-    this.wavesOn = true,
-    this.previousSpeech,
-    this.nextSpeech,
-    this.publishingNotes,
-    this.exportSeveral,
-    this.markMoment,
-    this.goodMoments,
-    this.shortFromHere,
-    this.shortsFromMarkers,
+    this.speech = false,
   });
 
-  /// 1.14: File > "Publishing notes…" and "Export several…"; Edit >
-  /// Shorts: "Mark a good moment" (M), "Good moments…", "Make a short
-  /// from here…", "Make shorts from markers…".
-  final VoidCallback? publishingNotes;
-  final VoidCallback? exportSeveral;
-  final VoidCallback? markMoment;
-  final VoidCallback? goodMoments;
-  final VoidCallback? shortFromHere;
-  final VoidCallback? shortsFromMarkers;
+  final Map<Act, ActionEntry> entries;
+  final bool playing;
 
-  /// Edit > "Text window" (1.13) and "Find in the text…".
-  final VoidCallback? showText;
-  final bool textShown;
-  final VoidCallback? findInText;
-
-  /// Playback > "Show sound waves" and "Previous / Next speech start".
-  final VoidCallback? toggleWaves;
-  final bool wavesOn;
-  final VoidCallback? previousSpeech;
-  final VoidCallback? nextSpeech;
-
-  /// Edit > Speech (1.11, computers only): null where speech-to-text does
-  /// not exist (phones), and then the menu is not there at all.
-  final SpeechMenu? speech;
-
-  final VoidCallback? addMedia;
-  final VoidCallback? addMusic;
-  final VoidCallback? addTitle;
-  final VoidCallback? addCaption;
-  final VoidCallback? importSubtitles;
-  final VoidCallback? exportSubtitles;
-  final VoidCallback? renameProject;
-  final VoidCallback? split;
-  final VoidCallback? freezeFrame;
-  final VoidCallback? removeSilences;
-  final VoidCallback? moveEarlier;
-  final VoidCallback? moveLater;
-  final VoidCallback? startAtPlayhead;
-  final VoidCallback? endAtPlayhead;
-  final VoidCallback? duplicate;
-  final VoidCallback? copySettings;
-  final VoidCallback? pasteSettings;
-  final VoidCallback? separateSound;
-  final VoidCallback? putSoundBack;
-  final VoidCallback? addSoundTrack;
-
-  /// Edit > Sound > "Add voice recording…" and "Line up with the video"
-  /// (the selected sound; 1.10).
-  final VoidCallback? addVoice;
-  final VoidCallback? lineUpVoice;
-
-  /// "Fit music to video" for the selected music.
-  final VoidCallback? fitMusic;
-
-  /// "Copy music credits" (music from the free music search).
-  final VoidCallback? copyCredits;
-  final VoidCallback? lowerMusic;
-  final bool lowerMusicOn;
+  /// Speech-to-text exists here (computers): the speech items are shown.
+  final bool speech;
   final ValueChanged<CanvasAspect>? shape;
   final CanvasAspect? currentShape;
   final ValueChanged<VideoSize>? videoSize;
   final VideoSize? currentVideoSize;
-  final VoidCallback? goToStart;
-  final VoidCallback? goToEnd;
-  final VoidCallback? playBackwards;
-  final VoidCallback? pause;
-  final VoidCallback? playForwards;
-  final VoidCallback? previousFrame;
-  final VoidCallback? nextFrame;
-  final VoidCallback? zoomIn;
-  final VoidCallback? zoomOut;
-  final VoidCallback? toggleSnapping;
-  final bool snapping;
-  final VoidCallback? showShortcuts;
 
-  /// What the menus show (which items are on, ticks), to tell whether
-  /// they need building again.
+  /// The action of [a], null while it cannot be done.
+  VoidCallback? run(Act a) => entries[a]?.onTap;
+
+  /// What the menus show (which items are on, their reasons and ticks),
+  /// to tell whether they need building again.
   List<Object?> get state => [
-        for (final a in [
-          addMedia, addMusic, addTitle, addCaption, importSubtitles, //
-          exportSubtitles, renameProject, split, freezeFrame,
-          removeSilences, moveEarlier, moveLater, startAtPlayhead,
-          endAtPlayhead, duplicate, copySettings, pasteSettings,
-          separateSound, putSoundBack, addSoundTrack, lowerMusic,
-          addVoice, lineUpVoice,
-          fitMusic, copyCredits,
-          goToStart, goToEnd, playBackwards, pause, playForwards,
-          previousFrame, nextFrame, zoomIn, zoomOut, toggleSnapping,
-          showShortcuts, shape, videoSize,
-          showText, findInText, toggleWaves, previousSpeech, nextSpeech,
-          publishingNotes, exportSeveral, markMoment, goodMoments,
-          shortFromHere, shortsFromMarkers,
-        ])
-          a != null,
-        lowerMusicOn,
+        for (final a in Act.values) ...[
+          entries[a]?.label,
+          entries[a]?.reason,
+          entries[a]?.checked,
+          entries[a]?.onTap != null,
+        ],
+        playing,
+        speech,
         currentShape,
         currentVideoSize,
-        snapping,
-        textShown,
-        wavesOn,
-        speech != null,
-        speech?.transcribe != null,
-        speech?.captions != null,
-        speech?.fillers != null,
-        speech?.autoCuts != null,
+        shape != null,
+        videoSize != null,
       ];
-}
-
-/// The Edit > Speech items. A null action is greyed out.
-@immutable
-class SpeechMenu {
-  const SpeechMenu({
-    this.transcribe,
-    this.captions,
-    this.fillers,
-    this.autoCuts,
-  });
-
-  /// "Automatic cuts…": what was cut automatically, with Put back.
-  final VoidCallback? autoCuts;
-  final VoidCallback? transcribe;
-  final VoidCallback? captions;
-  final VoidCallback? fillers;
 }
 
 /// "Original (as the first clip)", "9:16 upright", ...
@@ -279,7 +75,7 @@ String menuShapeLabel(CanvasAspect a) => switch (a) {
       CanvasAspect.portrait4x5 => '4:5 upright',
     };
 
-/// "Match first clip", "720p", ...
+/// "Same as the first clip", "720p", ...
 String menuVideoSizeLabel(VideoSize v) => switch (v) {
       VideoSize.matchFirstClip => 'Same as the first clip',
       VideoSize.p720 => '720p',
@@ -296,7 +92,7 @@ class HomeMenuActions {
   final VoidCallback openProjectFile;
 }
 
-/// Connects the open editor to the app's menu bar (macOS).
+/// Connects the open editor to the app's menu bar.
 class AppMenuController extends ChangeNotifier {
   bool _notifyPending = false;
 
@@ -316,6 +112,7 @@ class AppMenuController extends ChangeNotifier {
       notifyListeners();
     }, debugLabel: 'AppMenuController');
   }
+
   Object? _owner;
   EditorMenuActions? _editor;
   Object? _homeOwner;
@@ -348,15 +145,7 @@ class AppMenuController extends ChangeNotifier {
     final before = _editor;
     final same = identical(_owner, owner) &&
         before != null &&
-        before.canUndo == actions.canUndo &&
-        before.canRedo == actions.canRedo &&
-        before.canDelete == actions.canDelete &&
-        before.canPlay == actions.canPlay &&
-        before.playing == actions.playing &&
-        before.canExport == actions.canExport &&
-        before.canCrop == actions.canCrop &&
-        before.canAddOverlay == actions.canAddOverlay &&
-        listEquals(before.extra.state, actions.extra.state);
+        listEquals(before.state, actions.state);
     _owner = owner;
     _editor = actions;
     // The editor reports after every edit and playback change; the menu
@@ -374,7 +163,7 @@ class AppMenuController extends ChangeNotifier {
   }
 }
 
-/// What the Help menu does.
+/// What the Help menu (and File > Settings…) does.
 @immutable
 class HelpMenuActions {
   const HelpMenuActions({
@@ -383,9 +172,10 @@ class HelpMenuActions {
     this.showAbout,
     this.copyVersionInfo,
     this.checkForUpdates,
-    this.autoUpdateCheck = true,
-    this.toggleAutoUpdateCheck,
     this.connectClaude,
+    this.showWhatsNew,
+    this.showShortcuts,
+    this.openSettings,
   });
   final VoidCallback openHelp;
   final VoidCallback showTour;
@@ -399,13 +189,17 @@ class HelpMenuActions {
   /// Asks now whether a newer version exists (lib/ui/update).
   final VoidCallback? checkForUpdates;
 
-  /// Whether the app checks for updates by itself (once a day), and the
-  /// switch for it.
-  final bool autoUpdateCheck;
-  final VoidCallback? toggleAutoUpdateCheck;
-
   /// Opens "Connect to Claude" (computers only; null on phones).
   final VoidCallback? connectClaude;
+
+  /// Opens "What's new" (the release notes inside the app).
+  final VoidCallback? showWhatsNew;
+
+  /// Opens the "Keyboard shortcuts" help article.
+  final VoidCallback? showShortcuts;
+
+  /// Opens the Settings page (File > Settings…, Ctrl/Cmd+,).
+  final VoidCallback? openSettings;
 }
 
 /// The one [AppMenuController] of the app.
@@ -416,19 +210,324 @@ final AppMenuController appMenu = AppMenuController();
 bool get usesPlatformMenuBar =>
     !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
 
-/// The menus of the macOS menu bar. Disabled items have no [onSelected].
+/// One line of a menu: an item, a divider or a submenu.
+@immutable
+class MenuNode {
+  const MenuNode.item(
+    this.label, {
+    this.id,
+    this.shortcut,
+    this.onSelected,
+    this.checked,
+    this.mixed = false,
+  })  : children = null,
+        divider = false;
+  const MenuNode.submenu(this.label, List<MenuNode> this.children, {this.id})
+      : shortcut = null,
+        onSelected = null,
+        checked = null,
+        mixed = false,
+        divider = false;
+  const MenuNode.divider()
+      : label = '',
+        id = null,
+        shortcut = null,
+        onSelected = null,
+        checked = null,
+        mixed = false,
+        children = null,
+        divider = true;
+
+  final String label;
+
+  /// The widget key is `menu-<id>`.
+  final String? id;
+  final SingleActivator? shortcut;
+
+  /// Null: greyed out.
+  final VoidCallback? onSelected;
+
+  /// Null: no tick; else the state of a switch.
+  final bool? checked;
+
+  /// A switch that is on for some and off for others.
+  final bool mixed;
+  final List<MenuNode>? children;
+  final bool divider;
+}
+
+/// The keys as a menu shows them: "Ctrl+Shift+T", "Cmd+,", "Space".
+String describeShortcut(SingleActivator a) {
+  final key = a.trigger;
+  final name = switch (key) {
+    LogicalKeyboardKey.space => 'Space',
+    LogicalKeyboardKey.comma => ',',
+    LogicalKeyboardKey.equal => '+',
+    LogicalKeyboardKey.minus => '-',
+    LogicalKeyboardKey.slash => '?',
+    LogicalKeyboardKey.arrowLeft => 'Left',
+    LogicalKeyboardKey.arrowRight => 'Right',
+    _ => key.keyLabel,
+  };
+  return [
+    if (a.control) 'Ctrl',
+    if (a.meta) 'Cmd',
+    if (a.alt) 'Alt',
+    if (a.shift) 'Shift',
+    name,
+  ].join('+');
+}
+
+/// The whole menu tree as text, one line per item (tests keep a copy, so
+/// a moved or renamed item is noticed).
+List<String> describeMenuTree(List<MenuNode> menus) {
+  final out = <String>[];
+  void walk(String path, List<MenuNode> nodes) {
+    for (final n in nodes) {
+      if (n.divider) {
+        out.add('$path > ---');
+      } else if (n.children != null) {
+        walk('$path > ${n.label}', n.children!);
+      } else {
+        out.add('$path > ${n.label}'
+            '${n.shortcut == null ? '' : '  [${describeShortcut(n.shortcut!)}]'}');
+      }
+    }
+  }
+
+  for (final m in menus) {
+    walk(m.label, m.children!);
+  }
+  return out;
+}
+
+/// THE menu tree: File, Edit, Add, Clip, Sound, Text and speech, View,
+/// Playback, Help. [platform] decides the modifier key (Cmd on macOS, Ctrl
+/// elsewhere), Delete / Backspace, the Help key and Quit / Exit.
 ///
-/// Items carry their shortcuts (Undo, Delete = Backspace, Play = Space, the
-/// single-letter editing keys, ...). They are not fired twice with the
-/// editor's own key handling: the key goes to the app first, and a key the
-/// app handles (the editor's shortcuts, or a text field's own typing and
-/// Undo) is not passed on to the menu; the editor handles every one of
-/// them itself, so they also work the same way without the menu.
+/// Items carry their shortcuts (Undo, Delete, Play = Space, the
+/// single-letter editing keys, ...). Most are only SHOWN here: the editor's
+/// own key handling does them, so they also work without the menu and never
+/// run twice (see [windowMenuShortcuts] for the few the menu bar handles).
+List<MenuNode> buildMenuTree(
+  EditorMenuActions? editor, {
+  HelpMenuActions? help,
+  HomeMenuActions? home,
+  TargetPlatform? platform,
+}) {
+  final os = platform ?? defaultTargetPlatform;
+  final mac = os == TargetPlatform.macOS;
+  final windows = os == TargetPlatform.windows;
+  final e = editor;
+  final h = e == null ? home : null;
+  SingleActivator key(LogicalKeyboardKey k, {bool shift = false}) =>
+      SingleActivator(k, meta: mac, control: !mac, shift: shift);
+  SingleActivator plain(LogicalKeyboardKey k) => SingleActivator(k);
+
+  MenuNode act(Act a, String id, {SingleActivator? shortcut, String? label}) {
+    final entry = e?.entries[a];
+    final base = label ?? entry?.label ?? actLabel(a);
+    final reason = entry?.reason;
+    return MenuNode.item(
+      reason == null ? base : '$base ($reason)',
+      id: id,
+      shortcut: shortcut,
+      onSelected: entry?.onTap,
+      checked: entry?.checked,
+      mixed: entry?.mixed ?? false,
+    );
+  }
+
+  const divider = MenuNode.divider();
+  final settings = e?.entries[Act.settings]?.onTap ?? help?.openSettings;
+  final shortcuts = e?.entries[Act.shortcuts]?.onTap ?? help?.showShortcuts;
+  return [
+    MenuNode.submenu('File', [
+      MenuNode.item('New project',
+          id: 'new-project',
+          shortcut: key(LogicalKeyboardKey.keyN),
+          onSelected: h?.newProject),
+      MenuNode.item('Open project file…',
+          id: 'open-project-file',
+          shortcut: key(LogicalKeyboardKey.keyO),
+          onSelected: h?.openProjectFile),
+      divider,
+      act(Act.renameProject, 'rename-project'),
+      act(Act.publishingNotes, 'publishing-notes'),
+      act(Act.backToProjects, 'back-to-projects'),
+      divider,
+      act(Act.export, 'export', shortcut: key(LogicalKeyboardKey.keyE)),
+      act(Act.exportSeveral, 'export-several'),
+      act(Act.exportSubtitles, 'export-subtitles'),
+      divider,
+      MenuNode.item('Settings…',
+          id: 'settings',
+          shortcut: key(LogicalKeyboardKey.comma),
+          onSelected: settings),
+      // macOS has Quit in the app's own menu, as every Mac app does.
+      if (!mac) ...[
+        divider,
+        MenuNode.item(windows ? 'Exit' : 'Quit',
+            id: 'quit',
+            shortcut: windows
+                ? const SingleActivator(LogicalKeyboardKey.f4, alt: true)
+                : const SingleActivator(LogicalKeyboardKey.keyQ,
+                    control: true),
+            onSelected: requestAppQuit),
+      ],
+    ]),
+    MenuNode.submenu('Edit', [
+      act(Act.undo, 'undo', shortcut: key(LogicalKeyboardKey.keyZ)),
+      // Ctrl+Y works too (Help > Keyboard shortcuts says so); the menu
+      // shows the same keys as on a Mac.
+      act(Act.redo, 'redo',
+          shortcut: key(LogicalKeyboardKey.keyZ, shift: true)),
+      act(Act.history, 'history',
+          shortcut: key(LogicalKeyboardKey.keyH, shift: true)),
+      divider,
+      act(Act.duplicate, 'duplicate', shortcut: key(LogicalKeyboardKey.keyD)),
+      act(Act.copySettings, 'copy-settings',
+          shortcut: key(LogicalKeyboardKey.keyC, shift: true)),
+      act(Act.pasteSettings, 'paste-settings',
+          shortcut: key(LogicalKeyboardKey.keyV, shift: true)),
+      // Delete and Backspace both delete, on every computer.
+      act(Act.delete, 'delete',
+          shortcut: plain(mac
+              ? LogicalKeyboardKey.backspace
+              : LogicalKeyboardKey.delete)),
+      divider,
+      act(Act.findInText, 'find-text', shortcut: key(LogicalKeyboardKey.keyF)),
+    ]),
+    MenuNode.submenu('Add', [
+      act(Act.addMedia, 'add-media'),
+      act(Act.addMusic, 'add-music'),
+      act(Act.addVoice, 'add-voice'),
+      act(Act.addTitle, 'add-title'),
+      act(Act.addCaption, 'add-caption'),
+      act(Act.importSubtitles, 'import-subtitles'),
+      act(Act.addOverlay, 'add-overlay'),
+      act(Act.markMoment, 'mark-moment',
+          shortcut: plain(LogicalKeyboardKey.keyM)),
+    ]),
+    MenuNode.submenu('Clip', [
+      act(Act.split, 'split', shortcut: plain(LogicalKeyboardKey.keyS)),
+      act(Act.startAtPlayhead, 'start-at-playhead',
+          shortcut: plain(LogicalKeyboardKey.keyI)),
+      act(Act.endAtPlayhead, 'end-at-playhead',
+          shortcut: plain(LogicalKeyboardKey.keyO)),
+      act(Act.freezeFrame, 'freeze-frame'),
+      act(Act.removeSilences, 'remove-silences'),
+      act(Act.crop, 'crop'),
+      act(Act.rotateRight, 'rotate'),
+      act(Act.moveEarlier, 'move-earlier'),
+      act(Act.moveLater, 'move-later'),
+      divider,
+      act(Act.shortFromHere, 'short-from-here'),
+      act(Act.shortsFromMarkers, 'shorts-from-markers'),
+      act(Act.goodMoments, 'good-moments'),
+    ]),
+    MenuNode.submenu('Sound', [
+      act(Act.fitMusic, 'fit-music'),
+      act(Act.lineUpVoice, 'line-up-voice'),
+      act(Act.separateSound, 'separate-sound'),
+      act(Act.putSoundBack, 'put-sound-back'),
+      act(Act.addSoundTrack, 'add-sound-track'),
+      act(Act.lowerMusic, 'lower-music'),
+      act(Act.copyCredits, 'copy-credits'),
+    ]),
+    MenuNode.submenu('Text and speech', [
+      act(Act.textWindow, 'text',
+          shortcut: key(LogicalKeyboardKey.keyT, shift: true)),
+      // Speech-to-text: computers only. On the project list the items are
+      // listed (greyed out), so the menu looks the same before and after
+      // a project is opened.
+      if (e == null || e.speech) ...[
+        act(Act.transcribe, 'transcribe'),
+        act(Act.captionsFromSpeech, 'speech-captions'),
+        act(Act.removeFillers, 'fillers'),
+        act(Act.autoCuts, 'auto-cuts'),
+      ],
+    ]),
+    MenuNode.submenu('View', [
+      act(Act.zoomIn, 'zoom-in', shortcut: plain(LogicalKeyboardKey.equal)),
+      act(Act.zoomOut, 'zoom-out', shortcut: plain(LogicalKeyboardKey.minus)),
+      act(Act.snapping, 'snapping'),
+      act(Act.soundWaves, 'waves'),
+      divider,
+      MenuNode.submenu('Shape', id: 'shape', [
+        for (final a in CanvasAspect.values)
+          MenuNode.item(menuShapeLabel(a),
+              id: 'shape-${a.name}',
+              checked: e?.currentShape == a,
+              onSelected: e?.shape == null ? null : () => e!.shape!(a)),
+      ]),
+      MenuNode.submenu('Video size', id: 'video-size', [
+        for (final v in VideoSize.values)
+          MenuNode.item(menuVideoSizeLabel(v),
+              id: 'video-size-${v.name}',
+              checked: e?.currentVideoSize == v,
+              onSelected:
+                  e?.videoSize == null ? null : () => e!.videoSize!(v)),
+      ]),
+    ]),
+    MenuNode.submenu('Playback', [
+      act(Act.playPause, 'play-pause',
+          shortcut: plain(LogicalKeyboardKey.space)),
+      act(Act.playBackwards, 'play-backwards',
+          shortcut: plain(LogicalKeyboardKey.keyJ)),
+      act(Act.pause, 'pause', shortcut: plain(LogicalKeyboardKey.keyK)),
+      act(Act.playForwards, 'play-forwards',
+          shortcut: plain(LogicalKeyboardKey.keyL)),
+      divider,
+      act(Act.goToStart, 'go-to-start',
+          shortcut: plain(LogicalKeyboardKey.home)),
+      act(Act.goToEnd, 'go-to-end', shortcut: plain(LogicalKeyboardKey.end)),
+      act(Act.previousFrame, 'previous-frame',
+          shortcut: plain(LogicalKeyboardKey.arrowLeft)),
+      act(Act.nextFrame, 'next-frame',
+          shortcut: plain(LogicalKeyboardKey.arrowRight)),
+      divider,
+      // Ctrl/Cmd+Left / Right: the editor's own key handling does them, so
+      // that they keep their meaning in a text box. (macOS shows no key
+      // here: its menu bar would take the keys away from text boxes.)
+      act(Act.previousSpeech, 'previous-speech',
+          shortcut: mac ? null : key(LogicalKeyboardKey.arrowLeft)),
+      act(Act.nextSpeech, 'next-speech',
+          shortcut: mac ? null : key(LogicalKeyboardKey.arrowRight)),
+    ]),
+    MenuNode.submenu('Help', [
+      MenuNode.item('ClipForge Help',
+          id: 'help',
+          shortcut: mac
+              ? const SingleActivator(LogicalKeyboardKey.slash,
+                  meta: true, shift: true)
+              : const SingleActivator(LogicalKeyboardKey.f1),
+          onSelected: help?.openHelp),
+      MenuNode.item('Keyboard shortcuts',
+          id: 'shortcuts', onSelected: shortcuts),
+      MenuNode.item('Show the tour', id: 'tour', onSelected: help?.showTour),
+      MenuNode.item("What's new",
+          id: 'whats-new', onSelected: help?.showWhatsNew),
+      divider,
+      MenuNode.item('Connect to Claude…',
+          id: 'connect-claude', onSelected: help?.connectClaude),
+      MenuNode.item('Check for updates…',
+          id: 'check-updates', onSelected: help?.checkForUpdates),
+      divider,
+      MenuNode.item('Copy version info',
+          id: 'copy-version', onSelected: help?.copyVersionInfo),
+      MenuNode.item('About ClipForge',
+          id: 'about', onSelected: help?.showAbout),
+    ]),
+  ];
+}
+
+/// The menus of the macOS menu bar: the app's own menu, [buildMenuTree]
+/// and Window. Disabled items have no [PlatformMenuItem.onSelected].
 List<PlatformMenuItem> buildAppMenus(EditorMenuActions? editor,
     {HelpMenuActions? help, HomeMenuActions? home}) {
-  final e = editor;
-  final x = e?.extra;
-  final h = e == null ? home : null;
+  final tree = buildMenuTree(editor,
+      help: help, home: home, platform: TargetPlatform.macOS);
   return [
     PlatformMenu(
       label: 'ClipForge',
@@ -458,292 +557,8 @@ List<PlatformMenuItem> buildAppMenus(EditorMenuActions? editor,
         ]),
       ],
     ),
-    PlatformMenu(
-      label: 'File',
-      menus: [
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-            label: 'New project',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyN, meta: true),
-            onSelected: h?.newProject,
-          ),
-          PlatformMenuItem(
-            label: 'Open project file…',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyO, meta: true),
-            onSelected: h?.openProjectFile,
-          ),
-        ]),
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(label: 'Add media…', onSelected: x?.addMedia),
-          PlatformMenuItem(label: 'Add music…', onSelected: x?.addMusic),
-          PlatformMenuItem(
-              label: 'Import subtitles (.srt)…',
-              onSelected: x?.importSubtitles),
-          PlatformMenuItem(
-              label: 'Export subtitles (.srt)…',
-              onSelected: x?.exportSubtitles),
-        ]),
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-              label: 'Rename project…', onSelected: x?.renameProject),
-          PlatformMenuItem(
-              label: 'Publishing notes…', onSelected: x?.publishingNotes),
-          PlatformMenuItem(
-            label: 'Back to projects',
-            onSelected: e?.backToProjects,
-          ),
-          PlatformMenuItem(
-            label: 'Export…',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyE, meta: true),
-            onSelected: e != null && e.canExport ? e.export : null,
-          ),
-          PlatformMenuItem(
-              label: 'Export several…', onSelected: x?.exportSeveral),
-        ]),
-      ],
-    ),
-    PlatformMenu(
-      label: 'Edit',
-      menus: [
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-            label: 'Undo',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyZ, meta: true),
-            onSelected: e != null && e.canUndo ? e.undo : null,
-          ),
-          PlatformMenuItem(
-            label: 'Redo',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyZ,
-                meta: true, shift: true),
-            onSelected: e != null && e.canRedo ? e.redo : null,
-          ),
-          PlatformMenuItem(
-            label: 'History',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyH,
-                meta: true, shift: true),
-            onSelected: e?.showHistory,
-          ),
-        ]),
-        PlatformMenuItemGroup(members: [
-          PlatformMenu(label: 'Shorts', menus: [
-            PlatformMenuItem(
-                label: 'Mark a good moment',
-                shortcut: const SingleActivator(LogicalKeyboardKey.keyM),
-                onSelected: x?.markMoment),
-            PlatformMenuItem(
-                label: 'Good moments…', onSelected: x?.goodMoments),
-            PlatformMenuItem(
-                label: 'Make a short from here…',
-                onSelected: x?.shortFromHere),
-            PlatformMenuItem(
-                label: 'Make shorts from markers…',
-                onSelected: x?.shortsFromMarkers),
-          ]),
-        ]),
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-            label: x != null && x.textShown ? 'Text window ✓' : 'Text window',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyT,
-                meta: true, shift: true),
-            onSelected: x?.showText,
-          ),
-          PlatformMenuItem(
-            label: 'Find in the text…',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyF, meta: true),
-            onSelected: x?.findInText,
-          ),
-        ]),
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-            label: 'Duplicate',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyD, meta: true),
-            onSelected: x?.duplicate,
-          ),
-          PlatformMenuItem(
-            label: 'Copy settings',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyC,
-                meta: true, shift: true),
-            onSelected: x?.copySettings,
-          ),
-          PlatformMenuItem(
-            label: 'Paste settings',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyV,
-                meta: true, shift: true),
-            onSelected: x?.pasteSettings,
-          ),
-          PlatformMenuItem(
-            label: 'Delete',
-            shortcut: const SingleActivator(LogicalKeyboardKey.backspace),
-            onSelected: e != null && e.canDelete ? e.delete : null,
-          ),
-        ]),
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-            label: 'Split at playhead',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyS),
-            onSelected: x?.split,
-          ),
-          PlatformMenuItem(
-            label: 'Start clip at playhead',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyI),
-            onSelected: x?.startAtPlayhead,
-          ),
-          PlatformMenuItem(
-            label: 'End clip at playhead',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyO),
-            onSelected: x?.endAtPlayhead,
-          ),
-          PlatformMenuItem(label: 'Freeze frame', onSelected: x?.freezeFrame),
-          PlatformMenuItem(
-              label: 'Remove silences…', onSelected: x?.removeSilences),
-          PlatformMenuItem(label: 'Move clip earlier', onSelected: x?.moveEarlier),
-          PlatformMenuItem(label: 'Move clip later', onSelected: x?.moveLater),
-        ]),
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-            label: 'Crop and position…',
-            onSelected: e != null && e.canCrop ? e.cropAndPosition : null,
-          ),
-          PlatformMenuItem(
-            label: 'Rotate right',
-            onSelected: e != null && e.canCrop ? e.rotateRight : null,
-          ),
-        ]),
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(label: 'Add title', onSelected: x?.addTitle),
-          PlatformMenuItem(label: 'Add caption…', onSelected: x?.addCaption),
-          PlatformMenuItem(
-            label: 'Add overlay video or photo…',
-            onSelected: e != null && e.canAddOverlay ? e.addOverlay : null,
-          ),
-        ]),
-        PlatformMenu(label: 'Sound', menus: [
-          PlatformMenuItem(label: 'Add voice recording…', onSelected: x?.addVoice),
-          PlatformMenuItem(label: 'Line up with the video', onSelected: x?.lineUpVoice),
-          PlatformMenuItem(label: 'Add sound track', onSelected: x?.addSoundTrack),
-          PlatformMenuItem(label: 'Separate sound…', onSelected: x?.separateSound),
-          PlatformMenuItem(label: 'Put sound back', onSelected: x?.putSoundBack),
-          PlatformMenuItem(label: 'Fit music to video', onSelected: x?.fitMusic),
-          PlatformMenuItem(label: 'Copy music credits', onSelected: x?.copyCredits),
-          PlatformMenuItem(
-              label: x != null && x.lowerMusicOn
-                  ? 'Lower music under speech ✓'
-                  : 'Lower music under speech',
-              onSelected: x?.lowerMusic),
-        ]),
-        if (x?.speech != null)
-          PlatformMenu(label: 'Speech', menus: [
-            PlatformMenuItem(
-                label: 'Transcribe speech…', onSelected: x!.speech!.transcribe),
-            PlatformMenuItem(
-                label: 'Captions from speech…', onSelected: x.speech!.captions),
-            PlatformMenuItem(
-                label: 'Remove filler words…', onSelected: x.speech!.fillers),
-            PlatformMenuItem(
-                label: 'Automatic cuts…', onSelected: x.speech!.autoCuts),
-          ]),
-        PlatformMenu(label: 'Shape', menus: [
-          for (final a in CanvasAspect.values)
-            PlatformMenuItem(
-              label: '${menuShapeLabel(a)}${x?.currentShape == a ? ' ✓' : ''}',
-              onSelected: x?.shape == null ? null : () => x!.shape!(a),
-            ),
-        ]),
-        PlatformMenu(label: 'Video size', menus: [
-          for (final v in VideoSize.values)
-            PlatformMenuItem(
-              label:
-                  '${menuVideoSizeLabel(v)}${x?.currentVideoSize == v ? ' ✓' : ''}',
-              onSelected: x?.videoSize == null ? null : () => x!.videoSize!(v),
-            ),
-        ]),
-      ],
-    ),
-    PlatformMenu(
-      label: 'Playback',
-      menus: [
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-            label: e != null && e.playing ? 'Pause' : 'Play',
-            shortcut: const SingleActivator(LogicalKeyboardKey.space),
-            onSelected: e != null && e.canPlay ? e.togglePlay : null,
-          ),
-          PlatformMenuItem(
-            label: 'Play backwards',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyJ),
-            onSelected: x?.playBackwards,
-          ),
-          PlatformMenuItem(
-            label: 'Stop',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyK),
-            onSelected: x?.pause,
-          ),
-          PlatformMenuItem(
-            label: 'Play forwards',
-            shortcut: const SingleActivator(LogicalKeyboardKey.keyL),
-            onSelected: x?.playForwards,
-          ),
-        ]),
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-            label: 'Go to start',
-            shortcut: const SingleActivator(LogicalKeyboardKey.home),
-            onSelected: x?.goToStart,
-          ),
-          PlatformMenuItem(
-            label: 'Go to end',
-            shortcut: const SingleActivator(LogicalKeyboardKey.end),
-            onSelected: x?.goToEnd,
-          ),
-          PlatformMenuItem(
-            label: 'Previous frame',
-            shortcut: const SingleActivator(LogicalKeyboardKey.arrowLeft),
-            onSelected: x?.previousFrame,
-          ),
-          PlatformMenuItem(
-            label: 'Next frame',
-            shortcut: const SingleActivator(LogicalKeyboardKey.arrowRight),
-            onSelected: x?.nextFrame,
-          ),
-        ]),
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-            label: 'Zoom in timeline',
-            shortcut: const SingleActivator(LogicalKeyboardKey.equal),
-            onSelected: x?.zoomIn,
-          ),
-          PlatformMenuItem(
-            label: 'Zoom out timeline',
-            shortcut: const SingleActivator(LogicalKeyboardKey.minus),
-            onSelected: x?.zoomOut,
-          ),
-          PlatformMenuItem(
-            label: x == null || x.snapping
-                ? 'Snap to playhead and edges ✓'
-                : 'Snap to playhead and edges',
-            onSelected: x?.toggleSnapping,
-          ),
-        ]),
-        PlatformMenuItemGroup(members: [
-          // Cmd+Left / Right (the editor's own key handling does them, so
-          // that they keep their meaning in a text box).
-          PlatformMenuItem(
-            label: 'Previous speech start',
-            onSelected: x?.previousSpeech,
-          ),
-          PlatformMenuItem(
-            label: 'Next speech start',
-            onSelected: x?.nextSpeech,
-          ),
-          PlatformMenuItem(
-            label: x == null || x.wavesOn
-                ? 'Show sound waves ✓'
-                : 'Show sound waves',
-            onSelected: x?.toggleWaves,
-          ),
-        ]),
-      ],
-    ),
+    for (final m in tree)
+      if (m.label != 'Help') _convert(m),
     const PlatformMenu(
       label: 'Window',
       menus: [
@@ -758,36 +573,35 @@ List<PlatformMenuItem> buildAppMenus(EditorMenuActions? editor,
         ]),
       ],
     ),
-    PlatformMenu(
-      label: 'Help',
-      menus: [
-        PlatformMenuItem(
-          label: 'ClipForge Help',
-          shortcut: const SingleActivator(LogicalKeyboardKey.slash,
-              meta: true, shift: true),
-          onSelected: help?.openHelp,
-        ),
-        PlatformMenuItem(
-            label: 'Keyboard shortcuts', onSelected: x?.showShortcuts),
-        PlatformMenuItem(label: 'Show the tour', onSelected: help?.showTour),
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-              label: 'Connect to Claude…', onSelected: help?.connectClaude),
-        ]),
-        PlatformMenuItemGroup(members: [
-          PlatformMenuItem(
-              label: 'Check for updates…', onSelected: help?.checkForUpdates),
-          PlatformMenuItem(
-              label: (help?.autoUpdateCheck ?? true)
-                  ? 'Check for updates automatically ✓'
-                  : 'Check for updates automatically',
-              onSelected: help?.toggleAutoUpdateCheck),
-        ]),
-        PlatformMenuItem(
-            label: 'Copy version info', onSelected: help?.copyVersionInfo),
-      ],
-    ),
+    _convert(tree.last),
   ];
+}
+
+PlatformMenuItem _convert(MenuNode n) {
+  if (n.children != null) {
+    return PlatformMenu(label: n.label, menus: groups(n.children!));
+  }
+  final tick = n.checked == true ? ' ✓' : '';
+  return PlatformMenuItem(
+      label: '${n.label}$tick', shortcut: n.shortcut, onSelected: n.onSelected);
+}
+
+/// [nodes] as the members of a macOS menu: the stretches between dividers
+/// become groups (drawn with a line between them).
+List<PlatformMenuItem> groups(List<MenuNode> nodes) {
+  if (!nodes.any((n) => n.divider)) return [for (final n in nodes) _convert(n)];
+  final out = <PlatformMenuItem>[];
+  var group = <PlatformMenuItem>[];
+  for (final n in nodes) {
+    if (n.divider) {
+      if (group.isNotEmpty) out.add(PlatformMenuItemGroup(members: group));
+      group = [];
+    } else {
+      group.add(_convert(n));
+    }
+  }
+  if (group.isNotEmpty) out.add(PlatformMenuItemGroup(members: group));
+  return out;
 }
 
 /// Puts the app's menus in the macOS menu bar (in place of the default
@@ -838,14 +652,18 @@ Future<void> requestAppQuit() async {
 
 /// The keys of the in-window menu bar that nothing else handles: they are
 /// handled here, once. Every other shortcut the menus show (Undo, Redo,
-/// Delete, Space, Ctrl+D, Ctrl+Shift+C / V, S, I, O, J, K, L, + / -, the
-/// arrows, Home / End) is only SHOWN in the menu: the editor's own key
-/// handling does them (and a text field's own typing and Undo go first),
-/// so they never run twice.
+/// Delete, Space, Ctrl+D, Ctrl+Shift+C / V, Ctrl+F, S, I, O, M, J, K, L,
+/// + / -, the arrows, Home / End) is only SHOWN in the menu: the editor's
+/// own key handling does them (and a text field's own typing and Undo go
+/// first), so they never run twice.
 Map<ShortcutActivator, VoidCallback> windowMenuShortcuts(
     AppMenuController c, HelpMenuActions? help) {
   final e = c.editor;
   final h = e == null ? c.home : null;
+  final export = e?.run(Act.export);
+  final history = e?.run(Act.history);
+  final text = e?.run(Act.textWindow);
+  final settings = e?.run(Act.settings) ?? help?.openSettings;
   return {
     if (h != null) ...{
       const SingleActivator(LogicalKeyboardKey.keyN, control: true):
@@ -853,14 +671,12 @@ Map<ShortcutActivator, VoidCallback> windowMenuShortcuts(
       const SingleActivator(LogicalKeyboardKey.keyO, control: true):
           h.openProjectFile,
     },
-    if (e != null && e.canExport && e.export != null)
-      const SingleActivator(LogicalKeyboardKey.keyE, control: true): e.export!,
-    if (e != null && e.showHistory != null)
-      const SingleActivator(LogicalKeyboardKey.keyH,
-          control: true, shift: true): e.showHistory!,
-    if (e != null && e.extra.showText != null)
-      const SingleActivator(LogicalKeyboardKey.keyT,
-          control: true, shift: true): e.extra.showText!,
+    const SingleActivator(LogicalKeyboardKey.keyE, control: true): ?export,
+    const SingleActivator(LogicalKeyboardKey.keyH,
+        control: true, shift: true): ?history,
+    const SingleActivator(LogicalKeyboardKey.keyT,
+        control: true, shift: true): ?text,
+    const SingleActivator(LogicalKeyboardKey.comma, control: true): ?settings,
     if (help != null) const SingleActivator(LogicalKeyboardKey.f1): help.openHelp,
     if (defaultTargetPlatform == TargetPlatform.linux)
       const SingleActivator(LogicalKeyboardKey.keyQ, control: true): () {
@@ -870,7 +686,7 @@ Map<ShortcutActivator, VoidCallback> windowMenuShortcuts(
 }
 
 /// The menu bar along the top of the window on Windows and Linux: the same
-/// menus and actions as the macOS menu bar (File, Edit, Playback, Help),
+/// menus and actions as the macOS menu bar ([buildMenuTree]),
 /// compact and in the app's dark colours. Sits above the app's navigator,
 /// so it needs its own [Overlay] for the menus that drop down.
 class WindowMenuBar extends StatefulWidget {
@@ -936,81 +752,74 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
   }
 
   Widget _bar(BuildContext context) {
-    final e = controller.editor;
-    final x = e?.extra;
-    final h = e == null ? controller.home : null;
-    final windows = defaultTargetPlatform == TargetPlatform.windows;
-    const itemText = TextStyle(fontSize: 13);
+    // The app's own font (a bare TextStyle would fall back to the
+    // system's default one).
+    final itemText = TextStyle(
+        fontSize: 13,
+        fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily);
     final itemStyle = MenuItemButton.styleFrom(
       minimumSize: const Size(200, 32),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       textStyle: itemText,
       visualDensity: VisualDensity.compact,
     );
-    Widget item(String label,
-            {VoidCallback? onPressed,
-            MenuSerializableShortcut? shortcut,
-            Key? key}) =>
-        MenuItemButton(
+    const dropStyle = MenuStyle(
+      backgroundColor: WidgetStatePropertyAll(AppColors.panelHigh),
+      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 4)),
+      shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(6)),
+        side: BorderSide(color: AppColors.outline),
+      )),
+    );
+    // [ticks]: the menu this item is in has items with a tick, so every
+    // item keeps the room for one and the words line up.
+    Widget build(MenuNode n, {required bool top, bool ticks = false}) {
+      final key = n.id == null ? null : ValueKey('menu-${n.id}');
+      if (n.divider) return const Divider(height: 9, indent: 8, endIndent: 8);
+      final children = n.children;
+      if (children != null) {
+        return SubmenuButton(
           key: key,
-          style: itemStyle,
-          shortcut: shortcut,
-          onPressed: onPressed,
-          child: Text(label),
-        );
-    Widget menu(String label, List<Widget> items) => SubmenuButton(
-          onOpen: _opened,
-          onClose: _closed,
+          onOpen: top ? _opened : null,
+          onClose: top ? _closed : null,
           style: SubmenuButton.styleFrom(
-            minimumSize: const Size(0, height),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            minimumSize: top ? const Size(0, height) : const Size(200, 32),
+            padding: EdgeInsets.symmetric(horizontal: top ? 10 : 14),
             textStyle: itemText,
             visualDensity: VisualDensity.compact,
           ),
-          menuStyle: const MenuStyle(
-            backgroundColor: WidgetStatePropertyAll(AppColors.panelHigh),
-            padding:
-                WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 4)),
-            shape: WidgetStatePropertyAll(RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(6)),
-              side: BorderSide(color: AppColors.outline),
-            )),
-          ),
-          menuChildren: items,
-          child: Text(label),
+          menuStyle: dropStyle,
+          menuChildren: [
+            for (final c in children)
+              build(c,
+                  top: false,
+                  ticks: children.any((x) => x.checked != null)),
+          ],
+          child: Text(n.label),
         );
-    Widget check(String label,
-            {required bool value,
-            VoidCallback? onPressed,
-            MenuSerializableShortcut? shortcut,
-            Key? key}) =>
-        MenuItemButton(
-          key: key,
-          style: itemStyle,
-          shortcut: shortcut,
-          onPressed: onPressed,
-          leadingIcon: SizedBox(
-            width: 18,
-            child: value ? const Icon(Icons.check, size: 16) : null,
-          ),
-          child: Text(label),
-        );
-    Widget submenu(String label, List<Widget> items) => SubmenuButton(
-          style: SubmenuButton.styleFrom(
-            minimumSize: const Size(200, 32),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            textStyle: itemText,
-            visualDensity: VisualDensity.compact,
-          ),
-          menuStyle: const MenuStyle(
-            backgroundColor: WidgetStatePropertyAll(AppColors.panelHigh),
-            padding:
-                WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 4)),
-          ),
-          menuChildren: items,
-          child: Text(label),
-        );
-    const divider = Divider(height: 9, indent: 8, endIndent: 8);
+      }
+      final checked = n.checked;
+      return MenuItemButton(
+        key: key,
+        style: itemStyle,
+        shortcut: n.shortcut,
+        onPressed: n.onSelected,
+        leadingIcon: checked == null
+            ? (ticks ? const SizedBox(width: 18) : null)
+            : SizedBox(
+                width: 18,
+                child: n.mixed
+                    ? const Icon(Icons.remove, size: 16)
+                    : checked
+                        ? const Icon(Icons.check, size: 16)
+                        : null,
+              ),
+        child: Text(n.label),
+      );
+    }
+
+    final tree = buildMenuTree(controller.editor,
+        help: help, home: controller.home);
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: AppColors.panel,
@@ -1029,278 +838,7 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
                       EdgeInsets.symmetric(horizontal: 4)),
                   shape: WidgetStatePropertyAll(RoundedRectangleBorder()),
                 ),
-                children: [
-                  menu('File', [
-                    item('New project',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyN,
-                            control: true),
-                        onPressed: h?.newProject),
-                    item('Open project file…',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyO,
-                            control: true),
-                        onPressed: h?.openProjectFile),
-                    divider,
-                    item('Add media…',
-                        key: const ValueKey('menu-add-media'),
-                        onPressed: x?.addMedia),
-                    item('Add music…', onPressed: x?.addMusic),
-                    item('Import subtitles (.srt)…',
-                        onPressed: x?.importSubtitles),
-                    item('Export subtitles (.srt)…',
-                        onPressed: x?.exportSubtitles),
-                    divider,
-                    item('Rename project…', onPressed: x?.renameProject),
-                    item('Publishing notes…',
-                        key: const ValueKey('menu-publishing-notes'),
-                        onPressed: x?.publishingNotes),
-                    item('Back to projects', onPressed: e?.backToProjects),
-                    item('Export…',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyE,
-                            control: true),
-                        onPressed: e != null && e.canExport ? e.export : null),
-                    item('Export several…',
-                        key: const ValueKey('menu-export-several'),
-                        onPressed: x?.exportSeveral),
-                    divider,
-                    item(windows ? 'Exit' : 'Quit',
-                        shortcut: windows
-                            ? const SingleActivator(LogicalKeyboardKey.f4,
-                                alt: true)
-                            : const SingleActivator(LogicalKeyboardKey.keyQ,
-                                control: true),
-                        onPressed: requestAppQuit),
-                  ]),
-                  menu('Edit', [
-                    item('Undo',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyZ,
-                            control: true),
-                        onPressed: e != null && e.canUndo ? e.undo : null),
-                    // Ctrl+Y works too (Help > Keyboard shortcuts says so);
-                    // the menu shows the same keys as on a Mac.
-                    item('Redo',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyZ,
-                            control: true, shift: true),
-                        onPressed: e != null && e.canRedo ? e.redo : null),
-                    item('History',
-                        key: const ValueKey('menu-history'),
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyH,
-                            control: true, shift: true),
-                        onPressed: e?.showHistory),
-                    divider,
-                    check('Text window',
-                        key: const ValueKey('menu-text'),
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyT,
-                            control: true, shift: true),
-                        value: x?.textShown ?? false,
-                        onPressed: x?.showText),
-                    item('Find in the text…',
-                        key: const ValueKey('menu-find-text'),
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyF,
-                            control: true),
-                        onPressed: x?.findInText),
-                    divider,
-                    item('Duplicate',
-                        key: const ValueKey('menu-duplicate'),
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyD,
-                            control: true),
-                        onPressed: x?.duplicate),
-                    item('Copy settings',
-                        key: const ValueKey('menu-copy-settings'),
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyC,
-                            control: true, shift: true),
-                        onPressed: x?.copySettings),
-                    item('Paste settings',
-                        key: const ValueKey('menu-paste-settings'),
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyV,
-                            control: true, shift: true),
-                        onPressed: x?.pasteSettings),
-                    item('Delete (or Backspace)',
-                        shortcut:
-                            const SingleActivator(LogicalKeyboardKey.delete),
-                        onPressed: e != null && e.canDelete ? e.delete : null),
-                    divider,
-                    item('Split at playhead',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyS),
-                        onPressed: x?.split),
-                    item('Start clip at playhead',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyI),
-                        onPressed: x?.startAtPlayhead),
-                    item('End clip at playhead',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyO),
-                        onPressed: x?.endAtPlayhead),
-                    item('Freeze frame', onPressed: x?.freezeFrame),
-                    item('Remove silences…', onPressed: x?.removeSilences),
-                    item('Move clip earlier', onPressed: x?.moveEarlier),
-                    item('Move clip later', onPressed: x?.moveLater),
-                    divider,
-                    item('Crop and position…',
-                        key: const ValueKey('menu-crop'),
-                        onPressed: e != null && e.canCrop
-                            ? e.cropAndPosition
-                            : null),
-                    item('Rotate right',
-                        key: const ValueKey('menu-rotate'),
-                        onPressed:
-                            e != null && e.canCrop ? e.rotateRight : null),
-                    divider,
-                    item('Add title', onPressed: x?.addTitle),
-                    item('Add caption…', onPressed: x?.addCaption),
-                    item('Add overlay video or photo…',
-                        key: const ValueKey('menu-add-overlay'),
-                        onPressed: e != null && e.canAddOverlay
-                            ? e.addOverlay
-                            : null),
-                    divider,
-                    submenu('Shorts', [
-                      item('Mark a good moment',
-                          key: const ValueKey('menu-mark-moment'),
-                          shortcut:
-                              const SingleActivator(LogicalKeyboardKey.keyM),
-                          onPressed: x?.markMoment),
-                      item('Good moments…',
-                          key: const ValueKey('menu-good-moments'),
-                          onPressed: x?.goodMoments),
-                      item('Make a short from here…',
-                          key: const ValueKey('menu-short-from-here'),
-                          onPressed: x?.shortFromHere),
-                      item('Make shorts from markers…',
-                          key: const ValueKey('menu-shorts-from-markers'),
-                          onPressed: x?.shortsFromMarkers),
-                    ]),
-                    submenu('Sound', [
-                      item('Add voice recording…',
-                          key: const ValueKey('menu-add-voice'),
-                          onPressed: x?.addVoice),
-                      item('Line up with the video',
-                          key: const ValueKey('menu-line-up-voice'),
-                          onPressed: x?.lineUpVoice),
-                      item('Add sound track', onPressed: x?.addSoundTrack),
-                      item('Separate sound…', onPressed: x?.separateSound),
-                      item('Put sound back', onPressed: x?.putSoundBack),
-                      item('Fit music to video', onPressed: x?.fitMusic),
-                      item('Copy music credits', onPressed: x?.copyCredits),
-                      check('Lower music under speech',
-                          value: x?.lowerMusicOn ?? false,
-                          onPressed: x?.lowerMusic),
-                    ]),
-                    if (x?.speech != null)
-                      submenu('Speech', [
-                        item('Transcribe speech…',
-                            key: const ValueKey('menu-transcribe'),
-                            onPressed: x!.speech!.transcribe),
-                        item('Captions from speech…',
-                            key: const ValueKey('menu-speech-captions'),
-                            onPressed: x.speech!.captions),
-                        item('Remove filler words…',
-                            key: const ValueKey('menu-fillers'),
-                            onPressed: x.speech!.fillers),
-                        item('Automatic cuts…',
-                            key: const ValueKey('menu-auto-cuts'),
-                            onPressed: x.speech!.autoCuts),
-                      ]),
-                    submenu('Shape', [
-                      for (final a in CanvasAspect.values)
-                        check(menuShapeLabel(a),
-                            value: x?.currentShape == a,
-                            onPressed: x?.shape == null
-                                ? null
-                                : () => x!.shape!(a)),
-                    ]),
-                    submenu('Video size', [
-                      for (final v in VideoSize.values)
-                        check(menuVideoSizeLabel(v),
-                            value: x?.currentVideoSize == v,
-                            onPressed: x?.videoSize == null
-                                ? null
-                                : () => x!.videoSize!(v)),
-                    ]),
-                  ]),
-                  menu('Playback', [
-                    item(e != null && e.playing ? 'Pause' : 'Play',
-                        shortcut:
-                            const SingleActivator(LogicalKeyboardKey.space),
-                        onPressed: e != null && e.canPlay ? e.togglePlay : null),
-                    item('Play backwards',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyJ),
-                        onPressed: x?.playBackwards),
-                    item('Stop',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyK),
-                        onPressed: x?.pause),
-                    item('Play forwards',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.keyL),
-                        onPressed: x?.playForwards),
-                    divider,
-                    item('Go to start',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.home),
-                        onPressed: x?.goToStart),
-                    item('Go to end',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.end),
-                        onPressed: x?.goToEnd),
-                    item('Previous frame',
-                        shortcut:
-                            const SingleActivator(LogicalKeyboardKey.arrowLeft),
-                        onPressed: x?.previousFrame),
-                    item('Next frame',
-                        shortcut:
-                            const SingleActivator(LogicalKeyboardKey.arrowRight),
-                        onPressed: x?.nextFrame),
-                    divider,
-                    item('Zoom in timeline (+)',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.equal),
-                        onPressed: x?.zoomIn),
-                    item('Zoom out timeline (-)',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.minus),
-                        onPressed: x?.zoomOut),
-                    check('Snap to playhead and edges',
-                        key: const ValueKey('menu-snapping'),
-                        value: x?.snapping ?? true,
-                        onPressed: x?.toggleSnapping),
-                    divider,
-                    item('Previous speech start',
-                        key: const ValueKey('menu-previous-speech'),
-                        shortcut: const SingleActivator(
-                            LogicalKeyboardKey.arrowLeft,
-                            control: true),
-                        onPressed: x?.previousSpeech),
-                    item('Next speech start',
-                        key: const ValueKey('menu-next-speech'),
-                        shortcut: const SingleActivator(
-                            LogicalKeyboardKey.arrowRight,
-                            control: true),
-                        onPressed: x?.nextSpeech),
-                    check('Show sound waves',
-                        key: const ValueKey('menu-waves'),
-                        value: x?.wavesOn ?? true,
-                        onPressed: x?.toggleWaves),
-                  ]),
-                  menu('Help', [
-                    item('ClipForge Help',
-                        shortcut: const SingleActivator(LogicalKeyboardKey.f1),
-                        onPressed: help?.openHelp),
-                    item('Keyboard shortcuts',
-                        key: const ValueKey('menu-shortcuts'),
-                        onPressed: x?.showShortcuts),
-                    item('Show the tour', onPressed: help?.showTour),
-                    divider,
-                    item('Connect to Claude…',
-                        key: const ValueKey('menu-connect-claude'),
-                        onPressed: help?.connectClaude),
-                    divider,
-                    item('Check for updates…',
-                        key: const ValueKey('menu-check-updates'),
-                        onPressed: help?.checkForUpdates),
-                    check('Check for updates automatically',
-                        key: const ValueKey('menu-auto-updates'),
-                        value: help?.autoUpdateCheck ?? true,
-                        onPressed: help?.toggleAutoUpdateCheck),
-                    divider,
-                    item('Copy version info',
-                        onPressed: help?.copyVersionInfo),
-                    item('About ClipForge',
-                        key: const ValueKey('menu-about'),
-                        onPressed: help?.showAbout),
-                  ]),
-                ],
+                children: [for (final m in tree) build(m, top: true)],
               ),
             ),
           ],

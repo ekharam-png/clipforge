@@ -9,7 +9,10 @@
 //    "notes_url":"https://.../releases/tag/v1.12.0",
 //    "platforms":{
 //      "windows":  {"url":"https://.../ClipForge-windows.zip","size":123,"sha256":"..."},
-//      "macos":    {...}, "android": {...}, "android32": {...}}}
+//      "macos":    {...}, "android": {...}}}
+//
+// (Until 1.14 there was also a 32-bit Android file. It is no longer built: a
+// 32-bit phone finds no file for itself and is offered the download page.)
 //
 // Files made before 1.12 have no "platforms": the app then only offers the
 // download page.
@@ -79,7 +82,7 @@ class UpdateInfo {
   /// The release notes page ("What's new").
   final String? notesUrl;
 
-  /// "windows", "macos", "android", "android32" -> the file for it.
+  /// "windows", "macos", "android" -> the file for it.
   final Map<String, UpdateAsset> platforms;
 
   /// Parses the text of latest.json; a [FormatException] when it is not
@@ -218,11 +221,13 @@ bool offerUpdate(UpdateInfo info,
     info.isNewerThan(currentBuild) && (manual || skippedBuild != info.build);
 
 /// The key in [UpdateInfo.platforms] for this device, or null where the
-/// app cannot install an update itself (Linux: download page only).
-String? updatePlatformKey(String operatingSystem, {bool android32 = false}) =>
+/// app cannot install an update itself (Linux, and an Android phone that
+/// is [only32Bit], for which no file is built since 1.15: download page
+/// only).
+String? updatePlatformKey(String operatingSystem, {bool only32Bit = false}) =>
     switch (operatingSystem) {
       'windows' => 'windows',
       'macos' => 'macos',
-      'android' => android32 ? 'android32' : 'android',
+      'android' => only32Bit ? null : 'android',
       _ => null,
     };
