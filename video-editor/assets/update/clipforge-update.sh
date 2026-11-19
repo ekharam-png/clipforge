@@ -18,6 +18,14 @@
 #
 # It only ever touches <InstallDir>, <InstallDir>.update-old and <NewDir>;
 # projects and media (Documents/ClipForge) are never touched.
+#
+# 1.14.1: every step is also written to the file named by
+# $CLIPFORGE_UPDATE_LOG (update-log.txt, shared with the app); the first
+# line, "started token=$CLIPFORGE_UPDATE_TOKEN", is what the app waits for
+# before it closes. An app that has not closed after the wait is left
+# alone (exit 6). Unlike on Windows the app is still swapped by renaming:
+# macOS renames a folder whatever is open in it, so the Windows problem
+# (a window or terminal holding the folder) does not exist here.
 
 install="${1%/}"
 new="${2%/}"
@@ -27,7 +35,14 @@ version="${5:-}"
 [ "$#" -ge 5 ] && shift 5 || shift "$#"
 old="$install.update-old"
 
+log="${CLIPFORGE_UPDATE_LOG:-}"
+log() {
+  [ -n "$log" ] || return 0
+  printf '%s script(sh): %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >> "$log" 2>/dev/null || true
+}
+
 write_result() {
+  log "result: $1 $2"
   [ -n "$result" ] || return 0
   # $2 holds only fixed text and a path; quotes and backslashes are escaped.
   message=$(printf '%s' "$2" | sed 's/\\/\\\\/g; s/"/\\"/g')
@@ -44,13 +59,23 @@ start_app() {
   fi
 }
 
+log "started token=${CLIPFORGE_UPDATE_TOKEN:-} pid=$$"
+log "args: install=[$install] new=[$new] waitPid=$wait_pid version=$version result=[$result]"
+
 # 1. Wait until the app has closed (at most a minute).
+wait_steps=$(( ${CLIPFORGE_UPDATE_WAIT_SECONDS:-60} * 4 ))
 if [ "$wait_pid" -gt 0 ] 2>/dev/null; then
   i=0
-  while kill -0 "$wait_pid" 2>/dev/null && [ "$i" -lt 240 ]; do
+  while kill -0 "$wait_pid" 2>/dev/null && [ "$i" -lt "$wait_steps" ]; do
     sleep 0.25
     i=$((i + 1))
   done
+  if kill -0 "$wait_pid" 2>/dev/null; then
+    # Still there: it is not replaced under its feet, nor started twice.
+    write_result failed "ClipForge did not close, so nothing was changed."
+    exit 6
+  fi
+  log "the app (pid $wait_pid) has closed"
 fi
 
 # 2. Nothing to do without both.
@@ -79,6 +104,7 @@ fi
 # it: a file added inside a signed app would break its seal).
 : > "$old.marker" 2>/dev/null || true
 if ! mv "$install" "$old" 2>/dev/null; then
+  log "mv [$install] -> [$old] failed"
   rm -f "$old.marker" 2>/dev/null || true
   write_result failed "The ClipForge app could not be moved (no permission to change this folder?)."
   start_app "$install" "$@"
@@ -87,6 +113,7 @@ fi
 
 # 4. The new app takes its place; on failure the old one comes back.
 if ! mv "$new" "$install" 2>/dev/null; then
+  log "mv [$new] -> [$install] failed"
   if mv "$old" "$install" 2>/dev/null; then
     write_result failed "The new version could not be put in place; ClipForge is unchanged."
     start_app "$install" "$@"
@@ -103,4 +130,5 @@ start_app "$install" "$@"
 # 5. Tidy up (the app also removes a leftover on its next start).
 rm -rf "$old" 2>/dev/null && rm -f "$old.marker" 2>/dev/null
 rm -f "$new.marker" 2>/dev/null || true
+log "done"
 exit 0

@@ -900,7 +900,7 @@ To see what changed in each version, open **What's new** in Help.
 === updates
 title: Updates
 section: Troubleshooting
-keywords: update, updates, upgrade, new version, newer, latest, download, install, check for updates, automatic, banner, available, skip, later, restart, apk, privacy, internet, network
+keywords: update, updates, upgrade, new version, newer, latest, download, install, installer, setup, check for updates, automatic, banner, available, skip, later, restart, apk, privacy, internet, network, update-new, tidy up, folder, log, copy details, failed
 related: about-version, where-files-go, crashes
 
 When a newer ClipForge is out, the project list shows a line at the top: "Version … is available".
@@ -912,7 +912,7 @@ When a newer ClipForge is out, the project list shows a line at the top: "Versio
 
 ## What Update does
 
-- Windows and Mac: ClipForge downloads the new version, checks that it is exactly the published file, and then offers **Restart ClipForge to finish**. It closes, swaps the old version for the new one and opens again after a few seconds. If you choose **Later**, the update is finished by itself the next time you start ClipForge (never while an export is running). If something goes wrong, the old version is put back and ClipForge says why, with **Try again** and **Open the download page**.
+- Windows and Mac: ClipForge downloads the new version, checks that it is exactly the published file, and then offers **Restart ClipForge to finish**. It closes, puts the new version in place of the old one and opens again after a few seconds. If you choose **Later**, the update is finished by itself the next time you start ClipForge (never while an export is running). If something goes wrong, the old version is put back and ClipForge says why, with **Try again** and **Open the download page**.
 - Android: ClipForge downloads and checks the new version and hands it to Android. Android asks you to confirm. The first time it may say that installing from ClipForge is not allowed: tap Settings there, switch on "Allow from this source", go back and confirm.
 - If ClipForge cannot update itself where it is installed, it opens the download page instead: get the new version there and put it over the old one.
 
@@ -920,9 +920,30 @@ Your projects and videos are never touched by an update.
 
 ## The ClipForge folder (Windows)
 
-Keep ClipForge in a folder simply called "ClipForge", without a version number: the app updates itself inside that folder, so a name like "ClipForge-1.12.0" would soon be wrong. Such a folder still works. You can rename it while ClipForge is closed; a shortcut to it then has to be made again.
+If you installed ClipForge with the installer (ClipForge-Setup.exe), there is nothing to look after: it lives in its own place and is in the Start menu.
 
-While an update waits to be finished, a folder ending in ".update-new" sits next to the ClipForge folder. Leave it there: ClipForge removes it when the update is done. ClipForge only ever removes folders it made itself.
+If you use the zip: keep the folder named "ClipForge", without a version number. The app updates itself inside that folder, so a name like "ClipForge-1.12.0" would soon be wrong. Such a folder still works. You can rename it while ClipForge is closed; a shortcut to it then has to be made again.
+
+While an update waits to be finished, a folder ending in ".update-new" sits next to the ClipForge folder. Leave it there, and do not start ClipForge from a folder ending in ".update-new": ClipForge removes it when the update is done. ClipForge only ever removes folders it made itself.
+
+An update replaces the files inside the ClipForge folder; the folder itself stays. You can leave an Explorer window open on it. If another program holds one of ClipForge's files, the update says which file and changes nothing: close that program and choose **Try again**.
+
+## Tidy up (Windows)
+
+Updates of versions 1.12 to 1.14 sometimes did not finish: the new version stayed in a folder ending in ".update-new". If ClipForge notices that it is running from such a folder, it asks once: "ClipForge is running from a download folder. Tidy up?"
+
+- **Tidy up and restart**: ClipForge closes, moves this version into a folder called "ClipForge" next to it (or into the original folder, if you choose that), and opens again from there.
+- Older ClipForge folders next to it are listed with their versions and removed too. Untick the ones you want to keep. Only folders that really hold an older ClipForge are listed; nothing else is ever removed.
+- **Not now**: ClipForge keeps working where it is and does not ask again until the next version.
+
+Your projects and videos are not touched. Unpacking the zip makes no desktop or Start-menu shortcuts, so there are none to fix; a shortcut you made yourself has to be made again.
+
+## If an update does not work
+
+- The message says why and has **Copy details**. Paste that into your message when you report the problem.
+- **Copy version info** (Help menu) also copies the folder ClipForge runs from and the last lines of the update log.
+- ClipForge writes every step of an update into a plain text file called update-log.txt. The message shows where it is.
+- "ClipForge could not start the small helper": this PC does not let ClipForge's update helper run. ClipForge stays open and nothing was changed. Use **Open the download page** and install the new version from there (on Windows: ClipForge-Setup.exe).
 
 ## Checking
 

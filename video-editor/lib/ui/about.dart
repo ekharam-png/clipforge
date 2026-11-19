@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/build_info.dart';
+import '../core/update/update_log.dart';
 import 'help/help_screen.dart';
 import 'help/whats_new.dart';
 import 'theme.dart';
+import 'update/update_controller.dart' show updatePlatformProvider;
 
 // "Which build is this?": the About ClipForge box, the small version line
 // on the project list and in Help, and "Copy version info" for bug
@@ -73,8 +75,18 @@ Future<void> copyVersionInfo(BuildContext context) async {
       ? null
       : '${media.size.width.round()}x${media.size.height.round()} '
           '(scale ${media.devicePixelRatio.toStringAsFixed(1)})';
-  final text = versionReport(info,
+  var text = versionReport(info,
       system: details.system, device: details.device, screen: screen);
+  // Computers: where the app runs from and the last lines of the update
+  // log (1.14.1), when an update has ever been tried here.
+  try {
+    final updates = container.read(updatePlatformProvider);
+    if (updates.installDir != null) {
+      text = '$text\nFolder: ${updates.installDir}';
+    }
+    final log = updateLogReport(await updates.stateDir());
+    if (log != null) text = '$text\n\n$log';
+  } catch (_) {}
   await Clipboard.setData(ClipboardData(text: text));
   messenger
     ?..hideCurrentSnackBar()

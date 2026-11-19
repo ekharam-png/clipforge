@@ -11,15 +11,19 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/build_info.dart';
 import '../../core/update/update_download.dart';
 import '../../core/update/update_info.dart';
+import '../../core/update/tidy_up.dart';
 import '../../core/update/update_install.dart';
+import '../../core/update/update_log.dart';
 import '../about.dart';
 import '../app_prefs.dart';
 
 // Updates from inside the app (1.12). The rules are in lib/core/update;
 // this file is what the app does with them on each system:
-//   Windows  download the zip, check it, unpack next to the app, swap the
-//            folders with a small script after the app closed, restart.
-//            A folder that cannot be written -> the download page.
+//   Windows  download the zip, check it, unpack next to the app; a small
+//            script replaces the files of the app folder after the app
+//            closed (the app waits until the script says it runs) and
+//            restarts it. A folder that cannot be written -> the download
+//            page. Every step goes to update-log.txt in the state folder.
 //   macOS    the same with ClipForge.app; when the app's place cannot be
 //            changed (opened straight from Downloads, no permission) the
 //            unpacked new app is shown in Finder instead.
@@ -48,8 +52,15 @@ abstract class UpdatePlatform {
   /// The installed app (see [installDirOf]); null when unknown.
   String? get installDir;
 
+  /// The file name of the app's program ("clipforge.exe").
+  String get exeName;
+
   /// The swap script for this system.
   Future<String> swapScript();
+
+  /// Windows: the plain cmd version of the script, used when PowerShell
+  /// does not start; null elsewhere.
+  Future<String?> swapFallbackScript();
 
   /// Android: hands the APK to the system installer.
   Future<void> installApk(String path);
@@ -114,9 +125,17 @@ class RealUpdatePlatform implements UpdatePlatform {
   String? get installDir => installDirOf(Platform.resolvedExecutable, os);
 
   @override
+  String get exeName => p.basename(Platform.resolvedExecutable);
+
+  @override
   Future<String> swapScript() => rootBundle.loadString(Platform.isWindows
       ? 'assets/update/clipforge-update.ps1'
       : 'assets/update/clipforge-update.sh');
+
+  @override
+  Future<String?> swapFallbackScript() async => Platform.isWindows
+      ? await rootBundle.loadString('assets/update/clipforge-update.cmd')
+      : null;
 
   @override
   Future<void> installApk(String path) =>
@@ -159,16 +178,33 @@ final updateDownloaderProvider = Provider<UpdateDownloader>((ref) =>
     (asset, dir, build) => downloadUpdate(asset, dir, build: build));
 
 /// [startSwap], or what stands in for it in tests.
-typedef SwapStarter = Future<void> Function({
+typedef SwapStarter = Future<SwapStart> Function({
   required String os,
   required String scriptText,
   required String workDir,
   required String installDir,
   required String newDir,
   required String resultFile,
+  required String logFile,
   required String version,
   String exeName,
+  String? fallbackScriptText,
+  String mode,
+  String removeListFile,
 });
+
+/// [AppPrefs.text]: the version ("1.14.1+123") for which "Not now" was
+/// chosen in the tidy-up question. Asked again by the next version.
+const String kTidyUpDeclinedText = 'tidyUpDeclined';
+
+/// What the user chose in the tidy-up window.
+class TidyChoice {
+  const TidyChoice(this.target, this.remove);
+  final TidyTarget target;
+
+  /// The older folders that stay ticked.
+  final List<OlderInstall> remove;
+}
 
 enum UpdateStage {
   /// Nothing going on.
@@ -202,7 +238,35 @@ class UpdateController extends ChangeNotifier {
     DateTime Function()? now,
     SwapStarter? swap,
   })  : _now = now ?? DateTime.now,
-        _swap = swap ?? startSwap;
+        _swap = swap ?? _realSwap;
+
+  static Future<SwapStart> _realSwap({
+    required String os,
+    required String scriptText,
+    required String workDir,
+    required String installDir,
+    required String newDir,
+    required String resultFile,
+    required String logFile,
+    required String version,
+    String exeName = 'clipforge.exe',
+    String? fallbackScriptText,
+    String mode = 'update',
+    String removeListFile = '',
+  }) =>
+      startSwap(
+          os: os,
+          scriptText: scriptText,
+          workDir: workDir,
+          installDir: installDir,
+          newDir: newDir,
+          resultFile: resultFile,
+          logFile: logFile,
+          version: version,
+          exeName: exeName,
+          fallbackScriptText: fallbackScriptText,
+          mode: mode,
+          removeListFile: removeListFile);
 
   /// Starts the swap script (tests record the call instead).
   final SwapStarter _swap;
@@ -247,6 +311,33 @@ class UpdateController extends ChangeNotifier {
 
   int? get _currentBuild => int.tryParse(build.buildNumber ?? '');
 
+  /// The update log, or null when the state folder is not known.
+  Future<UpdateLog?> _log() async {
+    try {
+      return UpdateLog.inDir(await platform.stateDir(), now: _now);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The full path of update-log.txt (it may not exist yet).
+  Future<String?> logPath() async => (await _log())?.path;
+
+  /// For "Copy details": this version, the system's install folder and
+  /// the last lines of the update log.
+  Future<String> details({String? problem}) async {
+    final out = StringBuffer()
+      ..writeln(build.describe())
+      ..writeln('Folder: ${platform.installDir ?? 'unknown'}');
+    if (problem != null && problem.isNotEmpty) out.writeln('Problem: $problem');
+    String? report;
+    try {
+      report = updateLogReport(await platform.stateDir());
+    } catch (_) {}
+    out.writeln(report ?? 'Update log: none yet (${await logPath() ?? 'unknown place'})');
+    return out.toString().trimRight();
+  }
+
   void _set(UpdateStage s, {String? note, double? fraction}) {
     stage = s;
     message = note;
@@ -283,6 +374,16 @@ class UpdateController extends ChangeNotifier {
     final state = await platform.stateDir();
     final os = platform.os;
     final dir = platform.installDir;
+    // The folder the app RUNS from is nobody's leftover: a marker inside
+    // it (it came along with an update that was started by hand from its
+    // ".update-new" folder) is taken out, so that no older ClipForge next
+    // to it removes this folder as "a leftover of the updater".
+    if (os == 'windows' && dir != null) {
+      try {
+        final own = File(updateMarkerPath(dir, os));
+        if (own.existsSync()) own.deleteSync();
+      } catch (_) {}
+    }
     final result = takeUpdateResult(state);
     final waiting = PendingUpdate.read(state);
     final same = waiting != null && dir != null && p.equals(waiting.installDir, dir);
@@ -295,6 +396,14 @@ class UpdateController extends ChangeNotifier {
         currentBuild: _currentBuild,
         sameInstall: same,
         stagedReady: staged);
+    // Only starts that have something to do with an update are logged.
+    if (result != null || waiting != null) {
+      UpdateLog.inDir(state, now: _now).add(
+          'start: ${build.version}+${build.buildNumber ?? '?'} from [${dir ?? 'unknown'}]; '
+          'result=${result == null ? 'none' : '${result.status} "${result.message}"'}; '
+          'waiting=${waiting == null ? 'none' : '${waiting.version} (swap started ${waiting.attempts}x)'}; '
+          'what now: ${action.name}');
+    }
     switch (action) {
       case UpdateStartAction.tidy:
         PendingUpdate.clear(state);
@@ -331,9 +440,10 @@ class UpdateController extends ChangeNotifier {
         pending = waiting;
         lastResult = UpdateResult(
             'failed',
-            'ClipForge closed to finish the update, but the step that swaps '
-                'the old version for the new one did not run (it may have '
-                'been blocked by the system or by security software)',
+            'ClipForge closed to finish the update, but the step that puts '
+                'the new version in place did not finish and left no answer '
+                '(it may have been stopped by the system or by security '
+                'software)',
             waiting!.version);
         cleanUpdateLeftovers(dir!, os, keep: {waiting.newDir});
         notifyListeners();
@@ -391,22 +501,119 @@ class UpdateController extends ChangeNotifier {
             'ClipForge starts.';
       }
       final state = await platform.stateDir();
-      waiting.started(_now()).write(state);
-      await _swap(
+      final log = UpdateLog.inDir(state, now: _now);
+      final started = await _swap(
         os: platform.os,
         scriptText: await platform.swapScript(),
+        fallbackScriptText: await platform.swapFallbackScript(),
         workDir: state,
         installDir: dir,
         newDir: waiting.newDir,
         resultFile: p.join(state, kUpdateResultFile),
+        logFile: log.path,
         version: waiting.version,
-        exeName: p.basename(Platform.resolvedExecutable),
+        exeName: platform.exeName,
       );
+      if (!started.confirmed) return _notStarted(log.path, platform.os);
+      // Remembered only now: a swap that never started is not "unfinished".
+      waiting.started(_now()).write(state);
+      log.add('closing now so that the script can work');
       await platform.quit();
       return null;
     } catch (e) {
+      (await _log())?.add('the update could not be started: $e');
       return 'The update could not be started ($e). ClipForge is unchanged; '
           'you can use the download page instead.';
+    }
+  }
+
+  /// What is said when no script confirmed that it runs.
+  static String _notStarted(String logPath, String os) =>
+      'ClipForge could not start the small helper that puts the new '
+      'version in place: this computer did not let it run'
+      '${os == 'windows' ? ' (PowerShell and the plain command line were both tried)' : ''}. '
+      'ClipForge stays open and nothing was changed. Get the new version '
+      'from the download page instead. The details are in: $logPath';
+
+  /// True when the last message is about a helper that did not start
+  /// (the Update window then offers the download page first).
+  bool get helperBlocked =>
+      message != null && message!.contains('could not start the small helper');
+
+  // Tidy up (1.14.1, Windows) -------------------------------------------------
+
+  String get _versionKey => '${build.version}+${build.buildNumber ?? ''}';
+
+  /// What a tidy-up would do when this app runs from a folder the updater
+  /// unpacked into ("….update-new"); null when it does not, when the user
+  /// said "Not now" for this version, or while an update is in progress.
+  Future<TidyPlan?> tidyPlan({bool evenIfDeclined = false}) async {
+    if (platform.os != 'windows') return null;
+    final dir = platform.installDir;
+    final current = AppVersion.parse(_versionKey);
+    if (dir == null || current == null || pending != null || finishingAtStart) {
+      return null;
+    }
+    if (stagedName(p.basename(dir)).depth == 0) return null;
+    if (!evenIfDeclined) {
+      try {
+        if (await prefs.text(kTidyUpDeclinedText) == _versionKey) return null;
+      } catch (_) {}
+    }
+    return planTidyUp(
+        installDir: dir,
+        current: current,
+        exeName: platform.exeName);
+  }
+
+  /// "Not now": not asked again by this version.
+  Future<void> declineTidyUp() async {
+    try {
+      await prefs.setText(kTidyUpDeclinedText, _versionKey);
+    } catch (_) {}
+    (await _log())?.add('tidy-up: "Not now" for $_versionKey');
+  }
+
+  /// Starts the move for [choice] and closes the app. Returns null when
+  /// the app is closing, else why it could not be done.
+  Future<String?> tidyUp(TidyPlan plan, TidyChoice choice) async {
+    try {
+      if (!choice.target.usable) return 'That folder cannot be used.';
+      if (!await platform.mayQuit()) {
+        return 'ClipForge is still busy (an export is running, or a project '
+            'could not be saved). Try again when it has finished.';
+      }
+      final state = await platform.stateDir();
+      final log = UpdateLog.inDir(state, now: _now);
+      Directory(state).createSync(recursive: true);
+      final list = File(p.join(state, 'tidy-remove.txt'));
+      list.writeAsStringSync(
+          [for (final o in choice.remove) o.path].join('\r\n'),
+          flush: true);
+      log.add('tidy-up: move [${plan.runningDir}] to [${choice.target.path}] '
+          '(${choice.target.state.name}); remove: '
+          '${choice.remove.isEmpty ? 'nothing' : choice.remove.map((o) => '[${o.path}] ${o.version}').join(', ')}');
+      final started = await _swap(
+        os: platform.os,
+        scriptText: await platform.swapScript(),
+        fallbackScriptText: await platform.swapFallbackScript(),
+        workDir: state,
+        installDir: choice.target.path,
+        newDir: plan.runningDir,
+        resultFile: p.join(state, kUpdateResultFile),
+        logFile: log.path,
+        version: build.version,
+        exeName: platform.exeName,
+        mode: 'move',
+        removeListFile: list.path,
+      );
+      if (!started.confirmed) return _notStarted(log.path, platform.os);
+      log.add('closing now so that the script can work');
+      await platform.quit();
+      return null;
+    } catch (e) {
+      (await _log())?.add('the tidy-up could not be started: $e');
+      return 'The tidy-up could not be started ($e). Nothing was changed.';
     }
   }
 
@@ -631,8 +838,13 @@ class UpdateController extends ChangeNotifier {
   }
 }
 
+/// What starts the swap script; null = the real [startSwap]. Tests put a
+/// stand-in here so that no script is ever started by a test.
+final swapStarterProvider = Provider<SwapStarter?>((ref) => null);
+
 final updateControllerProvider = Provider<UpdateController>((ref) {
   final c = UpdateController(
+    swap: ref.watch(swapStarterProvider),
     prefs: ref.watch(appPrefsProvider),
     platform: ref.watch(updatePlatformProvider),
     build: ref.watch(buildInfoProvider),

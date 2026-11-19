@@ -2,16 +2,20 @@
 //
 // Windows and macOS work the same way (decision, 1.12):
 //   1. the new app is unpacked into a folder NEXT TO the installed one
-//      (`<install>.update-new`), so the final step is a rename on the same
-//      disk;
-//   2. a small script (assets/update/clipforge-update.ps1 / .sh) is
-//      started detached; the app closes;
-//   3. the script waits for the app to be gone, renames
-//      `<install>` -> `<install>.update-old` and `<install>.update-new`
-//      -> `<install>`, starts the app and deletes the old folder. A rename
-//      happens completely or not at all; when either rename fails the old
-//      app is back in place and is started again. The outcome is written
-//      to a result file that the app reads on its next start.
+//      (`<install>.update-new`);
+//   2. a small script (assets/update/clipforge-update.ps1 / .cmd / .sh)
+//      is started outside the app's process tree; the app waits until the
+//      script has written its first line into the update log, then closes;
+//   3. the script waits for the app to be gone and puts the new version
+//      in place. macOS: by renaming the two bundles. Windows (1.14.1): by
+//      replacing the CONTENTS of the folder (safety copy to
+//      `<install>.update-old`, robocopy /MIR of the new files, a check,
+//      the safety copy mirrored back on failure) - the folder itself is
+//      never renamed, because on real PCs something always seemed to hold
+//      it (an Explorer window, a terminal, a scanner) and the 1.12 - 1.14
+//      rename then never happened. The outcome is written to a result
+//      file that the app reads on its next start, and every step to
+//      update-log.txt (update_log.dart).
 // Projects and media live in Documents/ClipForge and are never touched.
 //
 // When the place the app is installed in cannot be written (Program Files,
@@ -29,6 +33,7 @@ import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
 
 import 'update_info.dart';
+import 'update_log.dart';
 
 const String kUpdateNewSuffix = '.update-new';
 const String kUpdateOldSuffix = '.update-old';
@@ -320,7 +325,11 @@ String? folderNameNote(String installDir, String version, String os) {
 
 /// What the swap script reported.
 class UpdateResult {
-  const UpdateResult(this.status, this.message, this.version);
+  const UpdateResult(this.status, this.message, this.version, {this.mode = 'update'});
+
+  /// "update", or "move" for a tidy-up (tidy_up.dart).
+  final String mode;
+  bool get wasMove => mode == 'move';
 
   /// "updated", "failed" (nothing changed) or "broken".
   final String status;
@@ -335,13 +344,15 @@ UpdateResult? takeUpdateResult(String dir) {
   final file = File(p.join(dir, kUpdateResultFile));
   try {
     if (!file.existsSync()) return null;
-    var text = file.readAsStringSync();
+    // (the cmd script may write a path in the system's own encoding)
+    var text = utf8.decode(file.readAsBytesSync(), allowMalformed: true);
     file.deleteSync();
     if (text.startsWith('﻿')) text = text.substring(1);
     final json = jsonDecode(text);
     if (json is! Map) return null;
     return UpdateResult('${json['status'] ?? ''}', '${json['message'] ?? ''}',
-        '${json['version'] ?? ''}');
+        '${json['version'] ?? ''}',
+        mode: json['mode'] == 'move' ? 'move' : 'update');
   } catch (_) {
     return null;
   }
@@ -391,7 +402,16 @@ Future<String> stageWindowsUpdate(String zipPath, String installDir,
           kind: 'check',
           detail: 'no $exeName in the zip');
     }
-    Directory(found).renameSync(newDir);
+    // A scanner may still be reading the fresh files: a few tries.
+    for (var attempt = 0;; attempt++) {
+      try {
+        Directory(found).renameSync(newDir);
+        break;
+      } on FileSystemException {
+        if (attempt >= 5) rethrow;
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+    }
     writeUpdateMarker(newDir, 'windows');
     return newDir;
   } on UpdateException {
@@ -471,62 +491,335 @@ Future<String> stageMacUpdate(String zipPath, String installDir,
   }
 }
 
-/// The command that runs the swap script for [os] ("windows" / "macos").
-/// [scriptPath] must be OUTSIDE the install folder.
-({String executable, List<String> arguments}) swapCommand({
-  required String os,
-  required String scriptPath,
+/// The version file inside a Windows app folder (1.14.1), written by the
+/// build (windows/CMakeLists.txt): `{"version":"1.14.1+123"}`. The swap
+/// scripts compare it after copying; the app reads it to tell which
+/// version a ClipForge folder holds.
+const String kVersionFileName = 'clipforge-version.json';
+String versionFilePath(String installDir) =>
+    p.join(installDir, 'data', kVersionFileName);
+
+/// A version with its build number: "1.14.1+123" (the build may be
+/// missing).
+class AppVersion implements Comparable<AppVersion> {
+  const AppVersion(this.major, this.minor, this.patch, [this.build]);
+  final int major, minor, patch;
+  final int? build;
+
+  /// "1.14.1+123", "1.14.1", "1.14.1.123"; null when [text] is not one.
+  static AppVersion? parse(String? text) {
+    final m = RegExp(r'^\s*(\d+)\.(\d+)\.(\d+)(?:[+.](\d+))?')
+        .firstMatch(text ?? '');
+    if (m == null) return null;
+    return AppVersion(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!),
+        m[4] == null ? null : int.parse(m[4]!));
+  }
+
+  /// The version first; the build number only decides between two builds
+  /// of the same version (and only when both are known).
+  @override
+  int compareTo(AppVersion other) {
+    for (final (a, b) in [(major, other.major), (minor, other.minor), (patch, other.patch)]) {
+      if (a != b) return a.compareTo(b);
+    }
+    if (build == null || other.build == null) return 0;
+    return build!.compareTo(other.build!);
+  }
+
+  bool isOlderThan(AppVersion other) => compareTo(other) < 0;
+
+  /// "1.14.1" (what people know it as).
+  String get name => '$major.$minor.$patch';
+
+  @override
+  String toString() => build == null ? name : '$name+$build';
+}
+
+/// The "ProductVersion" text in the version details of a Windows program
+/// (what Explorer shows under Properties > Details), read straight from
+/// the file's bytes; null when there is none. ClipForge's is
+/// "version+build" ("1.12.0+109").
+String? productVersionOfExe(List<int> bytes) {
+  // UTF-16LE "ProductVersion", then zeros up to the value, then the value.
+  final key = [for (final c in 'ProductVersion'.codeUnits) ...[c, 0]];
+  outer:
+  for (var i = 0; i + key.length + 4 <= bytes.length; i += 2) {
+    // (resource strings are word aligned, but the section need not be)
+    for (final start in [i, i + 1]) {
+      if (start + key.length + 4 > bytes.length) continue;
+      var same = true;
+      for (var k = 0; k < key.length; k++) {
+        if (bytes[start + k] != key[k]) {
+          same = false;
+          break;
+        }
+      }
+      if (!same) continue;
+      var at = start + key.length;
+      while (at + 1 < bytes.length && bytes[at] == 0 && bytes[at + 1] == 0) {
+        at += 2;
+      }
+      final out = StringBuffer();
+      while (at + 1 < bytes.length && out.length < 64) {
+        final unit = bytes[at] | (bytes[at + 1] << 8);
+        if (unit == 0) break;
+        out.writeCharCode(unit);
+        at += 2;
+      }
+      if (out.isEmpty) continue outer;
+      return out.toString();
+    }
+  }
+  return null;
+}
+
+/// Which ClipForge the folder [dir] holds: from its version file, else
+/// from the program's version details. Null when [dir] has no
+/// [exeName] or no version can be read - then nothing is known about it.
+AppVersion? readInstalledVersion(String dir, {String exeName = 'clipforge.exe'}) {
+  try {
+    final exe = File(p.join(dir, exeName));
+    if (!exe.existsSync()) return null;
+    final file = File(versionFilePath(dir));
+    if (file.existsSync()) {
+      final json = jsonDecode(file.readAsStringSync());
+      final v = json is Map ? AppVersion.parse('${json['version']}') : null;
+      if (v != null) return v;
+    }
+    // The runner is small (well under a megabyte); anything huge is not it.
+    if (exe.lengthSync() > 64 * 1024 * 1024) return null;
+    return AppVersion.parse(productVersionOfExe(exe.readAsBytesSync()));
+  } catch (_) {
+    return null;
+  }
+}
+
+/// The values the Windows scripts read from the environment (no path is
+/// ever quoted on a command line). ALL of them are always set, so that a
+/// value left over from an earlier run can never be picked up.
+Map<String, String> swapEnvironment({
   required String installDir,
   required String newDir,
   required int waitPid,
   required String resultFile,
+  required String logFile,
   required String version,
+  required String token,
+  required String scriptPath,
+  required String workDir,
   String exeName = 'clipforge.exe',
-}) {
-  if (os == 'windows') {
-    return (
-      executable: 'powershell.exe',
-      arguments: [
-        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', //
-        '-WindowStyle', 'Hidden', '-File', scriptPath,
-        '-InstallDir', installDir, '-NewDir', newDir, '-WaitPid', '$waitPid',
-        '-ExeName', exeName, '-ResultFile', resultFile, '-Version', version,
-      ],
-    );
-  }
-  return (
-    executable: '/bin/sh',
-    arguments: [scriptPath, installDir, newDir, '$waitPid', resultFile, version],
-  );
+  String mode = 'update',
+  String removeListFile = '',
+}) =>
+    {
+      'CF_UPD_INSTALL': installDir,
+      'CF_UPD_NEW': newDir,
+      'CF_UPD_PID': '$waitPid',
+      'CF_UPD_EXE': exeName,
+      'CF_UPD_RESULT': resultFile,
+      'CF_UPD_LOG': logFile,
+      'CF_UPD_VERSION': version,
+      'CF_UPD_TOKEN': token,
+      'CF_UPD_MODE': mode,
+      'CF_UPD_REMOVE_LIST': removeListFile,
+      'CF_UPD_SCRIPT': scriptPath,
+      'CF_UPD_WORKDIR': workDir,
+    };
+
+/// Windows: the PowerShell command that starts the update script OUTSIDE
+/// this app's process tree, the way 1.12 starts export workers
+/// (lib/mcp/export_jobs.dart): a short-lived PowerShell runs
+/// `Start-Process -WindowStyle Hidden` and exits, so the script's parent
+/// is gone before the app closes. The script gets its own hidden console
+/// and inherits the environment ([swapEnvironment]).
+const String kWindowsSwapStartScript = r"$q = [char]34; "
+    r"$a = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', "
+    r"'-WindowStyle', 'Hidden', '-File', ($q + $env:CF_UPD_SCRIPT + $q)); "
+    r"$p = Start-Process -FilePath 'powershell.exe' -ArgumentList $a "
+    r"-WorkingDirectory $env:CF_UPD_WORKDIR -WindowStyle Hidden -PassThru; "
+    r"[Console]::Out.Write($p.Id)";
+
+/// The file names the scripts are written under in the work folder.
+const String kSwapScriptPs = 'clipforge-update.ps1';
+const String kSwapScriptCmd = 'clipforge-update.cmd';
+const String kSwapScriptSh = 'clipforge-update.sh';
+
+/// One way of starting the swap script; [start] returns a note for the log.
+class SwapLauncher {
+  const SwapLauncher(this.name, this.start);
+
+  /// "PowerShell", "cmd", "sh".
+  final String name;
+  final Future<String> Function() start;
 }
 
-/// Writes [scriptText] to [workDir] and starts it detached (it outlives
-/// this app). The app must close right after this returns.
-Future<void> startSwap({
+/// How [startSwap] went.
+class SwapStart {
+  const SwapStart({required this.confirmed, required this.method, required this.logFile});
+
+  /// The script wrote its first line into the log: it is running and
+  /// waiting for the app to close. When false the app must NOT close.
+  final bool confirmed;
+
+  /// The launcher that worked ("PowerShell", "cmd", "sh"); "" when none.
+  final String method;
+  final String logFile;
+}
+
+/// The ways to start the script on [os], best first. Windows: PowerShell
+/// (outside the process tree), then plain cmd for PCs where PowerShell is
+/// blocked. Others: /bin/sh, detached.
+List<SwapLauncher> swapLaunchers({
+  required String os,
+  required String workDir,
+  required Map<String, String> environment,
+  required List<String> shArguments,
+  bool withCmd = true,
+}) {
+  if (os == 'windows') {
+    return [
+      SwapLauncher('PowerShell', () async {
+        final r = await Process.run(
+          'powershell.exe',
+          [
+            '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', //
+            '-WindowStyle', 'Hidden', '-Command', kWindowsSwapStartScript,
+          ],
+          environment: environment,
+          workingDirectory: workDir,
+        ).timeout(const Duration(seconds: 30));
+        final err = '${r.stderr}'.trim();
+        return 'exit code ${r.exitCode}, script process id "${'${r.stdout}'.trim()}"'
+            '${err.isEmpty ? '' : ', said: ${err.length > 300 ? err.substring(0, 300) : err}'}';
+      }),
+      if (withCmd)
+        SwapLauncher('cmd', () async {
+          // No spaces and no quotes on this command line: the script is
+          // named relative to the work folder, everything else comes from
+          // the environment. "start" gives it its own (minimised) window
+          // and the cmd that ran "start" ends at once.
+          final proc = await Process.start(
+            'cmd.exe',
+            ['/d', '/c', 'start', '/min', 'cmd.exe', '/d', '/c', kSwapScriptCmd],
+            environment: environment,
+            workingDirectory: workDir,
+          );
+          proc.stdout.drain<void>().ignore();
+          proc.stderr.drain<void>().ignore();
+          proc.stdin.close().ignore();
+          final code = await proc.exitCode.timeout(const Duration(seconds: 15));
+          return 'exit code $code';
+        }),
+    ];
+  }
+  return [
+    SwapLauncher('sh', () async {
+      final proc = await Process.start('/bin/sh', shArguments,
+          workingDirectory: workDir,
+          environment: environment,
+          mode: ProcessStartMode.detached);
+      return 'process id ${proc.pid}';
+    }),
+  ];
+}
+
+/// Waits until a script has written "started token=[token]" into [log].
+Future<bool> waitForSwapStarted(UpdateLog log, String token,
+    {Duration timeout = const Duration(seconds: 10)}) async {
+  final until = DateTime.now().add(timeout);
+  while (true) {
+    if (log.hasStarted(token)) return true;
+    if (DateTime.now().isAfter(until)) return false;
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+  }
+}
+
+/// Writes the scripts to [workDir] (never inside the app folder: that
+/// would lock it) and starts one so that it outlives this app. Each way in
+/// [launchers] (default: [swapLaunchers]) is tried until a script has
+/// CONFIRMED that it runs, by its first line in [logFile]. The app closes
+/// only when the answer says [SwapStart.confirmed].
+///
+/// [mode] "move" and [removeListFile] are for the tidy-up (tidy_up.dart).
+Future<SwapStart> startSwap({
   required String os,
   required String scriptText,
   required String workDir,
   required String installDir,
   required String newDir,
   required String resultFile,
+  required String logFile,
   required String version,
   String exeName = 'clipforge.exe',
+  String? fallbackScriptText,
+  String mode = 'update',
+  String removeListFile = '',
+  List<SwapLauncher>? launchers,
+  Duration confirmTimeout = const Duration(seconds: 15),
 }) async {
+  final log = UpdateLog(logFile);
   await Directory(workDir).create(recursive: true);
-  final script = File(p.join(
-      workDir, os == 'windows' ? 'clipforge-update.ps1' : 'clipforge-update.sh'));
-  await script.writeAsString(scriptText, flush: true);
-  final cmd = swapCommand(
-    os: os,
-    scriptPath: script.path,
-    installDir: installDir,
-    newDir: newDir,
-    waitPid: pid,
-    resultFile: resultFile,
-    version: version,
-    exeName: exeName,
-  );
-  // The working folder must not be inside the app (it would lock it).
-  await Process.start(cmd.executable, cmd.arguments,
-      workingDirectory: workDir, mode: ProcessStartMode.detached);
+  final windows = os == 'windows';
+  // cmd needs CRLF line ends (labels are not found reliably otherwise);
+  // PowerShell does not mind them.
+  String crlf(String text) => text.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
+  final script = File(p.join(workDir, windows ? kSwapScriptPs : kSwapScriptSh));
+  await script.writeAsString(windows ? crlf(scriptText) : scriptText, flush: true);
+  if (windows && fallbackScriptText != null) {
+    await File(p.join(workDir, kSwapScriptCmd))
+        .writeAsString(crlf(fallbackScriptText), flush: true);
+  }
+  // A stale result must not be read as this run's.
+  try {
+    final old = File(resultFile);
+    if (old.existsSync()) old.deleteSync();
+  } catch (_) {}
+  // The scripts' "only one of us" folders of earlier runs.
+  try {
+    for (final d in Directory(p.dirname(resultFile)).listSync().whereType<Directory>()) {
+      if (d.path.endsWith('.lock')) d.deleteSync(recursive: true);
+    }
+  } catch (_) {}
+  final token = '${DateTime.now().microsecondsSinceEpoch}-$pid';
+  final environment = windows
+      ? swapEnvironment(
+          installDir: installDir,
+          newDir: newDir,
+          waitPid: pid,
+          resultFile: resultFile,
+          logFile: logFile,
+          version: version,
+          token: token,
+          scriptPath: script.path,
+          workDir: workDir,
+          exeName: exeName,
+          mode: mode,
+          removeListFile: removeListFile)
+      : {'CLIPFORGE_UPDATE_LOG': logFile, 'CLIPFORGE_UPDATE_TOKEN': token};
+  log.add('swap: mode=$mode version=$version install=[$installDir] '
+      'new=[$newDir] app pid=$pid work folder=[$workDir] token=$token');
+  final ways = launchers ??
+      swapLaunchers(
+          os: os,
+          workDir: workDir,
+          environment: environment,
+          shArguments: [script.path, installDir, newDir, '$pid', resultFile, version],
+          withCmd: fallbackScriptText != null);
+  for (final way in ways) {
+    try {
+      final note = await way.start();
+      log.add('start by ${way.name}: $note');
+    } catch (e) {
+      log.add('start by ${way.name} failed: $e');
+      continue;
+    }
+    if (await waitForSwapStarted(log, token, timeout: confirmTimeout)) {
+      log.add('the script is running (started by ${way.name})');
+      return SwapStart(confirmed: true, method: way.name, logFile: logFile);
+    }
+    log.add('the script did not report in within '
+        '${confirmTimeout.inSeconds} s (started by ${way.name})');
+  }
+  log.add('no script could be started: the app stays open, nothing was changed');
+  return SwapStart(confirmed: false, method: '', logFile: logFile);
 }

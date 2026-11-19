@@ -21,10 +21,18 @@
 #
 # Updates from inside the app (1.12): the release job writes latest.json
 # with, per system, the address, size and SHA-256 of the fixed-name file
-# (tool/ci/make_latest_json.py). The Windows job runs the update script
-# with a pretend app folder (tool/ci/windows_swap_test.py) and checks that
+# (tool/ci/make_latest_json.py). The Windows job runs the update scripts
+# with pretend app folders (tool/ci/windows_swap_test.py) and checks that
 # an export survives the helper's process tree being killed
 # (tool/ci/job_survives_test.py).
+#
+# Windows installer (1.14.1): the Windows job also builds a per-user
+# installer with Inno Setup (windows/installer/clipforge.iss), installs,
+# updates and uninstalls it silently as a test, and the release publishes
+# it as ClipForge-Setup.exe next to the zip. latest.json keeps pointing
+# the app's own updater at the zip. When Inno Setup cannot be had on the
+# runner the installer steps are skipped with a warning and the release
+# has no ClipForge-Setup.exe (the download page links to it: check).
 #
 # Version numbers (lib/core/build_info.dart): the version comes from
 # pubspec.yaml, the build number is this workflow's run number, and the
@@ -381,14 +389,22 @@ jobs:
           $release = "build\windows\x64\runner\Release"
           $assets = "$release\data\flutter_assets\assets"
           foreach ($file in "fonts\DejaVuSans.ttf", "fonts\DejaVuSans-Bold.ttf",
-                            "claude\ClipForge-claude.mcpb", "update\clipforge-update.ps1") {
+                            "claude\ClipForge-claude.mcpb", "update\clipforge-update.ps1",
+                            "update\clipforge-update.cmd") {
             if (-not (Test-Path "$assets\$file")) { throw "$file is missing from the app bundle" }
           }
+          # The version file the update scripts compare (windows/CMakeLists.txt).
+          $versionFile = "$release\data\clipforge-version.json"
+          if (-not (Test-Path $versionFile)) { throw "data\clipforge-version.json is missing from the app folder" }
+          $inFile = (Get-Content $versionFile -Raw | ConvertFrom-Json).version
+          Write-Host "clipforge-version.json: $inFile"
+          if ($inFile -ne "$env:CF_VERSION+${{ needs.check.outputs.build }}") { throw "clipforge-version.json says $inFile" }
           if (Test-Path "$release\clipforge-mcp.exe") { throw "clipforge-mcp.exe must not sit next to clipforge.exe any more" }
           Copy-Item docs\claude-setup.html "$release\Connect Claude to ClipForge.html"
-      # The update script, on real Windows, with a pretend app folder
-      # (swap, a locked folder, roll-back; see the script's header).
-      - name: Test the update script with a pretend app folder
+      # The update scripts (PowerShell, and the plain cmd one), on real
+      # Windows, with pretend app folders: replace the files, a held
+      # folder, a held file, roll-back, tidy-up (see the test's header).
+      - name: Test the update scripts with pretend app folders
         shell: pwsh
         run: |
           python tool\ci\windows_swap_test.py "build\mcp\clipforge-mcp.exe"
@@ -435,9 +451,95 @@ jobs:
           $tops = @($zip.Entries | ForEach-Object { ($_.FullName -split '[\\/]')[0] } | Sort-Object -Unique)
           $zip.Dispose()
           if ($tops.Count -ne 1 -or $tops[0] -ne 'ClipForge') { throw "the Windows zip must hold one top folder 'ClipForge', found: $($tops -join ', ')" }
+      # The installer (1.14.1): per user, no administrator rights, into
+      # %LOCALAPPDATA%\Programs\ClipForge, from the same folder as the zip.
+      # Inno Setup: the one on the runner, else from Chocolatey; when
+      # neither works the installer is skipped with a warning.
+      - name: Build the installer (Inno Setup)
+        id: installer
+        shell: pwsh
+        run: |
+          function Find-Iscc {
+            foreach ($dir in "${env:ProgramFiles(x86)}\Inno Setup 6", "$env:ProgramFiles\Inno Setup 6") {
+              if (Test-Path "$dir\ISCC.exe") { return "$dir\ISCC.exe" }
+            }
+            $onPath = Get-Command iscc.exe -ErrorAction SilentlyContinue
+            if ($onPath) { return $onPath.Source }
+            return $null
+          }
+          $iscc = Find-Iscc
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            $iscc = Find-Iscc
+          }
+          if (-not $iscc) {
+            Write-Host "::warning::Inno Setup could not be found or installed: no ClipForge-Setup.exe in this run"
+            "built=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          Write-Host "Inno Setup: $iscc"
+          $source = (Resolve-Path dist\ClipForge).Path
+          $out = (Resolve-Path dist).Path
+          & $iscc "/DAppVersion=$env:CF_VERSION" "/DSourceDir=$source" "/DOutputDir=$out" `
+            "/DOutputName=$env:CF_NAME-windows-setup" windows\installer\clipforge.iss
+          if ($LASTEXITCODE -ne 0) { throw "building the installer failed" }
+          if (-not (Test-Path "dist\$env:CF_NAME-windows-setup.exe")) { throw "the installer was not written" }
+          "built=true" >> $env:GITHUB_OUTPUT
+      # The installer, for real: silent install into a temp folder, the
+      # files are there, the app's own update script works in the
+      # installed folder and leaves the uninstaller alone, silent uninstall.
+      - name: Test the installer (install, update in place, uninstall)
+        if: steps.installer.outputs.built == 'true'
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path "dist\$env:CF_NAME-windows-setup.exe").Path
+          $dir = "$env:RUNNER_TEMP\cf install\ClipForge"
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$dir`"", "/LOG=`"$env:RUNNER_TEMP\cf-setup.log`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\cf-setup.log" -Tail 40; throw "the installer ended with $($p.ExitCode)" }
+          foreach ($file in "clipforge.exe", "data\clipforge-version.json", "data\app.so", "unins000.exe") {
+            if (-not (Test-Path "$dir\$file")) { throw "$file is missing after the install" }
+          }
+          $installed = (Get-Content "$dir\data\clipforge-version.json" -Raw | ConvertFrom-Json).version
+          if ($installed -ne "$env:CF_VERSION+${{ needs.check.outputs.build }}") { throw "the installed version file says $installed" }
+          $shortcut = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\ClipForge.lnk"
+          if (-not (Test-Path $shortcut)) { throw "no Start-menu shortcut after the install" }
+          Write-Host "installed: $dir ($installed), shortcut: $shortcut"
+          # The app's own updater in the installed folder: the unpacked
+          # "new version" is a copy with one more file.
+          $new = "$dir.update-new"
+          Copy-Item $dir $new -Recurse
+          Remove-Item "$new\unins000.exe", "$new\unins000.dat" -ErrorAction SilentlyContinue
+          Set-Content "$new\.clipforge-update-marker" '{"by":"ClipForge updater"}'
+          Set-Content "$new\new-in-update.txt" 'new'
+          $result = "$env:RUNNER_TEMP\cf-install-result.json"
+          $log = "$env:RUNNER_TEMP\cf-install-update-log.txt"
+          powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File assets\update\clipforge-update.ps1 `
+            -InstallDir $dir -NewDir $new -WaitPid 0 -ResultFile $result -LogFile $log -Version $env:CF_VERSION -NoRestart
+          $code = $LASTEXITCODE
+          Get-Content $log
+          if ($code -ne 0) { throw "the update script ended with $code in the installed folder" }
+          if (-not (Test-Path "$dir\new-in-update.txt")) { throw "the update did not reach the installed folder" }
+          if (-not (Test-Path "$dir\unins000.exe") -or -not (Test-Path "$dir\unins000.dat")) { throw "the update removed the uninstaller" }
+          if ((Test-Path $new) -or (Test-Path "$dir.update-old")) { throw "the update left folders next to the installed app" }
+          # Silent uninstall (the uninstaller works from a copy of itself,
+          # so the folder may go a moment after it returns).
+          $u = Start-Process "$dir\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($u.ExitCode -ne 0) { throw "the uninstaller ended with $($u.ExitCode)" }
+          for ($i = 0; $i -lt 60 -and (Test-Path "$dir\clipforge.exe"); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path "$dir\clipforge.exe") { throw "clipforge.exe is still there after the uninstall" }
+          if (Test-Path $shortcut) { throw "the Start-menu shortcut is still there after the uninstall" }
+          if (Test-Path $dir) { Write-Host "left in the folder after the uninstall:"; Get-ChildItem $dir -Recurse | ForEach-Object { $_.FullName } }
+          if (Test-Path "$dir\data") { throw "the app's data folder is still there after the uninstall" }
+          Write-Host "OK: install, update in place and uninstall work"
       - uses: actions/upload-artifact@v7
         with:
           path: video-editor/dist/${{ env.CF_NAME }}-windows.zip
+          archive: false
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: steps.installer.outputs.built == 'true'
+        with:
+          path: video-editor/dist/${{ env.CF_NAME }}-windows-setup.exe
           archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
@@ -618,6 +720,13 @@ jobs:
           need() { test -f "$1" || { echo "::error::$1 is missing"; exit 1; }; }
           copy() { need "$1"; cp "$1" "$2"; }
           copy "$CF_NAME-windows.zip"             ClipForge-windows.zip
+          # The Windows installer (1.14.1), when this run could build it.
+          # latest.json does not name it: the app updates from the zip.
+          if [ -f "$CF_NAME-windows-setup.exe" ]; then
+            cp "$CF_NAME-windows-setup.exe" ClipForge-Setup.exe
+          else
+            echo "::warning::no Windows installer in this run: the release has no ClipForge-Setup.exe, and the first Windows button on the download page will not work"
+          fi
           copy "$CF_NAME-macos.zip"               ClipForge-macos.zip
           copy "$CF_NAME-android.apk"             ClipForge-android.apk
           copy "$CF_NAME-android-old-32bit-phones.apk" ClipForge-android-old-32bit-phones.apk
@@ -650,6 +759,8 @@ jobs:
               echo "::error::release $tag exists already: raise the version in pubspec.yaml first"; exit 1
             fi
           fi
+          files=(./*.zip ./*.apk ./*.mcpb latest.json)
+          if compgen -G "./*.exe" >/dev/null; then files+=(./*.exe); fi
           gh release create "$tag" -R "$GITHUB_REPOSITORY" \
             --title "ClipForge $CF_VERSION" --notes-file "$RUNNER_TEMP/notes.md" "${how[@]}" \
-            ./*.zip ./*.apk ./*.mcpb latest.json
+            "${files[@]}"

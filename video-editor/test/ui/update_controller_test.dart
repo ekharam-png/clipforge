@@ -45,6 +45,9 @@ void main() {
   Object? downloadError;
   final swaps = <({String installDir, String newDir, String version})>[];
   Object? swapError;
+  var swapConfirmed = true;
+  final swapModes = <String>[];
+  final swapRemoveLists = <List<String>>[];
 
   UpdateController controller({BuildInfo build = ci139}) => UpdateController(
         prefs: prefs,
@@ -73,11 +76,20 @@ void main() {
           required String installDir,
           required String newDir,
           required String resultFile,
+          required String logFile,
           required String version,
           String exeName = 'clipforge.exe',
+          String? fallbackScriptText,
+          String mode = 'update',
+          String removeListFile = '',
         }) async {
           if (swapError != null) throw swapError!;
           swaps.add((installDir: installDir, newDir: newDir, version: version));
+          swapModes.add(mode);
+          swapRemoveLists.add(removeListFile.isEmpty || !File(removeListFile).existsSync()
+              ? const []
+              : const LineSplitter().convert(File(removeListFile).readAsStringSync()));
+          return SwapStart(confirmed: swapConfirmed, method: 'test', logFile: logFile);
         },
       );
 
@@ -92,6 +104,9 @@ void main() {
     downloadError = null;
     swaps.clear();
     swapError = null;
+    swapConfirmed = true;
+    swapModes.clear();
+    swapRemoveLists.clear();
   });
   tearDown(() => tmp.delete(recursive: true));
 
@@ -372,6 +387,48 @@ void main() {
       expect(PendingUpdate.read(await platform.stateDir())!.swapStartedAt, isNotNull);
     });
 
+    test('the helper script does not report in: the app does NOT close, says '
+        'so plainly, and nothing is marked as started (1.14.1)', () async {
+      final s = await staged();
+      swapConfirmed = false;
+      await s.c.restartToUpdate();
+      expect(swaps.length, 1);
+      expect(platform.quits, 0);
+      expect(s.c.stage, UpdateStage.failed);
+      expect(s.c.helperBlocked, isTrue);
+      expect(s.c.message, contains('could not start the small helper'));
+      expect(s.c.message, contains('ClipForge stays open and nothing was changed'));
+      expect(s.c.message, contains('download page'));
+      final state = await platform.stateDir();
+      expect(s.c.message, contains(p.join(state, 'update-log.txt')));
+      expect(PendingUpdate.read(state)!.swapStartedAt, isNull);
+      expect(Directory('${s.install.path}$kUpdateNewSuffix').existsSync(), isTrue);
+      // "Copy details" has the version, the folder and the problem.
+      final details = await s.c.details(problem: s.c.message);
+      expect(details, contains('ClipForge 1.11.0 (build 139)'));
+      expect(details, contains('Folder: ${s.install.path}'));
+      expect(details, contains('Problem: ClipForge could not start'));
+      // It works the next time (the script reports in): closes.
+      swapConfirmed = true;
+      await s.c.restartToUpdate();
+      expect(platform.quits, 1);
+      expect(PendingUpdate.read(state)!.swapStartedAt, isNotNull);
+      expect(swapModes, ['update', 'update']);
+    });
+
+    test('a marker inside the folder the app runs from is taken out at the '
+        'start: a running app is nobody\'s leftover (1.14.1)', () async {
+      final install = Directory(p.join(tmp.path, 'Apps', 'ClipForge.update-new'))
+        ..createSync(recursive: true);
+      writeUpdateMarker(install.path, 'windows');
+      platform
+        ..os = 'windows'
+        ..installDir = install.path;
+      await controller().onAppStart();
+      expect(hasUpdateMarker(install.path, 'windows'), isFalse);
+      expect(install.existsSync(), isTrue);
+    });
+
     test('"Later": the next start finishes the update by itself, once',
         () async {
       final s = await staged();
@@ -390,7 +447,7 @@ void main() {
       await third.onAppStart();
       expect(swaps.length, 1);
       expect(third.lastResult!.updated, isFalse);
-      expect(third.lastResult!.message, contains('did not run'));
+      expect(third.lastResult!.message, contains('did not finish and left no answer'));
       expect(third.pending, isNotNull);
       expect(Directory(newDir).existsSync(), isTrue, reason: 'kept for Try again');
       expect(await third.finishPending(), isNull);

@@ -2,9 +2,10 @@
 // next to it, and the swap script. The macOS / Linux script
 // (assets/update/clipforge-update.sh) is RUN here with pretend app folders,
 // including every failure path (nothing may ever be left half done). The
-// Windows script (clipforge-update.ps1) has the same steps; it is run by
-// the Windows job of the build workflow (tool/ci/windows_swap_test.py) and
-// only checked for consistency here.
+// Windows scripts (clipforge-update.ps1 and .cmd; since 1.14.1 they
+// replace the folder's contents with robocopy instead of renaming it) are
+// run by the Windows job of the build workflow
+// (tool/ci/windows_swap_test.py) and only checked for consistency here.
 
 import 'dart:convert';
 import 'dart:io';
@@ -12,6 +13,7 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:clipforge/core/update/update_info.dart';
 import 'package:clipforge/core/update/update_install.dart';
+import 'package:clipforge/core/update/update_log.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -390,62 +392,305 @@ void main() {
     });
   });
 
-  group('the Windows script matches what the app passes', () {
+  group('the Windows scripts match what the app passes', () {
     final ps = File('assets/update/clipforge-update.ps1').readAsStringSync();
+    final cmd = File('assets/update/clipforge-update.cmd').readAsStringSync();
 
-    test('every argument the app passes is a parameter of the script', () {
-      final cmd = swapCommand(
-          os: 'windows',
-          scriptPath: r'C:\Temp\clipforge-update.ps1',
+    test('every value the app puts into the environment is read by both '
+        'scripts, and all of them are always set', () {
+      final env = swapEnvironment(
           installDir: r'C:\Apps\ClipForge',
           newDir: r'C:\Apps\ClipForge.update-new',
           waitPid: 4321,
           resultFile: r'C:\Temp\update-result.json',
-          version: '1.13.0');
-      expect(cmd.executable, 'powershell.exe');
-      expect(cmd.arguments, containsAllInOrder(['-File', r'C:\Temp\clipforge-update.ps1']));
-      final passed = [
-        for (final a in cmd.arguments.skip(cmd.arguments.indexOf('-File') + 2))
-          if (RegExp(r'^-[A-Z]').hasMatch(a)) a.substring(1),
-      ];
-      expect(passed, ['InstallDir', 'NewDir', 'WaitPid', 'ExeName', 'ResultFile', 'Version']);
-      final params = ps.substring(ps.indexOf('param('), ps.indexOf(r"$ErrorActionPreference"));
-      for (final name in passed) {
-        expect(params, contains('\$$name'), reason: '-$name');
+          logFile: r'C:\Temp\update-log.txt',
+          version: '1.14.1',
+          token: 't1',
+          scriptPath: r'C:\Temp\clipforge-update.ps1',
+          workDir: r'C:\Temp');
+      expect(env['CF_UPD_MODE'], 'update');
+      expect(env['CF_UPD_REMOVE_LIST'], '', reason: 'never left over from an earlier run');
+      expect(env['CF_UPD_PID'], '4321');
+      for (final name in env.keys) {
+        if (name == 'CF_UPD_SCRIPT' || name == 'CF_UPD_WORKDIR') {
+          expect(kWindowsSwapStartScript, contains('\$env:$name'));
+          continue;
+        }
+        expect(ps, contains("'$name'"), reason: '$name in the PowerShell script');
+        expect(cmd, contains('%$name'), reason: '$name in the cmd script');
       }
+      // The script is started outside the app's process tree, hidden.
+      expect(kWindowsSwapStartScript, contains('Start-Process'));
+      expect(kWindowsSwapStartScript, contains("'-ExecutionPolicy', 'Bypass'"));
+      expect(kWindowsSwapStartScript, contains('-WindowStyle Hidden'));
     });
 
-    test('it is plain ASCII, rolls back, and names only the three folders', () {
-      expect(ps.codeUnits.every((c) => c < 128), isTrue,
-          reason: 'Windows PowerShell 5.1 reads files without a BOM as ANSI');
-      expect(ps, contains('update-old'));
+    test('both are plain ASCII, replace the contents with robocopy /MIR, '
+        'never rename the app folder, roll back, and log', () {
+      for (final (name, text) in [('ps1', ps), ('cmd', cmd)]) {
+        expect(text.codeUnits.every((c) => c < 128), isTrue,
+            reason: '$name: Windows reads a file without a BOM in the system code page');
+        expect(text, contains('/MIR'), reason: name);
+        expect(text, contains('/R:2'), reason: name);
+        expect(text, contains('/W:1'), reason: name);
+        expect(text, contains('update-old'), reason: name);
+        expect(text, contains('.clipforge-update-marker'), reason: name);
+        expect(text, contains(r'data\clipforge-version.json'), reason: name);
+        expect(text, contains('started token='), reason: '$name: what the app waits for');
+        expect(text.toLowerCase(), isNot(contains(r'documents\clipforge\')),
+            reason: 'user data is mentioned only in the comment as "never touched"');
+        // robocopy: below 8 is success.
+        expect(RegExp(r'(-ge 8|GEQ 8)').hasMatch(text), isTrue, reason: name);
+        expect(RegExp(r'(-lt 8|LSS 8)').hasMatch(text), isTrue, reason: name);
+      }
+      expect(ps, isNot(contains('Directory]::Move')),
+          reason: 'the folder itself is never renamed (1.14.1)');
+      expect(cmd, isNot(matches(RegExp(r'^\s*(ren|move)\s', multiLine: true))));
       expect(ps, contains("Write-Result 'updated'"));
       expect(ps, contains("Write-Result 'broken'"));
-      expect('Move-Folder \$OldDir \$InstallDir'.allMatches(ps).length, 1, reason: 'the roll-back');
-      expect(ps.toLowerCase(), isNot(contains('documents\\clipforge\\')),
-          reason: 'user data is mentioned only in the comment as "never touched"');
-      // The same steps and exit codes as the sh script.
+      expect(ps, contains("Mirror \$OldDir \$InstallDir 'putting the old version back'"));
+      expect(cmd, contains('"%ROBO%" "%OLD%" "%CF_UPD_INSTALL%"'));
+      // The same exit codes in all three scripts.
       final sh = File(_script).readAsStringSync();
-      for (final code in ['exit 2', 'exit 3', 'exit 4', 'exit 5', 'exit 0']) {
-        expect(ps, contains(code));
-        expect(sh, contains(code));
+      for (final code in [2, 3, 4, 5, 6, 0]) {
+        expect(ps, contains('return $code'), reason: 'ps1 $code');
+        expect(cmd, contains('exit $code'), reason: 'cmd $code');
+        expect(sh, contains('exit $code'), reason: 'sh $code');
       }
     });
 
-    test('macOS: the script is run by /bin/sh with the same five values', () {
-      final cmd = swapCommand(
+    test('the cmd script has no ( ) blocks and no delayed expansion outside '
+        'its log helper, and its remarks hold no special characters', () {
+      final lines = const LineSplitter().convert(cmd);
+      for (final line in lines) {
+        if (line.startsWith('rem')) {
+          expect(RegExp(r'[<>|&%^]').hasMatch(line), isFalse, reason: line);
+        }
+        expect(line.trimRight().endsWith('('), isFalse, reason: 'a block: $line');
+      }
+      expect('EnableDelayedExpansion'.allMatches(cmd).length, 1);
+      // Every label that is jumped to exists.
+      final labels = {
+        for (final l in lines)
+          if (l.startsWith(':')) l.substring(1).trim().toLowerCase(),
+      };
+      for (final m in RegExp(r'(?:goto|call) :?([A-Za-z]\w*)').allMatches(cmd)) {
+        final name = m[1]!.toLowerCase();
+        if (name == 'eof') continue;
+        expect(labels, contains(name), reason: 'label $name');
+      }
+    });
+  });
+
+  group('which ClipForge a folder holds', () {
+    test('versions compare by version first, then by build', () {
+      final v = AppVersion.parse('1.12.0+109')!;
+      expect(v.name, '1.12.0');
+      expect(v.build, 109);
+      expect('$v', '1.12.0+109');
+      expect(AppVersion.parse('1.12.0.109')!.build, 109, reason: 'the file version form');
+      expect(AppVersion.parse('nonsense'), isNull);
+      expect(v.isOlderThan(AppVersion.parse('1.13.0+118')!), isTrue);
+      expect(AppVersion.parse('1.14.0+121')!.isOlderThan(AppVersion.parse('1.14.1+1')!), isTrue,
+          reason: 'a build made on a PC has build 1 and is still newer');
+      expect(AppVersion.parse('1.14.1+120')!.isOlderThan(AppVersion.parse('1.14.1+125')!), isTrue);
+      expect(AppVersion.parse('1.14.1')!.isOlderThan(AppVersion.parse('1.14.1+125')!), isFalse,
+          reason: 'unknown build: not proven older');
+    });
+
+    /// A pretend program with a version block like the real one.
+    List<int> exeWith(String version, {int pad = 1}) => [
+          ...List.filled(301, 0x4D),
+          for (final c in 'ProductName'.codeUnits) ...[c, 0],
+          0, 0, 0, 0,
+          for (final c in 'ClipForge'.codeUnits) ...[c, 0],
+          0, 0,
+          for (final c in 'ProductVersion'.codeUnits) ...[c, 0],
+          for (var i = 0; i < pad; i++) ...[0, 0],
+          for (final c in version.codeUnits) ...[c, 0],
+          0, 0, 9, 9, 9,
+        ];
+
+    test('the version is read from the program file itself', () {
+      expect(productVersionOfExe(exeWith('1.12.0+109')), '1.12.0+109');
+      expect(productVersionOfExe(exeWith('1.13.0+118', pad: 2)), '1.13.0+118');
+      expect(productVersionOfExe(List.filled(500, 7)), isNull);
+      expect(productVersionOfExe(const []), isNull);
+    });
+
+    test('the version file wins; no program, no version', () {
+      final dir = p.join(tmp.path, 'ClipForge');
+      Directory(p.join(dir, 'data')).createSync(recursive: true);
+      expect(readInstalledVersion(dir), isNull, reason: 'no clipforge.exe');
+      File(p.join(dir, 'clipforge.exe')).writeAsBytesSync(exeWith('1.12.0+109'));
+      expect('${readInstalledVersion(dir)}', '1.12.0+109');
+      File(versionFilePath(dir)).writeAsStringSync('{"version":"1.14.1+130"}\n');
+      expect('${readInstalledVersion(dir)}', '1.14.1+130');
+      File(versionFilePath(dir)).writeAsStringSync('not json');
+      expect(readInstalledVersion(dir), isNull, reason: 'nothing is guessed');
+      File(p.join(dir, 'clipforge.exe')).writeAsStringSync('no version in here');
+      File(versionFilePath(dir)).deleteSync();
+      expect(readInstalledVersion(dir), isNull);
+    });
+  });
+
+  group('starting the swap script', () {
+    late String work, install, fresh, result, log;
+    setUp(() {
+      work = p.join(tmp.path, 'state');
+      install = p.join(tmp.path, 'Apps', 'ClipForge.app');
+      fresh = '$install.update-new';
+      result = p.join(work, kUpdateResultFile);
+      log = p.join(work, kUpdateLogFile);
+      Directory(work).createSync(recursive: true);
+      for (final (d, v) in [(install, 'old'), (fresh, 'new')]) {
+        File(p.join(d, 'version.txt'))
+          ..createSync(recursive: true)
+          ..writeAsStringSync(v);
+      }
+    });
+
+    Future<Map<String, dynamic>> waitForResult() async {
+      for (var i = 0; i < 100 && !File(result).existsSync(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      return (jsonDecode(File(result).readAsStringSync()) as Map).cast<String, dynamic>();
+    }
+
+    test('the real sh script reports in through the log, and the app is told '
+        'it runs', () async {
+      File(result).writeAsStringSync('{"status":"failed","message":"stale"}');
+      // This test process plays the app and does not close: the script
+      // waits its (shortened) time, then leaves everything alone.
+      final started = await startSwap(
           os: 'macos',
-          scriptPath: '/tmp/s.sh',
-          installDir: '/Applications/ClipForge.app',
-          newDir: '/Applications/ClipForge.app.update-new',
-          waitPid: 77,
-          resultFile: '/tmp/r.json',
-          version: '1.13.0');
-      expect(cmd.executable, '/bin/sh');
-      expect(cmd.arguments, [
-        '/tmp/s.sh', '/Applications/ClipForge.app', //
-        '/Applications/ClipForge.app.update-new', '77', '/tmp/r.json', '1.13.0',
-      ]);
+          scriptText: File(_script).readAsStringSync().replaceFirst(
+              r'${CLIPFORGE_UPDATE_WAIT_SECONDS:-60}', '1'),
+          workDir: work,
+          installDir: install,
+          newDir: fresh,
+          resultFile: result,
+          logFile: log,
+          version: '1.14.1');
+      expect(started.confirmed, isTrue);
+      expect(started.method, 'sh');
+      final r = await waitForResult();
+      expect(r['status'], 'failed', reason: 'the stale result was removed first');
+      expect(r['message'], contains('did not close'));
+      expect(File(p.join(install, 'version.txt')).readAsStringSync(), 'old');
+      expect(File(p.join(fresh, 'version.txt')).readAsStringSync(), 'new');
+      final text = File(log).readAsStringSync();
+      expect(text, contains(' app: swap: mode=update version=1.14.1'));
+      expect(text, contains('script(sh): started token='));
+      expect(text, contains('script(sh): args: install=[$install]'));
+      expect(text, contains(' app: the script is running (started by sh)'));
+      expect(text, contains('script(sh): result: failed ClipForge did not close'));
+    });
+
+    test('a script that never reports in: not confirmed, said in the log; '
+        'the next way is tried and the first that reports wins', () async {
+      final tried = <String>[];
+      SwapLauncher silent(String name) => SwapLauncher(name, () async {
+            tried.add(name);
+            return 'pretended';
+          });
+      var started = await startSwap(
+          os: 'windows',
+          scriptText: 'echo one\necho two\n',
+          fallbackScriptText: '@echo off\nrem x\n',
+          workDir: work,
+          installDir: install,
+          newDir: fresh,
+          resultFile: result,
+          logFile: log,
+          version: '1.14.1',
+          confirmTimeout: const Duration(milliseconds: 300),
+          launchers: [silent('PowerShell'), silent('cmd')]);
+      expect(started.confirmed, isFalse);
+      expect(tried, ['PowerShell', 'cmd']);
+      var text = File(log).readAsStringSync();
+      expect(text, contains('the script did not report in within 0 s (started by PowerShell)'));
+      expect(text, contains('no script could be started: the app stays open'));
+      // The scripts were written with CRLF line ends (cmd needs them).
+      expect(File(p.join(work, kSwapScriptCmd)).readAsStringSync(), '@echo off\r\nrem x\r\n');
+      expect(File(p.join(work, kSwapScriptPs)).readAsStringSync(), 'echo one\r\necho two\r\n');
+
+      // PowerShell is blocked (it throws), cmd works.
+      tried.clear();
+      started = await startSwap(
+          os: 'windows',
+          scriptText: 'x',
+          fallbackScriptText: 'y',
+          workDir: work,
+          installDir: install,
+          newDir: fresh,
+          resultFile: result,
+          logFile: log,
+          version: '1.14.1',
+          confirmTimeout: const Duration(seconds: 2),
+          launchers: [
+            SwapLauncher('PowerShell',
+                () async => throw const ProcessException('powershell.exe', [], 'blocked')),
+            SwapLauncher('cmd', () async {
+              // What the cmd script does first: its line in the log.
+              final token = RegExp(r'token=(\S+)')
+                  .allMatches(File(log).readAsStringSync())
+                  .last[1]!;
+              File(log).writeAsStringSync(
+                  'Thu 19/11/2026 12:00:00.00 script(cmd): started token=$token mode=update\r\n',
+                  mode: FileMode.append);
+              return 'exit code 0';
+            }),
+          ]);
+      expect(started.confirmed, isTrue);
+      expect(started.method, 'cmd');
+      text = File(log).readAsStringSync();
+      expect(text, contains('start by PowerShell failed'));
+      expect(text, contains('the script is running (started by cmd)'));
+    });
+
+    test('Windows: PowerShell first, then cmd; cmd only when its script is there', () {
+      List<String> names(bool withCmd) => [
+            for (final l in swapLaunchers(
+                os: 'windows',
+                workDir: work,
+                environment: const {},
+                shArguments: const [],
+                withCmd: withCmd))
+              l.name,
+          ];
+      expect(names(true), ['PowerShell', 'cmd']);
+      expect(names(false), ['PowerShell']);
+    });
+  });
+
+  group('the swap script (sh), 1.14.1', () {
+    test('an app that does not close is left alone: nothing is renamed', () async {
+      final install = p.join(tmp.path, 'Apps', 'ClipForge.app');
+      final fresh = '$install.update-new';
+      final result = p.join(tmp.path, 'r.json');
+      final log = p.join(tmp.path, 'update-log.txt');
+      for (final (d, v) in [(install, 'old'), (fresh, 'new')]) {
+        File(p.join(d, 'version.txt'))
+          ..createSync(recursive: true)
+          ..writeAsStringSync(v);
+      }
+      final marker = p.join(tmp.path, 'started.txt');
+      final r = await Process.run('/bin/sh', [
+        _script, install, fresh, '$pid', result, '1.14.1', //
+        '/bin/sh', '-c', 'echo again > "$marker"',
+      ], environment: {
+        'CLIPFORGE_UPDATE_WAIT_SECONDS': '1',
+        'CLIPFORGE_UPDATE_LOG': log,
+        'CLIPFORGE_UPDATE_TOKEN': 'abc',
+      });
+      expect(r.exitCode, 6);
+      expect(File(p.join(install, 'version.txt')).readAsStringSync(), 'old');
+      expect(Directory(fresh).existsSync(), isTrue);
+      expect(File(marker).existsSync(), isFalse, reason: 'the app is not started a second time');
+      expect(File(result).readAsStringSync(), contains('did not close'));
+      expect(File(log).readAsStringSync(), contains('started token=abc pid='));
     });
   });
 }

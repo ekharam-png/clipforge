@@ -99,6 +99,9 @@ header { padding: 56px 0 28px; }
   box-shadow: inset 0 -18px 30px rgba(0,0,0,.18);
   transition: transform .15s ease, filter .15s ease;
 }
+.lane.two { display: grid; grid-template-columns: 2fr 1fr; gap: 4px; }
+.lane.two .clip { width: auto; margin-left: 0; }
+.clip.alt { opacity: .86; }
 .clip:hover { filter: brightness(1.12); }
 .clip:active { transform: translateY(1px); }
 .clip:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
@@ -141,6 +144,7 @@ footer p { margin: 0 0 6px; max-width: 46em; }
   .row { grid-template-columns: 1fr; gap: 4px; }
   .ruler { padding-left: 0; }
   .win, .mac, .and { width: 100%; margin-left: 0; }
+  .lane.two { grid-template-columns: 1fr; }
   .playhead { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .clip { transition: none; } }
@@ -157,9 +161,12 @@ footer p { margin: 0 0 6px; max-width: 46em; }
     <span class="playhead" aria-hidden="true"></span>
     <div class="row" data-os="windows">
       <span class="label">Windows</span>
-      <div class="lane"><a class="clip win" href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-windows.zip">
-        <span class="top"><span>ClipForge-windows.zip</span><span>Windows 10 and 11</span></span>
-        <span class="act">Download for Windows</span></a></div>
+      <div class="lane two"><a class="clip win" href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-Setup.exe">
+        <span class="top"><span>ClipForge-Setup.exe</span><span>Windows 10 and 11</span></span>
+        <span class="act">Installer (recommended)</span></a>
+        <a class="clip win alt" href="https://github.com/ekharam-png/clipforge/releases/latest/download/ClipForge-windows.zip">
+        <span class="top"><span>ClipForge-windows.zip</span><span>no install</span></span>
+        <span class="act">Zip</span></a></div>
     </div>
     <div class="row" data-os="mac">
       <span class="label">Mac</span>
@@ -190,10 +197,9 @@ footer p { margin: 0 0 6px; max-width: 46em; }
       <div style="--c: var(--clip-win)">
         <h3>Windows</h3>
         <ol>
-          <li>Right-click the downloaded zip and choose Extract All.</li>
-          <li>Inside is a folder called <b>ClipForge</b>. Move it to where you want to keep it (for example Documents) and keep that name, with no version number: ClipForge updates itself inside this folder.</li>
-          <li>Open the ClipForge folder and double-click <b>clipforge.exe</b>.</li>
-          <li>If you see "Windows protected your PC", click More info, then Run anyway.</li>
+          <li><b>Installer (recommended):</b> open the downloaded <b>ClipForge-Setup.exe</b>. If you see "Windows protected your PC", click More info, then Run anyway. It needs no administrator password and puts ClipForge in the Start menu.</li>
+          <li><b>Or the zip:</b> right-click it and choose Extract All. Inside is a folder called <b>ClipForge</b>: move it to where you want to keep it (for example Documents), then open it and double-click <b>clipforge.exe</b>.</li>
+          <li>With the zip, keep the folder named <b>ClipForge</b>, with no version number: ClipForge updates itself inside this folder. Do not start ClipForge from a folder whose name ends in <b>.update-new</b>.</li>
         </ol>
       </div>
       <div style="--c: var(--clip-mac)">

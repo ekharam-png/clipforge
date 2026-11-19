@@ -106,3 +106,12 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+# The version as a small file in the app folder (1.14.1),
+# data/clipforge-version.json = {"version":"1.14.1+123"}: the update
+# scripts compare it after replacing the files, and the app reads it to
+# tell which ClipForge a folder holds (lib/core/update/update_install.dart).
+install(CODE "
+  file(WRITE \"${INSTALL_BUNDLE_DATA_DIR}/clipforge-version.json\"
+    \"{\\\"version\\\":\\\"${FLUTTER_VERSION}\\\"}\\n\")
+  " COMPONENT Runtime)

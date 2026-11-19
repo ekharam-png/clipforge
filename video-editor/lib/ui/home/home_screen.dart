@@ -87,6 +87,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           if (mounted) openHelp(context, articleId: kWhatsNewId);
         });
       }
+      // Windows, once per version: the app runs from a folder an earlier
+      // update unpacked into ("….update-new") - offer to tidy up.
+      if (mounted) await offerTidyUp(context, updates);
     } catch (_) {
       // Updates are never in the way of using the app.
     }

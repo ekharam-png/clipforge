@@ -186,7 +186,8 @@ a test build that is not released yet:
 | --- | --- |
 | `ClipForge-<version>-build<n>-android.apk` | Android phones and tablets |
 | `ClipForge-<version>-build<n>-android-old-32bit-phones.apk` | Only if the first one refuses to install (very old phones) |
-| `ClipForge-<version>-build<n>-windows.zip` | Windows 10 / 11 (64-bit) |
+| `ClipForge-<version>-build<n>-windows-setup.exe` | Windows 10 / 11 (64-bit): the installer (recommended; 1.14.1) |
+| `ClipForge-<version>-build<n>-windows.zip` | Windows 10 / 11 (64-bit): the same app as a zip, no install |
 | `ClipForge-<version>-build<n>-macos.zip` | Mac (macOS 12 or newer) |
 
 For example `ClipForge-1.4.0-build21-macos.zip`: version 1.4.0, made by run 21.
@@ -210,12 +211,20 @@ fingerprint are exactly the ones `latest.json` names.
 
 | System | What Update does |
 | --- | --- |
-| Windows | Downloads `ClipForge-windows.zip`, checks it, unpacks it next to the ClipForge folder, then closes the app; a small script swaps the two folders and starts the new version. If a step fails the old folder is put back. A ClipForge folder that cannot be changed (for example inside Program Files) opens the download page instead. |
+| Windows | Downloads `ClipForge-windows.zip`, checks it, unpacks it next to the ClipForge folder (a folder ending in `.update-new`), starts a small script and closes once the script has reported in. The script replaces the files inside the ClipForge folder (1.14.1: the folder itself is never renamed, so an open Explorer window or terminal is not in the way), checks the result, starts the new version and removes the unpacked folder. A safety copy (`.update-old`) is put back if a step fails. A ClipForge folder that cannot be changed (for example inside Program Files) opens the download page instead. The same works for an install made with `ClipForge-Setup.exe`. |
 | Mac | The same with `ClipForge.app`. When the app's place cannot be changed (it was opened straight from the download, or no permission), the new app is unpacked into Downloads and shown in Finder: drag it into Applications. |
 | Android | Downloads the APK, checks it and hands it to Android's installer, which asks you to confirm (the first time also to allow installs from ClipForge). |
 | Linux (development builds) | Opens the download page. |
 
 Projects and media (`Documents/ClipForge`) are never touched by an update.
+
+Every step of an update on a computer is written to `update-log.txt` (Windows:
+`%APPDATA%\com.ekcut\ClipForge\update-state\`; the exact path is in the
+message when an update fails and in what **Copy version info** copies, which
+also holds the log's last 40 lines). If ClipForge runs from a folder whose
+name ends in `.update-new` (left by an update of 1.12 - 1.14 that did not
+finish), it offers to **tidy up**: it moves itself into a folder called
+`ClipForge` and removes the older ClipForge folders next to it.
 Builds made on your own computer do not check by themselves.
 
 ## Which version do I have?
@@ -260,16 +269,31 @@ file**. See "Keeping projects across updates" below.
 
 ### Windows
 
+The installer (recommended, 1.14.1):
+
+1. Download `ClipForge-Setup.exe` and open it. Windows shows a blue "Windows
+   protected your PC" box because the app is not signed: click **More
+   info**, then **Run anyway**.
+2. It installs for you only (no administrator password), into
+   `%LOCALAPPDATA%\Programs\ClipForge`, and adds ClipForge to the Start
+   menu. To remove it: Settings > Apps > ClipForge > Uninstall. Projects
+   (`Documents\ClipForge`) stay.
+
+Or the zip (nothing is installed):
+
 1. Download `ClipForge-windows.zip`, right-click it and choose **Extract All**.
 2. Inside is a folder called `ClipForge`. Move that folder to where you want
-   to keep it and leave its name as it is, without a version number: the
-   app updates itself inside this folder, so the name stays right. (A folder
-   that is already called "ClipForge-1.12.0" keeps working; it can be
-   renamed to "ClipForge" while the app is closed.)
+   to keep it and keep the folder named `ClipForge`, without a version
+   number: the app updates itself inside this folder. (A folder that is
+   already called "ClipForge-1.12.0" keeps working; it can be renamed to
+   "ClipForge" while the app is closed.)
 3. Open the `ClipForge` folder and double-click `clipforge.exe`. Keep all the
-   other files in that folder next to it.
-4. Windows shows a blue "Windows protected your PC" box because the app is not
-   signed: click **More info**, then **Run anyway**.
+   other files in that folder next to it. The zip makes no shortcuts.
+4. Windows shows the same "Windows protected your PC" box: **More info**,
+   then **Run anyway**.
+5. Do not start ClipForge from a folder whose name ends in `.update-new`:
+   that is a download waiting to be put in place. If it happened anyway,
+   ClipForge offers to tidy up.
 
 ### macOS
 
@@ -526,7 +550,10 @@ Windows.
 The Claude extension file is built by `docs/tools/build_claude_bundles.py`;
 with `--asset assets/claude` it is also copied to where the app build picks
 it up (`assets/claude/README.txt`). CI checks on Windows that the update
-script swaps and rolls back (`tool/ci/windows_swap_test.py`) and that an
+scripts replace the app's files, cope with a held folder, name a held file
+and roll back (`tool/ci/windows_swap_test.py`), builds the installer
+(`windows/installer/clipforge.iss`, Inno Setup) and installs, updates and
+uninstalls it silently, and that an
 export survives the helper's process tree being killed
 (`tool/ci/job_survives_test.py`, also run on Linux).
 

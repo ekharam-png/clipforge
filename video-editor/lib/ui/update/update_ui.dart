@@ -1,6 +1,8 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/update/tidy_up.dart';
 import '../theme.dart';
 import 'update_controller.dart';
 
@@ -109,6 +111,19 @@ void _say(BuildContext context, String message) {
   ScaffoldMessenger.maybeOf(context)
     ?..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(message)));
+}
+
+/// "Copy details": this version, the app folder and the last lines of the
+/// update log go to the clipboard, for a bug report.
+Future<void> copyUpdateDetails(BuildContext context, UpdateController c,
+    {String? problem}) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final text = await c.details(problem: problem);
+  await Clipboard.setData(ClipboardData(text: text));
+  messenger
+    ?..hideCurrentSnackBar()
+    ..showSnackBar(const SnackBar(
+        content: Text('Details copied. Paste them into your message.')));
 }
 
 /// "Check for updates" (Help menu, phones: More): asks now and says the
@@ -273,14 +288,34 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
           content = Text(c.message ?? '');
           actions.add(FilledButton(onPressed: close, child: const Text('OK')));
         } else if (stage == UpdateStage.failed) {
-          content = Text(c.message ?? 'The update did not work.');
-          actions
-            ..add(pageButton)
-            ..add(TextButton(onPressed: close, child: const Text('Close')))
-            ..add(FilledButton(
-              onPressed: c.startUpdate,
-              child: const Text('Try again'),
-            ));
+          content = Text(c.message ?? 'The update did not work.',
+              key: const ValueKey('update-failed-text'));
+          final copy = TextButton(
+            key: const ValueKey('update-copy-details'),
+            onPressed: () => copyUpdateDetails(context, c, problem: c.message),
+            child: const Text('Copy details'),
+          );
+          if (c.helperBlocked) {
+            // Trying again would end the same way: the download page is
+            // the way forward.
+            actions
+              ..add(copy)
+              ..add(TextButton(onPressed: close, child: const Text('Close')))
+              ..add(FilledButton(
+                key: const ValueKey('update-open-page'),
+                onPressed: _openPage,
+                child: const Text('Open the download page'),
+              ));
+          } else {
+            actions
+              ..add(copy)
+              ..add(pageButton)
+              ..add(TextButton(onPressed: close, child: const Text('Close')))
+              ..add(FilledButton(
+                onPressed: c.startUpdate,
+                child: const Text('Try again'),
+              ));
+          }
         } else {
           final can = _canInstall;
           content = Text(can == false
@@ -336,6 +371,21 @@ Future<void> showUpdateOutcome(BuildContext context, UpdateController c,
   final note = c.folderNote;
   final canRetry = c.pending != null;
   c.clearLastResult();
+  if (result.updated && result.wasMove) {
+    final dir = c.platform.installDir;
+    final name = dir?.split(RegExp(r'[\\/]')).last;
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        key: const ValueKey('tidy-done-line'),
+        duration: const Duration(seconds: 10),
+        persist: false,
+        content: Text('Tidied up: ClipForge now runs from the folder '
+            '${name == null ? 'you chose' : '"$name"'}. A shortcut you made '
+            'to the old folder has to be made again.'),
+      ));
+    return;
+  }
   if (result.updated) {
     ScaffoldMessenger.maybeOf(context)
       ?..hideCurrentSnackBar()
@@ -353,6 +403,38 @@ Future<void> showUpdateOutcome(BuildContext context, UpdateController c,
     return;
   }
   final broken = result.status == 'broken';
+  final reason = result.message.isEmpty
+      ? (result.wasMove
+          ? 'ClipForge could not be moved'
+          : 'The new version could not be put in place')
+      : result.message.replaceFirst(RegExp(r'\.$'), '');
+  final logPath = await c.logPath();
+  if (!context.mounted) return;
+  if (result.wasMove) {
+    await showDialog<void>(
+      context: context,
+      builder: (d) => AlertDialog(
+        key: const ValueKey('tidy-failed-dialog'),
+        title: const Text('The tidy-up was not finished'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Text('$reason. '
+              '${broken ? '' : 'ClipForge works as before, from the folder it was in. '}'
+              'Nothing of yours was removed.'
+              '${logPath == null ? '' : '\n\nThe steps are written down in:\n$logPath'}'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => copyUpdateDetails(context, c, problem: reason),
+            child: const Text('Copy details'),
+          ),
+          FilledButton(
+              onPressed: () => Navigator.of(d).pop(), child: const Text('OK')),
+        ],
+      ),
+    );
+    return;
+  }
   await showDialog<void>(
     context: context,
     builder: (d) => AlertDialog(
@@ -360,12 +442,21 @@ Future<void> showUpdateOutcome(BuildContext context, UpdateController c,
       title: const Text('The update was not installed'),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
-        child: Text(
-            '${result.message.isEmpty ? 'The new version could not be put in place' : result.message.replaceFirst(RegExp(r'\.$'), '')}. '
-            '${broken ? '' : 'ClipForge is unchanged and works as before. '}'
-            '${canRetry ? 'The download is still here: Try again closes ClipForge and swaps the versions once more. Close other windows that show the ClipForge folder first.' : 'You can get the new version from the download page.'}'),
+        child: SingleChildScrollView(
+          child: Text(
+              'The update could not be finished: $reason. '
+              '${broken ? '' : 'ClipForge is unchanged and works as before. '}'
+              '${canRetry ? 'The download is still here: Try again closes ClipForge and puts the new version in place once more.' : 'You can get the new version from the download page.'}'
+              '${logPath == null ? '' : '\n\nThe steps are written down in:\n$logPath'}'),
+        ),
       ),
+      actionsOverflowButtonSpacing: 4,
       actions: [
+        TextButton(
+          key: const ValueKey('update-failed-copy'),
+          onPressed: () => copyUpdateDetails(context, c, problem: reason),
+          child: const Text('Copy details'),
+        ),
         TextButton(
           onPressed: () async {
             Navigator.of(d).pop();
@@ -396,4 +487,177 @@ Future<void> showUpdateOutcome(BuildContext context, UpdateController c,
       ],
     ),
   );
+}
+
+
+/// Asks once per version, on Windows, when the app runs from a folder the
+/// updater unpacked a download into ("ClipForge-1.12.0.update-new"):
+/// "Tidy up?". See lib/core/update/tidy_up.dart for what is proven before
+/// anything is offered for removal. Returns true when the app is closing
+/// to do it.
+Future<bool> offerTidyUp(BuildContext context, UpdateController c,
+    {bool evenIfDeclined = false}) async {
+  final plan = await c.tidyPlan(evenIfDeclined: evenIfDeclined);
+  if (plan == null || !context.mounted) return false;
+  final choice = await showDialog<TidyChoice>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _TidyDialog(plan: plan),
+  );
+  if (choice == null) {
+    await c.declineTidyUp();
+    return false;
+  }
+  final problem = await c.tidyUp(plan, choice);
+  if (problem == null) return true;
+  if (context.mounted) {
+    await showDialog<void>(
+      context: context,
+      builder: (d) => AlertDialog(
+        key: const ValueKey('tidy-not-started'),
+        title: const Text('The tidy-up was not started'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Text(problem),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => copyUpdateDetails(context, c, problem: problem),
+            child: const Text('Copy details'),
+          ),
+          FilledButton(
+              onPressed: () => Navigator.of(d).pop(), child: const Text('OK')),
+        ],
+      ),
+    );
+  }
+  return false;
+}
+
+class _TidyDialog extends StatefulWidget {
+  const _TidyDialog({required this.plan});
+  final TidyPlan plan;
+
+  @override
+  State<_TidyDialog> createState() => _TidyDialogState();
+}
+
+class _TidyDialogState extends State<_TidyDialog> {
+  late TidyTarget? _target = widget.plan.defaultTarget;
+
+  /// Paths of older folders the user unticked.
+  final Set<String> _keep = {};
+
+  String _targetLabel(TidyTarget t) => switch (t.state) {
+        TidyTargetState.free => 'A new folder called "${t.name}"',
+        TidyTargetState.olderClipForge =>
+          'The folder "${t.name}" (it holds ClipForge ${t.version!.name}, '
+              'which is replaced by this version)',
+        TidyTargetState.taken =>
+          '"${t.name}": there is already something with this name that is '
+              'not an older ClipForge, so it is left alone',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final plan = widget.plan;
+    final target = _target;
+    final older = target == null ? const <OlderInstall>[] : plan.removable(target);
+    const dim = TextStyle(color: AppColors.textDim, fontSize: 13);
+    return AlertDialog(
+      key: const ValueKey('tidy-dialog'),
+      title: const Text('Tidy up the ClipForge folder?'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('ClipForge is running from a download folder '
+                  '("${plan.runningName}"). Tidy up?'),
+              const SizedBox(height: 10),
+              Text(
+                  target == null
+                      ? 'ClipForge cannot do it here: the names it would use '
+                          'are taken by something else. You can do it by '
+                          'hand: close ClipForge and rename this folder to '
+                          '"ClipForge".'
+                      : 'An earlier update left this version in the folder '
+                          'it was downloaded to. If you say yes, ClipForge '
+                          'closes, moves this version (${plan.current.name}) '
+                          'to the folder below, and opens again from there. '
+                          'Your projects and videos (Documents > ClipForge) '
+                          'are not touched.',
+                  style: dim),
+              const SizedBox(height: 12),
+              const Text('Where ClipForge should live:'),
+              RadioGroup<String>(
+                groupValue: target?.path,
+                onChanged: (path) => setState(() => _target =
+                    plan.targets.firstWhere((t) => t.path == path)),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final t in plan.targets)
+                      RadioListTile<String>(
+                        key: ValueKey('tidy-target-${t.name}'),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        value: t.path,
+                        enabled: t.usable,
+                        title: Text(_targetLabel(t)),
+                      ),
+                  ],
+                ),
+              ),
+              if (older.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Text('Older ClipForge folders next to it, to remove:'),
+                for (final o in older)
+                  CheckboxListTile(
+                    key: ValueKey('tidy-remove-${o.name}'),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: !_keep.contains(o.path),
+                    onChanged: (on) => setState(() =>
+                        on == true ? _keep.remove(o.path) : _keep.add(o.path)),
+                    title: Text('"${o.name}" (ClipForge ${o.version.name})'),
+                  ),
+                const Text(
+                    'Only folders that hold an older ClipForge are listed. '
+                    'Untick one to keep it.',
+                    style: dim),
+              ],
+              const SizedBox(height: 10),
+              const Text(
+                  'There are no desktop or Start-menu shortcuts to fix: '
+                  'unpacking the zip makes none. A shortcut you made '
+                  'yourself has to be made again.',
+                  style: dim),
+            ],
+          ),
+        ),
+      ),
+      actionsOverflowButtonSpacing: 4,
+      actions: [
+        TextButton(
+          key: const ValueKey('tidy-not-now'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Not now'),
+        ),
+        FilledButton(
+          key: const ValueKey('tidy-go'),
+          onPressed: target == null
+              ? null
+              : () => Navigator.of(context).pop(TidyChoice(target, [
+                    for (final o in older)
+                      if (!_keep.contains(o.path)) o,
+                  ])),
+          child: const Text('Tidy up and restart'),
+        ),
+      ],
+    );
+  }
 }

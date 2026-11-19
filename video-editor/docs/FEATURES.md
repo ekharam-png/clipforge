@@ -53,6 +53,17 @@ ClipForge uploads nothing and has no logins: it makes the files and the text, th
 | Make shorts from markers… | 1.14.0 | Both | One short around each marker (20 s before to 25 s after, moved outward to pauses, never into a word or caption). |
 | Claude: suggest_shorts, make_short extras, publishing notes, make_chapters, export_kit, markers | 1.14.0 | Computer | Candidate passages for Claude to judge; caption_style "short", title, snap_to_speech and warnings; notes and chapters; a kit as one background job; add / list / remove markers (70 tools). |
 
+## Updates that finish on real PCs (1.14.1)
+
+| Feature | Since | Where | What it does |
+|---|---|---|---|
+| Update by replacing the files in the folder | 1.14.1 | Windows | The script no longer renames the app folder (that never happened on real PCs). Safety copy, robocopy /MIR of the new files, a check against the version file, the safety copy mirrored back on failure. A held folder (Explorer, a terminal) does not matter; a held file is named and nothing changes. |
+| The helper must report in | 1.14.1 | Computer | The script is started outside the app's process tree; the app closes only after the script's first line is in the log. PowerShell first, a plain cmd / robocopy script as the fallback; neither starts: the app stays open and offers the download page. |
+| Update log, Copy details | 1.14.1 | Computer | update-log.txt in the state folder with the steps of the app and the scripts (kept across updates, cut at about 200 KB); "Copy details" on failure messages; Copy version info adds the app folder and the log's last 40 lines. |
+| Tidy up | 1.14.1 | Windows | When the app runs from a folder ending in ".update-new": a one-time question (per version) to move into "ClipForge" (or the original folder) and remove proven older ClipForge folders next to it, listed with versions and untickable. |
+| Windows installer | 1.14.1 | Windows | ClipForge-Setup.exe (Inno Setup): per user, no administrator rights, %LOCALAPPDATA%\Programs\ClipForge, Start-menu shortcut, uninstaller; the in-app updater works there. |
+| Version file in the app folder | 1.14.1 | Windows | data/clipforge-version.json, written by the build; the scripts compare it, the app reads it to tell which ClipForge a folder holds. |
+
 ## Connect to Claude and updates, reworked (1.14.0)
 
 | Feature | Since | Where | What it does |
@@ -263,7 +274,7 @@ From the roadmap in `docs/HANDOVER.md`; not built yet.
 
 - AI voice separation (voice and background as two levels), on the device.
 - Speech to text on phones, and a speech engine built into the app (1.11 uses a speech program installed on the computer).
-- Signed and notarized Mac app, a Windows installer; updates for the Linux development build.
+- Signed and notarized Mac app, a signed Windows installer (the 1.14.1 installer is unsigned); updates for the Linux development build.
 - Removing filler words ("um", "uh") and captions from speech (with the planned on-device transcription).
 - Transcript-based editing, then a local AI assistant (computers, experimental).
 - A separate personal "Publisher" helper that posts for the owner (on hold; see docs/HANDOVER.md). ClipForge itself will not upload or log in anywhere.

@@ -2,7 +2,11 @@
 
 Read this first in a new session. It records what was built, why, how it fits
 together, how to build and test it, and what is still open. Last updated
-19 November 2026 (1.14.0: publishing kit, publishing notes, shorts and
+19 November 2026 (1.14.1: the Windows update never finished on the owner's
+real PC - the script now replaces the folder's contents instead of
+renaming the folder, must report in before the app closes, leaves a log,
+and there is a tidy-up and an installer; see "Updates that finish on real
+PCs". Before that 1.14.0: publishing kit, publishing notes, shorts and
 markers, Connect to Claude done by the app, clearer updates; before that
 1.13.0: the Text window, sound waves and who is speaking;
 before that 1.12.0: the app updates itself, the Claude helper follows the
@@ -1523,7 +1527,9 @@ three "once".
   "Skip this version" = `updateSkipBuild`, shown again by a manual check or
   a newer build. No URL-launcher plugin was added: pages open through
   `rundll32 url.dll` / `open` / `xdg-open` / an Android intent.
-- **Windows swap**: unpack to `<install>.update-new` (Dart, in an isolate),
+- **Windows swap** (AS BUILT IN 1.12; it never worked on the owner's real
+  PC and was replaced in 1.14.1, see "Updates that finish on real PCs"):
+  unpack to `<install>.update-new` (Dart, in an isolate),
   "Restart ClipForge" starts PowerShell detached (`-ExecutionPolicy Bypass
   -WindowStyle Hidden -File …`, working folder = the app's support folder,
   never the install folder) and quits. The script waits for the app's pid
@@ -1963,7 +1969,9 @@ a real session, the kit job's worker process on Windows.
 ## Connect to Claude done by the app; clearer updates (1.14.0, 19 Nov 2026)
 
 Two pieces of feedback from the owner's first real in-app update on
-Windows (1.12.0 build 114 -> 1.13.0 build 118; **it worked end to end**,
+Windows (1.12.0 build 114 -> 1.13.0 build 118; it was believed to have
+worked end to end - WRONG, see "Updates that finish on real PCs (1.14.1)":
+the new version had been started by hand from the ".update-new" folder;
 About shows 1.13.0) and from connecting Claude.
 
 ### Updates
@@ -2075,6 +2083,179 @@ start it from the app like Blender, see if it is running").
   "args" problems, and the Settings path for installing an extension by
   hand. The page's **Details** shows exactly what was run and answered:
   ask the owner for it when a light is wrong.
+
+## Updates that finish on real PCs (1.14.1, 19 Nov 2026)
+
+### What was found on the owner's real Windows 11 PC
+The first real users of the in-app update. The 1.12.0 zip was unpacked
+into a folder named `ClipForge-1.12.0`; the app was updated in-app twice
+(1.12 -> 1.13, 1.13 -> 1.14). Download, check and unpack worked both
+times. **The swap never happened.** Product versions per folder:
+
+    ClipForge-1.12.0                         1.12.0+109
+    ClipForge-1.12.0.update-new              1.13.0+118
+    ClipForge-1.12.0.update-new.update-new   1.14.0+121
+
+Each new version stayed in `<install>.update-new`, the old folder was
+untouched, and the new version was then started BY HAND from the
+".update-new" folder (so the next update nested one deeper). The
+statement in the 1.14.0 section that the first update "worked end to
+end" was wrong: About showed 1.13.0 because the app had been started from
+the unpacked folder. No `update-result.json` or `update-pending.json` was
+found afterwards, and the app said nothing. In CI on windows-latest the
+1.14 script passed every scenario.
+
+### Root-cause candidates (NOT determined - there was no log)
+A. **The script never ran or was ended with the app.** 1.12 - 1.14
+   started `powershell.exe -File …` with Dart's
+   `ProcessStartMode.detached` and then called `exit(0)`. Possible:
+   PowerShell without a console and without standard handles ends at
+   once; a job object ends it with the app; an execution policy set by
+   group policy (it outranks `-ExecutionPolicy Bypass`); security
+   software. Fits best: no result file, no restart of the old app, and
+   1.13's start-up clean-up did not delete the unpacked folder (it would
+   have if the old app had been started again by the script).
+B. **`Directory.Move(install, install.update-old)` failed for the whole
+   retry window** because something held the folder itself: an Explorer
+   window showing it, a terminal with it as current folder, a scanner
+   reading the fresh files, a child process. The script then writes
+   "failed" and restarts the old app, which would have shown a message
+   (1.14) - the owner saw none, so B alone does not explain it, but B is
+   real on any PC (CI scenario 4 now holds the folder and the rename is
+   refused there).
+The CI test ran the script from Python with nothing holding the folder,
+so neither class could show.
+
+### What 1.14.1 does (both classes are assumed real)
+- **No rename of the app folder any more (covers B).**
+  `assets/update/clipforge-update.ps1`: wait for the app's pid (still
+  alive after 60 s: exit 6, nothing done) -> every file in the folder is
+  tried for writing (a held file: named in the result, exit 3, nothing
+  changed) -> safety copy `robocopy <install> <install>.update-old /MIR
+  /R:2 /W:1` (marker written first and again after) -> `robocopy
+  <install>.update-new <install> /MIR /IS /IT` (6 tries; exit codes
+  below 8 are success) -> check (clipforge.exe has the new size,
+  `data\clipforge-version.json` is byte-equal to the new one) -> on
+  failure the safety copy is mirrored back (exit 4; if even that fails:
+  "broken", the app is started from the safety copy, exit 5) -> result
+  "updated", start the app, remove `.update-new` (marker) and the safety
+  copy. **Decision: copy, not move**, for the safety copy: reading files
+  is almost never refused, nothing in the live folder changes until the
+  copy is complete, and a failed copy leaves nothing to undo. Cost: the
+  app's size in free disk space and a few seconds.
+  `/XF .clipforge-update-marker unins*.exe unins*.dat unins*.msg`: the
+  marker is never copied into the app folder, and the installer's
+  uninstaller (which no update contains) is never deleted by the mirror.
+  Like the old swap, a mirror removes files in the app folder that the
+  new version does not have (they are in the safety copy until the end).
+- **The script must report in (covers A as far as an app can).**
+  `startSwap` (`lib/core/update/update_install.dart`): the scripts are
+  written to the state folder (never the install folder, CRLF line ends),
+  all values go through the environment (`CF_UPD_*`, always all of them),
+  and the script is started the way 1.12 starts export workers: a
+  short-lived `powershell -Command "Start-Process powershell -File …
+  -WindowStyle Hidden"` (`kWindowsSwapStartScript`), so the script is not
+  in the app's process tree and has its own hidden console. The app then
+  waits up to 15 s for the line `started token=<token>` in the log. Not
+  there: the **cmd fallback** `clipforge-update.cmd` (same steps with
+  robocopy, no PowerShell; started as `cmd /c start /min cmd /c
+  clipforge-update.cmd` from the state folder) and another 15 s. Still
+  not there: the app does NOT close, says "could not start the small
+  helper…" with the log's path, Copy details and the download page.
+  A lock folder (`<result>.<token>.lock`) makes a late first script and
+  the fallback exclude each other (exit 7). What this cannot cover: a
+  job object that ends the script when the app exits. The log then ends
+  after "started…/args…" with no "has closed" line, and the next start
+  says "did not finish and left no answer" - that is the evidence to ask
+  for. (WMI `Win32_Process.Create` or a scheduled task would leave a
+  job; not built.)
+- **Evidence: `update-log.txt`** (`lib/core/update/update_log.dart`) in
+  the state folder (`%APPDATA%\com.ekcut\ClipForge\update-state\`,
+  macOS `~/Library/Application Support/<bundle id>/update-state/`), kept
+  across updates, cut to its newer half above 200 KB. Lines:
+  `<time> app: …` (what was asked for, how each start went, "closing
+  now", and at the next start what was found and decided) and
+  `<time> script(ps|cmd|sh): …` (started, args, each robocopy exit code,
+  the check, the result, done). Help > Copy version info adds the app's
+  folder and the last 40 lines; failure messages have **Copy details**.
+  **How to read it**: find the last `app: swap:` line. Then
+  - no `started token=` after it -> the script did not start (class A;
+    the `start by PowerShell: exit code …, said: …` line has
+    PowerShell's own words);
+  - `started` but no `has closed` -> the script was ended with the app,
+    or the app never closed;
+  - `in use, waiting: <file>` / `still in use` -> a locked file (named);
+  - `robocopy (…) exit code N` with N >= 8 -> the copy failed, the
+    lines after it are robocopy's own;
+  - `result: updated` and `done` -> it worked; a `could not remove` line
+    names a leftover folder.
+- **Tidy up** (`lib/core/update/tidy_up.dart`, `offerTidyUp` in
+  `lib/ui/update/update_ui.dart`, called from the project list after the
+  update outcome): Windows, the app's folder name ends in ".update-new"
+  (any number of times). One question per version (`tidyUpDeclined` in
+  settings.json holds "version+build"). Target: "ClipForge" next to it
+  (default) or the original name without the endings; a target that
+  exists is used only when it is PROVEN to hold an older ClipForge (then
+  it is brought up to date), otherwise it is shown as taken. Older
+  folders offered for removal: name is `<base>` or `<base>.update-new…`
+  AND it holds clipforge.exe with a lower version
+  (`readInstalledVersion`: the version file, else "ProductVersion" read
+  from the exe's bytes, e.g. "1.12.0+109"). Listed with versions,
+  untickable. The move is the same script with `-Mode move`
+  (`CF_UPD_MODE=move`): `<install>` = the target (may not exist),
+  `<new>` = the running folder, removed afterwards without needing a
+  marker, plus the remove list (the script itself re-checks: next to the
+  target, holds the program). On failure the app is restarted from where
+  it was. Shortcuts: a zip install has none, nothing to fix (said in the
+  dialog). The owner gets there like this: 1.14.0 downloads 1.14.1 into
+  a third ".update-new" folder, its old script fails as before, the
+  owner starts 1.14.1 from that folder by hand once - or simply runs
+  ClipForge-Setup.exe.
+- **Installer** `windows/installer/clipforge.iss` (Inno Setup 6):
+  per user (`PrivilegesRequired=lowest`), `{localappdata}\Programs\
+  ClipForge`, Start-menu shortcut, optional desktop icon, uninstaller.
+  Built by the Windows job from `dist\ClipForge` (the zip's folder),
+  smoke-tested (silent install into a temp folder with a space, files +
+  version file + shortcut, the PowerShell update script run against the
+  installed folder, silent uninstall), published as
+  `ClipForge-Setup.exe`; latest.json still names only the zip, which is
+  what the in-app updater uses in an installed copy too. Unsigned:
+  SmartScreen shows the same "Windows protected your PC" box. The
+  version in Settings > Apps stays the installed one after in-app
+  updates (not corrected). The uninstaller removes only named things
+  (`data`, clipforge.exe, *.dll, the two documents, the marker), never
+  the whole folder.
+- **Version file**: `windows/CMakeLists.txt` (and linux, to test the
+  CMake lines here) writes `data/clipforge-version.json`
+  (`{"version":"1.14.1+123"}`) at install time; CI checks it.
+- **macOS** (`clipforge-update.sh`): reviewed. `mv` of a bundle works
+  whatever is open in it, so class B does not exist there; kept as a
+  rename. Added: the log and the "started" line (the app waits for it
+  like on Windows), and an app that is still running after the wait is
+  left alone (exit 6) instead of being swapped under its feet.
+- Tests: `test/core/update_log_test.dart`, `tidy_up_test.dart`,
+  `update_install_test.dart` (script consistency, version reading,
+  `startSwap` with the real sh script and with stand-in launchers),
+  `test/ui/update_1141_test.dart` (tidy-up dialog on real temp folders,
+  Not now, helper not started, Copy details, Copy version info),
+  `update_controller_test.dart`. Widget tests never start a script
+  (`swapStarterProvider`, `Fakes.swaps`).
+  `tool/ci/windows_swap_test.py`: 13 PowerShell scenarios (4 = folder
+  held by a handle and by a process whose current folder it is: the
+  update must SUCCEED; 5 = a held file: named, nothing changed, and with
+  `-SkipLockCheck` the roll-back; 11 = tidy-up; 13 = started by the
+  app's launcher line and surviving `taskkill /T` of the "app") and 6
+  cmd scenarios.
+- **Still unknown / not verified**: which class it was on the owner's
+  PC; everything in the new .ps1 / .cmd / .iss / workflow steps has
+  never run (no Windows here: no PowerShell, cmd, robocopy or Inno
+  Setup) - the next Windows job is their first run, expect to fix
+  details; robocopy's rule that `/XF` files are also not purged from the
+  target is relied on (CI scenarios 1 and 14a check it); whether Inno
+  Setup is on the runner or installs from Chocolatey; SmartScreen's
+  reaction to the unsigned installer; `chcp 65001` + `for /f` on a
+  remove list with non-ASCII paths in the cmd script (CI uses ASCII
+  there); the 15 s wait on a slow PC with a scanner.
 
 ## One-click Claude install, the skill, test documents (17 Nov 2026, no app change)
 
@@ -2409,7 +2590,7 @@ tester, and must say exactly which build they ran).
    `ClipForge-<version>-claude-skill.zip`; the owner's guide is
    `docs/claude-setup.html`.
 
-History so far: 1.14 publishing kit (destinations, export several, publishing notes, chapters, share / upload pages), shorts in the app, good-moment markers, suggest_shorts / export_kit for Claude, Connect to Claude buttons, update leftovers and apply-at-start; 1.13 Text window, sound waves, who is speaking; 1.12 self-update (banner, Windows / Mac swap, Android installer), Claude helper installed by the app + hand-over, Connect to Claude page, get_guide, self_test, Windows jobs survive Claude Code, old -> new answers, media table; 1.11 speech to text on computers (transcribe, captions from speech, gentle filler removal with put back, Transcript column, shorts for Claude, right-to-left text), unique project names, app lock fix; 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
+History so far: 1.14.1 Windows update by replacing the folder's contents (the rename never happened on a real PC), helper must report in, cmd fallback, update-log.txt, tidy-up, Inno Setup installer; 1.14 publishing kit (destinations, export several, publishing notes, chapters, share / upload pages), shorts in the app, good-moment markers, suggest_shorts / export_kit for Claude, Connect to Claude buttons, update leftovers and apply-at-start; 1.13 Text window, sound waves, who is speaking; 1.12 self-update (banner, Windows / Mac swap, Android installer), Claude helper installed by the app + hand-over, Connect to Claude page, get_guide, self_test, Windows jobs survive Claude Code, old -> new answers, media table; 1.11 speech to text on computers (transcribe, captions from speech, gentle filler removal with put back, Transcript column, shorts for Claude, right-to-left text), unique project names, app lock fix; 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
 Claude control; 1.3 Voice focus, quit crash fix, drag and drop, graphics
 card; 1.4 help and tour, Windows menu bar, instant sound, History, long
 videos, version numbers.
@@ -2443,7 +2624,8 @@ Not verified:
 - Speech to text on phones, a speech engine built into the app (1.11 uses a
   program installed on the computer). (Transcripts inside project bundles
   and previewing a filler cut: built in 1.12.)
-- Signed / notarized builds and an installer; a signature on latest.json
+- Signed / notarized builds (the Windows installer of 1.14.1 is
+  unsigned); a signature on latest.json
   (today: https + SHA-256 from the same release page); update for the
   Linux build; MCP prompts.
 - Searchable music library — built in 1.8 (Openverse); Jamendo direct needs a client_id.
@@ -2481,7 +2663,7 @@ building** until they report results. Read the checklist marks first.
 export PATH=/opt/sdk/flutter/bin:$PATH ANDROID_HOME=/opt/sdk/android
 cd video-editor
 flutter analyze
-flutter test                                   # all tests (1796)
+flutter test                                   # all tests (1827)
 flutter build apk --release --split-per-abi --target-platform android-arm64
 dart run bin/build_mcp.dart -o build/clipforge-mcp
 # real app on Linux:

@@ -4,6 +4,19 @@ Newest first. The version you have is in Help > About ClipForge (and at the
 bottom of the project list). This file is also the "What's new" page in the
 app's Help.
 
+## 1.14.1 – 19 November 2026
+
+Updates on Windows did not finish on real PCs: the new version stayed in a folder ending in ".update-new" next to the old one. This version fixes that.
+
+- Updates on Windows work differently now. ClipForge no longer renames its folder. After it has closed, the files inside the folder are replaced (with a safety copy that is put back if anything goes wrong). An Explorer window or a terminal that is open in the ClipForge folder is no longer in the way.
+  - If a file of ClipForge is held by another program, the update says which file, changes nothing, and offers **Try again**.
+  - ClipForge only closes once the small helper that does the work has reported that it runs. If this PC does not let it run (PowerShell blocked, for example), a second, simpler helper is tried. If neither starts, ClipForge stays open, says so plainly and offers the download page.
+- **Tidy up** (Windows): if ClipForge is running from a folder whose name ends in ".update-new" (left by an earlier update), it asks once: "ClipForge is running from a download folder. Tidy up?" After closing, it moves itself into a folder called "ClipForge" next to it (or into the original folder, your choice), removes the older ClipForge folders you leave ticked, and opens again from there. Only folders that are proven to hold an older ClipForge are listed. **Not now** is remembered for this version. A zip install has no desktop or Start-menu shortcuts, so there are none to fix; a shortcut you made yourself has to be made again.
+- An installer for Windows: `ClipForge-Setup.exe` on the download page (recommended). It needs no administrator password, installs for you only, adds ClipForge to the Start menu and comes with an uninstaller. Updates from inside the app work the same there. The zip is still available.
+- An update log: every step of an update is written to a plain text file, update-log.txt. When an update fails, the message has **Copy details**; **Copy version info** (Help) now adds the app's folder and the last 40 lines of that log. Send these when you report a problem.
+- If you use the zip: keep the folder named "ClipForge", and do not start ClipForge from a folder whose name ends in ".update-new".
+- Mac: the update helper now also writes to the update log, and leaves ClipForge alone if it has not closed.
+
 ## 1.14.0 – 19 November 2026
 
 - **Where is it going?** in the Export window: choose YouTube, Shorts / Reels / TikTok, Instagram post, WhatsApp / Telegram or Podcast audio and ClipForge picks the right shape, size and kind of file. Custom keeps the controls you know. ClipForge still uploads nothing and has no logins: it makes the files, you post them.

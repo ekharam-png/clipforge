@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:clipforge/core/update/update_download.dart';
 import 'package:clipforge/core/update/update_info.dart';
+import 'package:clipforge/core/update/update_install.dart';
 import 'package:clipforge/ui/claude/claude_helper.dart';
 import 'package:clipforge/ui/update/update_controller.dart';
 import 'package:clipforge/core/storage/project_lock.dart';
@@ -501,6 +503,13 @@ class Fakes {
   /// The build the app says it is (About, version line).
   BuildInfo buildInfo = BuildInfo.current;
 
+  /// The swaps (updates and tidy-ups) the app asked for; no script is
+  /// ever started by a widget test.
+  final List<({String installDir, String newDir, String mode, List<String> remove})> swaps = [];
+
+  /// Whether the pretend script "reports in".
+  bool swapConfirmed = true;
+
   /// The device "Copy version info" reports.
   DeviceDetails device = const DeviceDetails(system: 'TestOS 1.0, test_x64');
 
@@ -583,6 +592,30 @@ class Fakes {
           buildInfoProvider.overrideWithValue(buildInfo),
           deviceDetailsProvider.overrideWithValue(() async => device),
           updatePlatformProvider.overrideWithValue(updatePlatform),
+          swapStarterProvider.overrideWithValue(({
+            required String os,
+            required String scriptText,
+            required String workDir,
+            required String installDir,
+            required String newDir,
+            required String resultFile,
+            required String logFile,
+            required String version,
+            String exeName = 'clipforge.exe',
+            String? fallbackScriptText,
+            String mode = 'update',
+            String removeListFile = '',
+          }) async {
+            swaps.add((
+              installDir: installDir,
+              newDir: newDir,
+              mode: mode,
+              remove: removeListFile.isEmpty || !File(removeListFile).existsSync()
+                  ? const <String>[]
+                  : const LineSplitter().convert(File(removeListFile).readAsStringSync()),
+            ));
+            return SwapStart(confirmed: swapConfirmed, method: 'test', logFile: logFile);
+          }),
           updateFetcherProvider.overrideWithValue(() async {
             updateChecks++;
             final info = latest;
@@ -667,6 +700,10 @@ class FakeUpdatePlatform implements UpdatePlatform {
   Future<String> stateDir() async => '$dir/state';
   @override
   Future<String> swapScript() async => '#!/bin/sh\nexit 0\n';
+  @override
+  Future<String?> swapFallbackScript() async => null;
+  @override
+  String exeName = 'clipforge.exe';
   @override
   Future<void> installApk(String path) async => installed.add(path);
   @override
