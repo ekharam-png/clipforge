@@ -445,7 +445,14 @@ class TranscriptionService {
           wavPath: wav,
           audioTrack: audioTrack,
           workDir: runDir.path,
-          language: language,
+          // An English-only model cannot find out the language: with
+          // "Automatic" whisper is told English (1.17; FFmpeg's whisper
+          // filter otherwise fails with "model is not multilingual").
+          language: language == 'auto' &&
+                  plan.model != null &&
+                  plan.model!.model.englishOnly
+              ? 'en'
+              : language,
           durationMs: durationMs,
           modelPath: modelPath,
           modelName: modelName,

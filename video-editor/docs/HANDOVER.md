@@ -6,7 +6,10 @@ together, how to build and test it, and what is still open. Last updated
 row, quiet ranges, "Only when speaking", I / O now mark a part, and the
 sound pictures moved off the app's own isolate after a stall on a real
 Windows PC; see "Select a part, quiet ranges, only when speaking; the
-Windows stall (1.17.0)". Before that 1.16.0: Send feedback from inside the app, ONE source
+Windows stall (1.17.0)" - and, after a second real Windows test, its
+subsection "Second pass, same version": the import stall audit of the
+FFmpegKit path, perf-log.txt, shorts from markers, the model file, the
+app-level shortcuts and captions on Put back. Before that 1.16.0: Send feedback from inside the app, ONE source
 for the outside addresses - `tool/ci/links.json`, which also travels in
 latest.json so installed apps follow a move of the site - the website in
 `web/`, the old Pages page as a signpost, and `docs/RENAMING.md`; see
@@ -109,7 +112,12 @@ what must not change.
   `lib/core/feedback/feedback.dart` (payload, the one request, limits),
   `lib/ui/feedback/feedback_screen.dart`, `tool/ci/links.json` +
   `links.py`, `docs/RENAMING.md`.
-- `test/core`, `test/media`, `test/ui`, `test/mcp` — 2001 tests (1.17.0; 1931 at 1.16.0, 1888 at 1.15.0, 1827 at 1.14.1, 1796 at 1.14.0, 1690 at 1.13.0, 1611 at 1.12.0, 1516 at 1.11.0).
+- 1.17, second pass: `lib/core/perf_log.dart` (the performance log, the
+  gap timer, the watchdog isolate that writes `perf-log.txt`),
+  `lib/media/ffmpeg_lane.dart` (the order of FFmpeg runs inside the app,
+  `Throttle`), `lib/media/kit_runner.dart` (how FFmpegKit is run: no log
+  messages, quiet arguments, the plugin behind `KitPlatform`).
+- `test/core`, `test/media`, `test/ui`, `test/mcp` — 2048 tests (1.17.0 with its second pass, 2001 before it; 1931 at 1.16.0, 1888 at 1.15.0, 1827 at 1.14.1, 1796 at 1.14.0, 1690 at 1.13.0, 1611 at 1.12.0, 1516 at 1.11.0).
   `integration_test/real_app_test.dart` — drives the real app on Linux.
 
 ## What was built, and why
@@ -2468,7 +2476,8 @@ and measuring, and what was changed:
   inside the app's process; (b) the same on the platform thread through
   many small plugin calls. Changed: the peaks decode runs with
   `-threads 1 -filter_threads 1`; one-shot FFmpegKit runs (thumbnails,
-  strips, frames) are a queue of one (`_oneShot`); for a project with a
+  strips, frames) are a queue of one (`_oneShot`; replaced by the lane
+  of the second pass, end of this section); for a project with a
   file of 10 minutes or more the pictures start 1.5 s after opening, one
   file at a time, and NO file is started while the video plays
   (`SoundPictures.playing`); every run is cancellable
@@ -2546,6 +2555,252 @@ lower).
   (the tests use tones); FFmpeg 8.1 for `asetnsamples` + `volume` with
   `eval=frame` (same spelling since FFmpeg 2, measured on 6.1 only);
   `-threads 1` before `-i` on FFmpegKit.
+
+### Second pass, same version: the import stall, shorts, model file, shortcuts, Put back
+
+A second real Windows test of 1.15.0 (build 130, installed with the
+installer, FFmpegKit engine, Windows 11 laptop with an NVIDIA card) gave
+new evidence; 1.17.0 was built but not published, so this went into it.
+
+**The freeze.** Besides the 23-minute project: IMPORTING one 25:39 video
+(1280 x 720, 25 fps, about 250 MB) into a project with a short clip
+stalled - "Saving…" and "Drawing sound…" on screen, the timeline showed
+26:07 (so the probe had answered and the clip was in), the window did not
+react to zoom, and after a restart the import was NOT saved. A 75-second
+excerpt of the same recording with both voices worked. 1.9 / 1.10 opened,
+played and exported the same material on that PC. Still NOT reproducible
+here (Linux, system ffmpeg, no FFmpegKit). "Saving…" never changing means
+the app's own isolate did not run: the save is a timer plus a file write
+and waits for nothing else (checked, below). On Windows the platform
+thread and the Dart UI isolate are ONE thread in current Flutter, so
+anything synchronous in a plugin's method handler, and every message a
+plugin posts, competes with the app directly.
+
+What was found by reading `ffmpeg_kit_flutter_new` 4.6.8 (its Windows
+sources in the pub cache: `windows/ffmpeg_kit_flutter_plugin.cpp`,
+`windows/src/FFmpegKitConfig.cpp`, `AbstractSession.cpp`,
+`fftools_ffmpeg.c`; its Dart side `lib/src/ffmpeg_kit_flutter_initializer.dart`)
+and our own import / save path, each with what was changed:
+
+1. **Every log line is a message to Dart, callback or not.** The plugin
+   registers ONE global native log callback and for every line builds a
+   map, queues it and `PostMessage`s to a hidden window; the platform
+   thread then pushes it through the event channel, and the plugin's Dart
+   side looks the session up and, with no callback set, PRINTS the line.
+   Our engine also set a log callback on exports, sound renders and the
+   streaming runs. Changed: `FFmpegKitConfig.disableLogs()` once, before
+   the first run (`KitPlatform.quiet`): the native side then drops the
+   message before it is queued (`logs_enabled_`; same switch on Android).
+   The lines stay in the native session and are fetched ONCE, at the end,
+   only when a run failed by itself or its text is the result
+   (`-encoders`, `-filters`, silencedetect). No log callback is
+   registered anywhere any more.
+2. **Remove silences sent two log lines per 40 ms through that path**:
+   the level scan (`astats` + `ametadata=mode=print`) at level info is
+   about 77 000 lines for 25:39, each one a platform message, each handed
+   to a Dart callback, then split and matched by regular expressions on
+   the UI isolate. Changed for BOTH engines: `ametadata ... :file=<path>`
+   (`buildLevelScanCommand(outputFile:)`), the run at `-loglevel error`,
+   the file read and parsed in `Isolate.run` (`scanLevels`,
+   media_common.dart). Verified with the real ffmpeg here (5 minutes: 43
+   pauses found, isolate never held 100 ms). If the run with the file
+   fails or leaves no levels (a path the filter cannot open), it is run
+   once more the old way, through the log, and that text is parsed on
+   another isolate. This run is user-started, so it is not what stalled
+   the import - but it is the one real flood.
+3. **FFmpeg's log level is one value for the whole process, and every
+   session start resets it to "info"** (`av_log_set_level(configuredLogLevel)`
+   in `executeFFmpeg` / `executeFFprobe`). A run started with
+   `-loglevel error` is raised to info by any probe, thumbnail or export
+   that starts while it runs, and a run that needs info (silencedetect)
+   is silenced by one that sets error. So "quiet runs" were never
+   guaranteed quiet. With point 1 a louder level no longer reaches Dart.
+   What remains: the fixed-threshold silencedetect path (not the
+   automatic one) can still lose lines when another session starts
+   during it - not changed, see "unverified".
+4. **Fetching a session's log blocks the platform thread**:
+   `abstractSessionGetAllLogsAsString` runs synchronously in the method
+   handler and waits up to FIVE seconds while lines are "in transmit".
+   `_ffmpegNow` did that after every one-shot run, whether the log was
+   needed or not. Changed: not fetched after a successful quiet run or a
+   run stopped on purpose; otherwise with a 300 ms limit
+   (`kKitLogWaitMs`).
+5. **Statistics**: `forward_report` is rate-limited by FFmpeg's
+   `stats_period` (0.5 s) and is called whether or not `-nostats` is
+   given - so statistics are about two a second per session, not a
+   flood. Passed on at most four times a second anyway (`Throttle`,
+   ffmpeg_lane.dart), also for exports and sound renders. Runs that take
+   no progress get `-nostats`; runs with progress do not (on the prebuilt
+   Android / macOS libraries the source could not be read).
+6. **Samples, frames and levels**: the peaks decode writes a raw file
+   (24 MB for 25 minutes) that is reduced in `Isolate.run`, 64 KB at a
+   time (already 1.17); the cache file is 150 KB. The thumbnail strip is
+   at most ~300 small JPEGs per file, decoded by Flutter's image code as
+   tiles come into view; the manifest is a few bytes. The level scan was
+   the only large text on the UI isolate (point 2). "Line up by sound"
+   still builds its envelope on the UI isolate, in chunks, behind a
+   progress window (not changed).
+7. **The queue**: 1.17's `_oneShot` queue held thumbnails, strips,
+   frames, the encoder test AND the peaks decode of the non-cancellable
+   path in one line, first come first served; the cancellable peaks
+   decode ran outside it, next to everything. Changed: `FfmpegLane`
+   (ffmpeg_lane.dart) - one run at a time, `user` before `background`;
+   sound pictures and thumbnail strips are background runs that are
+   CANCELLED when a user run arrives and started again afterwards; while
+   an export runs no background run is started and a running one is
+   stopped. Probes, exports, sound renders and the short encoder /
+   filter lists are not in the lane (a probe never waits). All of it is
+   in `KitRunner` (kit_runner.dart), with the plugin behind `KitPlatform`
+   so the rules are tested without it.
+8. **The save path** (`autosave.dart`, `file_project_store.dart`,
+   `session.dart`, `editor_screen.dart`): nothing media-related is
+   awaited. A save is the 800 ms quiet time, `toJson` (another isolate
+   from 150 clips + titles), a temp file and a rename. The lock
+   heartbeat, the unused-media clean-up, the processed-sound cache scan
+   and the transcript fingerprints are not in that chain; the content
+   fingerprint reads 2 x 256 KB. So a stuck "Saving…" is the isolate not
+   running, not the save waiting. What WAS wrong: the imported clip sat
+   in memory for 800 ms before the write began, which is exactly the
+   window in which the app stalled. Changed: a change that ADDS a media
+   file is written at once (`Autosaver._addsMedia`); here an import is on
+   disk 6-7 ms after the probe answers, with its pictures still waiting.
+9. **A failed thumbnail run fetched its log twice** and thumbnails ran
+   `executeWithArguments` (not cancellable). All runs are asynchronous
+   sessions now, so every one can be stopped.
+
+**Instrumentation** (`lib/core/perf_log.dart`, release builds, no file
+names ever): a ring buffer of 400 lines - `start`, `project opened: N
+clips, N sounds, N s`, `probe start` / `probe end (video 1539 s) after
+N ms`, `save start` / `save end after N ms`, `save: a file was added,
+saving at once`, `lane: sound decode start` / `end after N ms` / `put
+back (a user run is waiting)` / `failed`, `lane: thumbnail strip …`,
+`sound picture 1 of 3 (1539 s) start` / `end` / `stopped`, `gap N ms (the
+app could not respond)` for every gap of 300 ms or more measured by a
+100 ms timer, `sound pictures paused: …`, `project closed`. Each line is
+`HH:MM:SS.mmm +<ms since start> <what>`.
+
+- **How to read it**: find the last `gap` or `NOT RESPONDING` line and
+  look at what STARTED before it and did not END. `lane: sound decode
+  start` without an end means FFmpeg was decoding; `save start` without
+  `save end` means the write itself hung (disk, antivirus); gaps with
+  nothing running point away from our media work (players, the graphics
+  driver). `longest gap` is in the header.
+- **Where**: `<app support>/perf-log.txt` (Windows:
+  `%APPDATA%\<company>\clipforge\`). Written on demand by **Help >
+  Copy version info** (which also copies the last 60 lines) and BY THE
+  WATCHDOG: a second isolate gets every line and a heartbeat ten times a
+  second; when the heartbeat stays away for 2 s it writes the file
+  itself with a `NOT RESPONDING for N ms and counting` line, and adds
+  `responding again after N ms` when it comes back. A stalled app cannot
+  write anything; the watchdog can. At the next start, a file that ends
+  with NOT RESPONDING is read and its last 30 lines are included in Copy
+  version info and in feedback as "Previous run (ended while not
+  responding)". **Send feedback** has the tick box "Include details
+  about how ClipForge ran" (off; shown in "What is sent" first; older
+  lines are dropped first when the message would pass 5000 characters).
+- **Safety valve**: `EditorSession._onGap` - a gap of 2 s or more while
+  `pictures.busy` calls `SoundPictures.pauseForResponsiveness`: the
+  running decode is cancelled, the queue emptied, the timeline shows
+  "Sound waves were paused to keep ClipForge responsive · Turn back on"
+  (`resume`). The setting is not touched; another edit does not restart
+  them.
+
+**UNVERIFIED on Windows - everything in this list** (nothing of it could
+be run with FFmpegKit): that the stall is gone; that `disableLogs`
+really stops the messages there (read in the plugin's source, not run);
+that fetching the log at the end still has the encoder / filter lists
+and the error text; that statistics still arrive without a log callback
+and with `-loglevel error`; that cancelling and restarting a decode
+(pre-emption) is clean in FFmpegKit on Windows (a cancelled session
+that does not end is given up after 5 s, `kKitStopGrace`, so that it
+cannot block the lane - the perf log then says `a stopped run did not
+end within 5000 ms; going on without it`, and that FFmpeg may still be
+running inside the app); `ametadata file=` with a Windows path (escaped like the
+caption text files, which do work there); whether the watchdog isolate
+can write while the platform thread is blocked in native code. The
+actual cause of the stall is NOT known: these are the defects found on
+that path, not a proven diagnosis. If it stalls again, ask for Copy
+version info after restarting. If it stalls with "Show sound waves"
+OFF, the pictures are not it: look at media_kit (players opened per
+clip, hardware decoding on the NVIDIA card) next.
+
+**Shorts from markers** (two markers at 0:11.6 and 0:23.7 of 35.3 s: the
+window showed 0:00.0-0:35.3 and 0:01.9-0:35.3, one short was made, "The
+short is ready"). `markerRange` clamped 20 s before / 25 s after to the
+video, so in a video shorter than 45 s every marker became the whole
+video. Now (core/publish/shorts.dart): under a minute
+(`kMarkerFullFromMs`) the window is half the video (at least
+`kMarkerMinMs` 8 s), split in the same 20:25 proportion;
+cut off at an edge it is made up on the other side. `overlappingGroups`
+/ `shortRangesFor`: ranges sharing more than 70 % of the shorter one are
+a group; the window then has a note and a choice ("One short covering
+both", ticked, or "Two shorts") and its title, list and button count
+what will be made. WHY the second was dropped is NOT known: with the
+fake store both are made here, and nothing in `createShort` dedupes by
+range or name (`freeProjectName` adds "(2)"). The loop swallowed every
+error as long as one short existed. Now: a failed short is tried once
+more, a full-length copy is never left behind in the project list
+(`createShort` deletes it), and the end message is "1 of 2 shorts was
+made" with "Not made: <range>: <reason>" - so the reason will be seen.
+Claude: `list_markers` uses the same ranges and adds `overlapping`
+(marker ids + the one range) with a line telling it to ask and to say
+how many it made; `make_short` itself takes explicit times.
+
+**Use a model file I have…**: `ModelStore.choose` only looked at the
+user's file after the downloaded packs and asked `serves('')` for
+Automatic, which an English-only file never does - so with the language
+on Automatic (the default) the plan was never ready and Transcribe
+stayed off. Now `ownModelServes`: the user's file wins when no size is
+chosen; an English-only file serves English and Automatic, and
+`TranscriptionService` then tells whisper "en" (FFmpeg's whisper filter
+fails with "model is not multilingual" on auto). The dialog sets the
+language to English when the file is chosen with Automatic and says so
+in one line (`own-model-note`); for another language the line says why
+it cannot be used. The test fake (`FakeSpeech.plan`) uses the same
+function.
+
+**Shortcuts**: the editor's keys were a `Focus.onKeyEvent` at the root of
+the editor: they only arrived when the focused widget was inside it AND
+did not use the key itself (a slider takes the arrows, a button Space, a
+scroll view the arrows and Space). Now `FocusManager.addEarlyKeyEventHandler`
+(`_EditorScreenState._onEarlyKey`): asked BEFORE the focus tree, active
+when the editor is the current route (`ModalRoute.isCurrent`: no dialog,
+sheet or popup menu), no menu of the menu bar is open
+(`WindowMenuBar.menuOpen`) and no text field has the focus (`_typing`).
+The old `Focus` handler stays as the second way in (a handled early
+event never reaches it, so nothing runs twice). The menu bar's own keys
+(Ctrl+E, Ctrl+Shift+H, Ctrl+Shift+T, F1, Ctrl+N / O) got the same
+(`_onMenuKey`). One exception, for keyboard users: after **Tab**, plain
+keys go to the focused control until the next pointer press
+(`_keyboardNav`); Ctrl shortcuts always work. macOS menu-bar shortcuts
+are the system's and unchanged.
+
+**Put back restores captions**: `AutoCut.titles` (`RemovedTitle`: the
+title and its start counted from the start of the cut on the timeline;
+JSON key `titles`, written only when not empty, schema still 2), filled
+by `titlesRemovedBy` for kinds "text" and "part" (the titles the cut's
+own clip operation removed), at most `kAutoCutTitlesMax` = 200 per cut.
+`_restoreAndShift` adds them back at the place of the returned footage.
+Not restored: a title that was only shortened by the cut; captions of
+filler and silence cuts (they are not removed by those).
+
+**Also fixed in passing**: the "Titles" row header overflowed by 3.5 px
+with a part selected in a narrow header.
+
+Tests: `test/core/v117b_test.dart`, `test/ui/v117b_ui_test.dart`, more
+in `test/media/v117_responsive_test.dart` (the plugin stand-in with
+50 000 log lines and 50 000 statistics per run: longest wait of the
+isolate 8-15 ms, 6 progress updates in 3 s, no line handed over, no log
+fetched; import saved after 6-7 ms with pictures pending; probe / save /
+user run against a never-ending picture; the level scan through a file
+with the real ffmpeg), `test/mcp/tools_v117_test.dart`,
+`test/core/autosave_test.dart`.
+
+Verified here (Linux container, FFmpeg 6.1.1): `flutter analyze` clean;
+`flutter test` 2048 passed (47 new); `dart run tool/pure_core_check.dart`;
+`dart run tool/gen_guide.dart --check`; the Linux e2e passed (one run).
+No release or APK build was made in this pass (disk), and nothing was
+run on Windows, macOS or Android.
 
 ## Feedback, one source for addresses, rename readiness (1.16.0, 20 Nov 2026)
 
@@ -3535,7 +3790,7 @@ building** until they report results. Read the checklist marks first.
 export PATH=/opt/sdk/flutter/bin:$PATH ANDROID_HOME=/opt/sdk/android
 cd video-editor
 flutter analyze
-flutter test                                   # all tests (2001)
+flutter test                                   # all tests (2048)
 flutter build apk --release --split-per-abi --target-platform android-arm64
 python3 tool/ci/release_assets_test.py && python3 tool/ci/release_assets.py --check-links
 python3 tool/ci/links_test.py && python3 tool/ci/make_readme_html_test.py

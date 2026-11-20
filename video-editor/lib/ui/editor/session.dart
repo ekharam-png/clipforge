@@ -5,6 +5,7 @@ import '../../core/editor/editor_controller.dart';
 import '../../core/editor/part.dart';
 import '../../core/editor/snapping.dart';
 import '../../core/model/project.dart';
+import '../../core/perf_log.dart';
 import '../../core/storage/project_store.dart';
 import '../../media/media_api.dart';
 import '../../media/processed_sound_cache.dart';
@@ -207,6 +208,10 @@ class EditorSession {
           // Long files: never read while the video plays.
           playing: () => playback.playing,
         );
+    PerfLog.instance.note('project opened: ${editor.project.clips.length} '
+        'clips, ${editor.project.audio.length} sounds, '
+        '${editor.project.durationMs ~/ 1000} s');
+    PerfLog.instance.addGapListener(_onGap);
     this.pictures.update(editor.project);
     // "Only when speaking": the preview turns a gated microphone down by
     // the same lists the export gets.
@@ -231,6 +236,14 @@ class EditorSession {
   /// The step of the nudge buttons on phones: false = one frame, true =
   /// a tenth of a second.
   final ValueNotifier<bool> partNudgeTenths = ValueNotifier(false);
+
+  /// The app could not respond for [gapMs] (core/perf_log.dart). Two
+  /// seconds and more while sound pictures are drawn: they are paused for
+  /// this editor, the app comes first.
+  void _onGap(int gapMs) {
+    if (_disposed || gapMs < kUnresponsiveMs) return;
+    pictures.pauseForResponsiveness(gapMs);
+  }
 
   void _onPartChanged() {
     if (part.value == null) {
@@ -719,6 +732,8 @@ class EditorSession {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    PerfLog.instance.removeGapListener(_onGap);
+    PerfLog.instance.note('project closed');
     part.dispose();
     partRows.dispose();
     partPreview.dispose();

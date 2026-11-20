@@ -318,18 +318,39 @@ RestoreResult _restoreAndShift(
     ProjectEditor e, AutoCut cut, String Function() newId) {
   final lengthBefore = e.project.durationMs;
   final result = _restore(e, cut, newId);
-  if (result == RestoreResult.failed || cut.kind != 'part') return result;
-  final p = e.project;
+  if (result == RestoreResult.failed) return result;
+  if (cut.kind != 'part' && cut.titles.isEmpty) return result;
+  var p = e.project;
   final grown = p.durationMs - lengthBefore;
-  if (grown <= 0) return result;
+  // Where the footage that came back starts on the timeline.
+  int? at;
   for (var i = 0; i < p.clips.length; i++) {
     final c = p.clips[i];
     if (c.path != cut.path || c.type != ClipType.video) continue;
     if (c.inMs > cut.startMs + 2 || c.outMs < cut.endMs - 2) continue;
     final speed = c.speed <= 0 ? 1.0 : c.speed;
-    final at = p.clipStartMs(i) + ((cut.startMs - c.inMs) / speed).round();
-    e.unripplePart(at, grown);
+    at = p.clipStartMs(i) + ((cut.startMs - c.inMs) / speed).round();
     break;
+  }
+  if (at == null) return result;
+  if (cut.kind == 'part' && grown > 0) e.unripplePart(at, grown);
+  // The titles and captions that went with the cut come back with it
+  // (1.17), where they were on the footage.
+  if (cut.titles.isNotEmpty) {
+    p = e.project;
+    final end = p.durationMs;
+    final back = <TitleOverlay>[];
+    for (final r in cut.titles) {
+      final length = r.title.endMs - r.title.startMs;
+      var start = at + r.offsetMs;
+      if (start < 0) start = 0;
+      if (start >= end) continue;
+      var stop = start + length;
+      if (stop > end) stop = end;
+      if (stop - start < ProjectEditor.minDurationMs) continue;
+      back.add(r.title.copyWith(startMs: start, endMs: stop));
+    }
+    e.addTitles(back);
   }
   return result;
 }
@@ -501,6 +522,9 @@ int applyTimelineCut(ProjectEditor e, TimelineCutPlan plan,
           word: word,
           at: at,
           by: by,
+          // What was written on that footage, for "Put back".
+          titles: titlesRemovedBy(before, e.project,
+              timelineOfSource(before, part.clipId, part.startMs)),
         ));
       }
     }

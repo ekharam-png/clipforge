@@ -210,7 +210,15 @@ class TrackHeaders extends StatelessWidget {
                         const Icon(Icons.title, size: 16, color: AppColors.textDim),
                         if (!compact) ...[
                           const SizedBox(width: 6),
-                          const Text('Titles', style: _dim),
+                          // (With a part selected the tick box takes room:
+                          // a narrow header must not overflow.)
+                          const Flexible(
+                            child: Text('Titles',
+                                style: _dim,
+                                maxLines: 1,
+                                softWrap: false,
+                                overflow: TextOverflow.clip),
+                          ),
                         ],
                       ],
                     ),

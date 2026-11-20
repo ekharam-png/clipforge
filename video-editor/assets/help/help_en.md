@@ -673,6 +673,8 @@ related: menus, undo-and-saving, split, timeline, snapping, select-a-part
 
 On a Mac use **Cmd** where this says Ctrl. Every shortcut is also in the menu bar at the top, next to its menu item (see **Menus**).
 
+The shortcuts work wherever you last clicked: on the timeline, in the Text window, on a slider in the side panel, or nowhere at all. Only while you type in a text field, or while a window or a menu is open, do the keys belong to that. If you move between the controls with **Tab**, plain keys (Space, the arrows) go to the control you are on, until your next click.
+
 ## Playing
 - **Space**: play or pause.
 - **J**: play backwards, **K**: pause, **L**: play forwards. Playing backwards jumps back in small steps, because video players cannot play smoothly in reverse.
@@ -958,6 +960,7 @@ If it keeps happening, please tell us: **Help** > **Send feedback…** (on a pho
 - what you were doing just before,
 - on a Mac: the text from the **Report…** button in the "quit unexpectedly" box (copy it),
 - on Windows or Android: a photo or screenshot of any message,
+- if it was slow or stopped answering: tick **Include details about how ClipForge ran** in **Send feedback**,
 - which version you have. **Send feedback** adds the version by itself; for a message written elsewhere use **Copy version info** (see "Which version do I have?").
 
 ClipForge does not send crash reports by itself.
@@ -979,6 +982,8 @@ Every copy of ClipForge has a version number (like 1.4.0), a build number and th
 - In Help: at the bottom of the topic list.
 
 **Copy version info** (in About ClipForge, in Help, and in the same menus) copies the version, build, date and your device's details. Paste it into your message or test checklist.
+
+It also copies the last lines of the performance log: when ClipForge opened a project, saved, drew sound waves, and when it could not respond. There are no file names, project names or text in it. The whole log is written to the file perf-log.txt in ClipForge's data folder at the same moment. If ClipForge stopped answering and you had to close it, start it again and use **Copy version info**: what it did last before that is included.
 
 The date is shown in your own time zone; the copied text uses UTC (world time), so everyone reads the same time.
 
@@ -1015,6 +1020,8 @@ The box "What is sent" on the page shows it exactly, before you press **Send**:
 - the name and version of your system (for example "Windows 11").
 
 Nothing about your projects, file names, videos, photos or music is ever included. Nothing is sent until you press **Send**, and ClipForge never sends a message by itself or tries again in the background.
+
+The box **Include details about how ClipForge ran** adds the last lines of the performance log (see "Which version do I have?"): useful when ClipForge was slow or stopped answering. It is off, the lines are shown in "What is sent" before they go, and they hold no file names, project names or text.
 
 After an update that did not work, the page has one more box: **Include the last update log lines**. It is off. If you tick it, the last lines of the update log are added to your message and shown in "What is sent" first. They say at which step the update stopped, and they can name the folder ClipForge is installed in.
 
@@ -1179,7 +1186,7 @@ A speech program needs a language pack. Nothing is downloaded until you press **
 - Medium, about 470 MB: good.
 - Large, about 1.6 GB: best, a large download. It covers every language.
 
-English has its own Small and Medium packs. Russian, Hebrew and other languages share theirs, so one download serves them all. The Small pack makes many mistakes in Hebrew; Medium or Large is worth it there. When you have several, the largest is used unless you pick another. **Remove** frees the space again, and the window shows how much the packs use. Already have a model file? **Use a model file I have…**
+English has its own Small and Medium packs. Russian, Hebrew and other languages share theirs, so one download serves them all. The Small pack makes many mistakes in Hebrew; Medium or Large is worth it there. When you have several, the largest is used unless you pick another. **Remove** frees the space again, and the window shows how much the packs use. Already have a model file? **Use a model file I have…** A file with ".en" in its name (like ggml-base.en.bin) understands English only: with the language on **Automatic** ClipForge sets it to English and says so; for another language it says in one line why the file cannot be used.
 
 ## Good to know
 
@@ -1263,7 +1270,7 @@ Type in **Find in the text…** (Ctrl+F puts the cursor there). Every place is m
 Double-click a caption (or click it, then **Edit**), change the text and press **Enter** (**Save**). The caption's name, if it has one, is part of the text you edit. **Delete caption** removes it; on a computer, click one caption and Shift-click another to select everything between them and delete them together. Each of these is one step for **Undo**. Transcripts and titles cannot be changed here.
 
 ## Cutting a part out of the video
-On a computer, select the captions or phrases of the part you do not want and click **Cut this part out of the video…**. ClipForge shows from when to when and how long, and asks first. The picture and its sound are removed, with the captions on that part. **Undo** brings everything back; later, **Text and speech** > **Automatic cuts…** > **Put back** returns the picture and the sound (not the captions).
+On a computer, select the captions or phrases of the part you do not want and click **Cut this part out of the video…**. ClipForge shows from when to when and how long, and asks first. The picture and its sound are removed, with the captions on that part. **Undo** brings everything back; later, **Text and speech** > **Automatic cuts…** > **Put back** returns the picture and the sound, and the captions and titles that were on that part.
 
 ## Copying and saving
 The three dots have **Copy all text**, **Copy with times and names**, **Save as text file…** and **Export subtitles (.srt)…**.
@@ -1277,7 +1284,7 @@ section: Sound
 keywords: who is speaking, speaker, speakers, waveform, waves, sound waves, wave, loud, quiet, pause, talk, podcast, interview, two people, zoom, turns, cut manually, speech start, next speech, colour, color, microphone, bleed, show sound waves
 related: voice-recorded-separately, sound-tracks, snapping, remove-silences, text-window, keyboard-shortcuts
 
-Every sound on the timeline shows its sound waves: tall where it is loud, flat where it is quiet. A video clip whose own sound is on has a slim wave along its bottom edge. The first time a file is used ClipForge listens to it once in the background ("Drawing sound…" at the top of the timeline); you can keep working, and after that it is instant.
+Every sound on the timeline shows its sound waves: tall where it is loud, flat where it is quiet. A video clip whose own sound is on has a slim wave along its bottom edge. The first time a file is used ClipForge listens to it once in the background ("Drawing sound…" at the top of the timeline); you can keep working, and after that it is instant. If ClipForge ever stops answering for a couple of seconds while it does this, it stops drawing by itself and says "Sound waves were paused to keep ClipForge responsive" with **Turn back on** next to it; your setting is not changed.
 
 ## Talk and pauses
 On a speech track (the Voice rows, for example one voice file per person from a Zoom recording, see **Voice recorded separately**), the stretches where that person really talks are bright in the speaker's colour, and the pauses are dim. So a row reads at a glance: talk, pause, talk. Each speaker has a colour; the microphone at the left of the row has it too, and the Text window uses the same colour for a speaker of the same name.
@@ -1412,7 +1419,7 @@ In the Text window, select the sentences you want and choose **Make a short from
 
 ## Good moments
 
-While you watch, press M on a computer (or **Add** > **Good moment marker**; phone: **Add**, then **Good moment marker**) each time something good happens. A small flag appears on the time ruler. **Good moments…** lists them, and **Make shorts from markers…** makes one short around each: about 20 seconds before to 25 seconds after.
+While you watch, press M on a computer (or **Add** > **Good moment marker**; phone: **Add**, then **Good moment marker**) each time something good happens. A small flag appears on the time ruler. **Good moments…** lists them, and **Make shorts from markers…** makes one short around each: about 20 seconds before to 25 seconds after. In a video shorter than a minute the part around each marker is smaller (about half the video), so two markers give two different shorts. When two markers are so close that their shorts would show mostly the same part, the window says so and you choose: **One short covering both** or **Two shorts**. As many shorts are made as the window says; if one cannot be made, the message at the end says which and why.
 
 ## What you can choose
 
@@ -1456,7 +1463,7 @@ While a part is selected every row has a tick box at its left: the video, each s
 ## What you can do with it
 The bar next to the timeline (phone: **Actions**) has the actions; they are also in the **Part** menu and on a right-click inside the selected part. Each is one step in **Undo** and History.
 
-- **Cut out**: removes that time from everything and closes the gap. It needs every row: if only some rows lost time, lips and voice would no longer match afterwards. It is listed under **Automatic cuts**, where **Put back** brings it back later.
+- **Cut out**: removes that time from everything and closes the gap. It needs every row: if only some rows lost time, lips and voice would no longer match afterwards. It is listed under **Automatic cuts**, where **Put back** brings it back later, with the captions and titles that were on it.
 - **Delete and leave a gap**: removes the part from the ticked rows; nothing moves. For music, sound effects, overlays, titles and captions. The video row cannot have a gap, and a voice lined up with the video follows its clip: use **Silence** for those.
 - **Silence** and **Lower volume…**: see Silence or lower a part.
 - **Speed…**: see Slow down a part.

@@ -1,6 +1,7 @@
 // Helpers shared by the engines (dart:io only, no plugins).
 
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:path/path.dart' as p;
 
@@ -77,16 +78,16 @@ Future<List<({int startMs, int endMs})>> detectSilenceWith(
       ? channel
       : AudioChannel.both;
   if (thresholdDb == null) {
-    // Automatic threshold: window levels, see silence_levels.dart.
-    final r = await run([
-      '-nostats', '-loglevel', 'info',
-      ...buildLevelScanCommand(path: path, audioTrack: track, channel: side),
-    ]);
-    if (!r.ok) {
-      throw ExportException('Cannot analyse the sound of $path',
-          log: (LogTail()..add(r.log)).toString());
-    }
-    final w = parseLevelLog(r.log);
+    // Automatic threshold: window levels, see silence_levels.dart. They
+    // are written to a file, not to the log, and read on another isolate.
+    final w = await scanLevels(
+        (file) => run([
+              '-nostats', '-loglevel', file == null ? 'info' : 'error',
+              ...buildLevelScanCommand(
+                  path: path, audioTrack: track, channel: side,
+                  outputFile: file),
+            ]),
+        path);
     final levels = SilenceLevels(
         fromMs: 0, spanMs: info.durationMs, starts: w.starts, levels: w.levels);
     return levels.silences(
@@ -108,6 +109,45 @@ Future<List<({int startMs, int endMs})>> detectSilenceWith(
   }
   return parseSilenceLog(r.log,
       durationMs: info.durationMs > 0 ? info.durationMs : null);
+}
+
+/// Runs a level scan and reads the levels on ANOTHER isolate: 25 minutes
+/// are 77 000 lines, which must neither travel through FFmpeg's log nor be
+/// taken apart on the app's own isolate. [run] gets the file the levels
+/// go to ([buildLevelScanCommand]'s `outputFile`). If that run fails or
+/// leaves no levels (a path FFmpeg's filter could not open, say), it is
+/// run once more with null: the old way, through the log at level info.
+/// Throws [ExportException] when that fails too.
+Future<({List<int> starts, List<double> levels})> scanLevels(
+    Future<FfmpegRun> Function(String? levelsFile) run, String path,
+    {bool Function()? stopped}) async {
+  final dir = await Directory.systemTemp.createTemp('clipforge_levels_');
+  try {
+    final file = p.join(dir.path, 'levels.txt');
+    final r = await run(file);
+    if (r.ok) {
+      final w = await Isolate.run(() => _readLevels(file));
+      if (w.levels.isNotEmpty) return w;
+    }
+    if (stopped?.call() ?? false) {
+      throw ExportException('Stopped', cancelled: true);
+    }
+    final old = await run(null);
+    if (!old.ok) {
+      throw ExportException('Cannot analyse the sound of $path',
+          log: (LogTail()..add(old.log.isEmpty ? r.log : old.log)).toString());
+    }
+    final log = old.log;
+    return await Isolate.run(() => parseLevelLog(log));
+  } finally {
+    await deleteQuietly(dir);
+  }
+}
+
+({List<int> starts, List<double> levels}) _readLevels(String file) {
+  final f = File(file);
+  if (!f.existsSync()) return (starts: <int>[], levels: <double>[]);
+  return parseLevelLog(f.readAsStringSync());
 }
 
 /// Throws an [ExportException] naming the clip and music files of [project]

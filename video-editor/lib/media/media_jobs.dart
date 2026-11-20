@@ -411,25 +411,51 @@ class _SilenceJob implements SilenceJob {
           : info.durationMs;
       final span = end > from ? end - from : 0;
       _emit(0.0001);
+      void onTime(int t) {
+        if (span > 0) _emit((t / span).clamp(0.0, 0.99));
+      }
+
+      if (thresholdDb == null) {
+        // The levels go to a file and are read on another isolate (not
+        // through the log: 77 000 lines for 25 minutes).
+        final w = await scanLevels(
+            (file) => run([
+                  '-loglevel', file == null ? 'info' : 'error',
+                  ...buildLevelScanCommand(
+                      path: path,
+                      audioTrack: track,
+                      channel: side,
+                      fromMs: from,
+                      spanMs: toMs > from ? span : 0,
+                      outputFile: file),
+                ], onTime, _cancel.future),
+            path,
+            stopped: () => _cancel.isCompleted);
+        if (_cancel.isCompleted) {
+          throw ExportException('Stopped', cancelled: true);
+        }
+        final l = levels =
+            SilenceLevels(fromMs: from, spanMs: span, starts: w.starts, levels: w.levels);
+        _emit(1);
+        _result.complete(l.silences(
+            thresholdDb: l.autoThresholdDb, minSilenceMs: minSilenceMs));
+        return;
+      }
+      // silencedetect reports through the log, at level "info": a line
+      // or two per silence.
       final r = await run(
-        thresholdDb == null
-            ? buildLevelScanCommand(
-                path: path,
-                audioTrack: track,
-                channel: side,
-                fromMs: from,
-                spanMs: toMs > from ? span : 0)
-            : buildSilenceDetectRangeCommand(
-                path: path,
-                thresholdDb: thresholdDb,
-                minSilenceMs: minSilenceMs,
-                audioTrack: track,
-                channel: side,
-                fromMs: from,
-                spanMs: toMs > from ? span : 0),
-        (t) {
-          if (span > 0) _emit((t / span).clamp(0.0, 0.99));
-        },
+        [
+          '-loglevel', 'info',
+          ...buildSilenceDetectRangeCommand(
+              path: path,
+              thresholdDb: thresholdDb,
+              minSilenceMs: minSilenceMs,
+              audioTrack: track,
+              channel: side,
+              fromMs: from,
+              spanMs: toMs > from ? span : 0),
+        ],
+        onTime,
         _cancel.future,
       );
       if (_cancel.isCompleted) {
@@ -438,15 +464,6 @@ class _SilenceJob implements SilenceJob {
       if (!r.ok) {
         throw ExportException('Cannot analyse the sound of $path',
             log: (LogTail()..add(r.log)).toString());
-      }
-      if (thresholdDb == null) {
-        final w = parseLevelLog(r.log);
-        final l = levels =
-            SilenceLevels(fromMs: from, spanMs: span, starts: w.starts, levels: w.levels);
-        _emit(1);
-        _result.complete(l.silences(
-            thresholdDb: l.autoThresholdDb, minSilenceMs: minSilenceMs));
-        return;
       }
       final found = parseSilenceLog(r.log, durationMs: span > 0 ? span : null);
       _emit(1);

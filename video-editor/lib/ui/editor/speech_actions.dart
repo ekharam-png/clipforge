@@ -207,7 +207,45 @@ class _TranscribeDialogState extends State<_TranscribeDialog> {
     final file = await widget.session.documents.pickFile(const ['bin']);
     if (file == null || !mounted) return;
     await _speech.useModelFile(file.path);
-    if (mounted) await _refresh();
+    if (!mounted) return;
+    setState(() {
+      // The file the user chose is what is used: no pack size on top.
+      _size = SpeechQuality.auto;
+      _error = null;
+      // An English-only file with the language on Automatic: English.
+      if (isEnglishOnlyModelFile(file.path) && _choice == 'auto') {
+        _choice = 'en';
+        _ownSetEnglish = true;
+      } else {
+        _ownSetEnglish = false;
+      }
+    });
+    await _refresh();
+  }
+
+  /// The language went to English because an English-only model file
+  /// was chosen (said in one line under the file's name).
+  bool _ownSetEnglish = false;
+
+  /// What to say about the user's own model file and the language, or
+  /// null: why it cannot be used, or that the language was changed.
+  String? get _ownNote {
+    final file = _speech.modelFile;
+    if (file == null || !isEnglishOnlyModelFile(file)) return null;
+    final language = _language;
+    if (language == 'en') {
+      return _ownSetEnglish
+          ? 'This file understands English only, so the language was set '
+              'to English.'
+          : null;
+    }
+    if (language == 'auto') {
+      return 'This file understands English only: the speech is taken as '
+          'English.';
+    }
+    return 'This file understands English only (".en" in its name), so it '
+        'cannot be used for ${languageName(language)}. Choose English, or '
+        'use a file or a pack for all languages.';
   }
 
   Future<void> _transcribe() async {
@@ -434,6 +472,7 @@ class _TranscribeDialogState extends State<_TranscribeDialog> {
                             setState(() {
                               _choice = v!;
                               _size = SpeechQuality.auto;
+                              _ownSetEnglish = false;
                             });
                             _refresh();
                           },
@@ -517,6 +556,7 @@ class _TranscribeDialogState extends State<_TranscribeDialog> {
                             style: _dim),
                       ),
                       TextButton(
+                        key: const ValueKey('own-model-choose'),
                         onPressed: running ? null : _chooseFile,
                         child: const Text('Use a model file I have…'),
                       ),
@@ -528,19 +568,26 @@ class _TranscribeDialogState extends State<_TranscribeDialog> {
                         Expanded(
                           child: Text(
                               'Your own file: ${p.basename(_speech.modelFile!)}',
+                              key: const ValueKey('own-model-name'),
                               style: _dim),
                         ),
                         TextButton(
+                          key: const ValueKey('own-model-forget'),
                           onPressed: running
                               ? null
                               : () async {
                                   await _speech.useModelFile(null);
+                                  _ownSetEnglish = false;
                                   if (mounted) await _refresh();
                                 },
                           child: const Text('Forget it'),
                         ),
                       ],
                     ),
+                  if (_speech.modelFile != null && _ownNote != null)
+                    Text(_ownNote!,
+                        key: const ValueKey('own-model-note'),
+                        style: _dim),
                 ] else if (plan.programFetchesModel || plan.needsChoice)
                   Text(
                       '${plan.backend!.label} keeps its own models and does '

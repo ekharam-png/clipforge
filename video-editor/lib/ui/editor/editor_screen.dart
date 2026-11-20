@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:io' show Platform;
 import 'dart:ui' show AppExitResponse;
 
+import 'package:flutter/gestures.dart' show GestureBinding;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -136,6 +137,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     _ticker = createTicker(_onTick);
     WidgetsBinding.instance.addObserver(this);
     FocusManager.instance.addListener(_onFocusChanged);
+    FocusManager.instance.addEarlyKeyEventHandler(_onEarlyKey);
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_onAnyPointer);
     _exitListener = AppLifecycleListener(onExitRequested: _onExitRequested);
     if (widget.tour) _tour.attachEditor(_tourHooks);
     _tour.addListener(_onTour);
@@ -536,6 +539,46 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     }
   }
 
+  /// Tab was used to move between the controls (and no click since):
+  /// plain keys then belong to the control that has the focus (Space
+  /// presses a button, the arrows move a slider), as keyboard users
+  /// expect. A click anywhere ends it.
+  bool _keyboardNav = false;
+
+  void _onAnyPointer(PointerEvent event) {
+    if (event is PointerDownEvent) _keyboardNav = false;
+  }
+
+  /// True when this editor is what the user is looking at: the top page
+  /// (no dialog, sheet or menu over it), no menu of the menu bar open,
+  /// and no text being typed.
+  bool _shortcutsActive() {
+    if (!mounted || _session == null) return false;
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return false;
+    if (WindowMenuBar.menuOpen) return false;
+    return !_typing();
+  }
+
+  /// ALL the editor's shortcuts are answered here, before the focus tree
+  /// is asked (1.17, a real Windows test: Ctrl+Z, Ctrl+F and Ctrl+Arrow
+  /// sometimes did nothing after a click in the Text window, the side
+  /// panel or the timeline - the key went to whatever had the focus, or
+  /// to nothing). They no longer depend on which panel has the focus:
+  /// whenever the editor is the top page and no text field or dialog has
+  /// the keyboard. Text fields keep their own Ctrl+Z / Ctrl+F.
+  KeyEventResult _onEarlyKey(KeyEvent event) {
+    if (!_shortcutsActive()) return KeyEventResult.ignored;
+    final keys = HardwareKeyboard.instance;
+    if (event.logicalKey == LogicalKeyboardKey.tab) {
+      if (event is KeyDownEvent) _keyboardNav = true;
+      return KeyEventResult.ignored;
+    }
+    final command = keys.isControlPressed || keys.isMetaPressed;
+    if (!command && _keyboardNav) return KeyEventResult.ignored;
+    return _onKey(_keys, event);
+  }
+
   static bool _typing() {
     final focused = FocusManager.instance.primaryFocus?.context;
     if (focused == null) return false;
@@ -717,6 +760,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     _session?.copiedSettings.removeListener(_updateMenu);
     _saveWatch?.cancel();
     _lock?.release();
+    FocusManager.instance.removeEarlyKeyEventHandler(_onEarlyKey);
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(_onAnyPointer);
     _keys.dispose();
     _ticker.dispose();
     _autosaver?.dispose();

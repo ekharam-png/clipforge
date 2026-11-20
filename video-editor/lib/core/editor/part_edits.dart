@@ -225,7 +225,10 @@ extension PartEdits on ProjectEditor {
               startMs: srcA,
               endMs: srcB,
               at: at,
-              by: by));
+              by: by,
+              // What was written on that footage, for "Put back".
+              titles: titlesRemovedBy(
+                  was, _project, timelineOfSource(was, c.id, srcA))));
         }
       }
       removed = total - _project.durationMs;

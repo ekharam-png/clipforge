@@ -262,6 +262,40 @@ class SpeechSettings {
       );
 }
 
+/// True when the name of a model file says it understands English only
+/// (whisper.cpp's "ggml-base.en.bin").
+bool isEnglishOnlyModelFile(String path) => RegExp(r'[.\-_]en([.\-_]|$)')
+    .hasMatch(p.basenameWithoutExtension(p.basename(path)));
+
+/// The user's own model file at [path] as an [InstalledModel].
+InstalledModel ownModelFile(String path, int sizeBytes) {
+  final name = p.basename(path);
+  return InstalledModel(
+      SpeechModel(
+        id: p.basenameWithoutExtension(name).replaceFirst('ggml-', ''),
+        fileName: name,
+        url: '',
+        sha256: '',
+        sizeBytes: 0,
+        sizeLabel: '',
+        title: 'Your own model file',
+        size: SpeechQuality.auto,
+        englishOnly: isEnglishOnlyModelFile(name),
+      ),
+      path,
+      sizeBytes,
+      own: false);
+}
+
+/// True when the user's own model file [own] is what a request for
+/// [language] ("auto" / '' = any) uses when no size was chosen: a file
+/// for all languages always; an English-only file for English and for
+/// Automatic (whisper is then told English).
+bool ownModelServes(InstalledModel own, String language) {
+  final lang = language == 'auto' ? '' : language;
+  return own.model.serves(lang) || lang.isEmpty;
+}
+
 /// A model file found on this computer.
 class InstalledModel {
   const InstalledModel(this.model, this.path, this.sizeBytes, {this.own = true});
@@ -360,23 +394,7 @@ class ModelStore {
     if (path == null) return null;
     final f = File(path);
     if (!f.existsSync()) return null;
-    final name = p.basename(path);
-    return InstalledModel(
-        SpeechModel(
-          id: p.basenameWithoutExtension(name).replaceFirst('ggml-', ''),
-          fileName: name,
-          url: '',
-          sha256: '',
-          sizeBytes: 0,
-          sizeLabel: '',
-          title: 'Your own model file',
-          size: SpeechQuality.auto,
-          englishOnly: RegExp(r'[.\-_]en([.\-_]|$)').hasMatch(
-              p.basenameWithoutExtension(name)),
-        ),
-        path,
-        f.lengthSync(),
-        own: false);
+    return ownModelFile(path, f.lengthSync());
   }
 
   /// Bytes used by packs in the folder (finished, half-fetched and
@@ -405,17 +423,21 @@ class ModelStore {
     final lang = language == 'auto' ? '' : language;
     final own = userModel;
     final have = installed;
+    // The file the user pointed at is what they want used (1.17: it was
+    // only looked at after the packs, and an English-only file was never
+    // usable with the language on Automatic - whisper is then told
+    // English, see TranscriptionService.transcribe).
+    if (quality == SpeechQuality.auto &&
+        own != null &&
+        ownModelServes(own, language)) {
+      return ModelChoice(installed: own);
+    }
     for (final id in modelIdsFor(lang, quality)) {
       for (final m in have) {
         if (m.model.id == id) return ModelChoice(installed: m);
       }
     }
-    if (quality == SpeechQuality.auto) {
-      if (own != null && own.model.serves(lang)) {
-        return ModelChoice(installed: own);
-      }
-      return const ModelChoice();
-    }
+    if (quality == SpeechQuality.auto) return const ModelChoice();
     return ModelChoice(download: byId(modelIdsFor(lang, quality).first));
   }
 

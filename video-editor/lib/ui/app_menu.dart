@@ -773,6 +773,11 @@ class WindowMenuBar extends StatefulWidget {
   /// Height of the bar.
   static const double height = 30;
 
+  /// True while a menu of the bar is open: the keys then belong to the
+  /// menu (arrows, letters), not to the editor's shortcuts.
+  static bool get menuOpen => _menusOpen > 0;
+  static int _menusOpen = 0;
+
   @override
   State<WindowMenuBar> createState() => _WindowMenuBarState();
 }
@@ -784,6 +789,7 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
 
   void _opened() {
     if (_open++ == 0) _focusBefore = FocusManager.instance.primaryFocus;
+    WindowMenuBar._menusOpen = _open;
   }
 
   /// When the last menu closes, the keyboard goes back to where it was
@@ -791,6 +797,7 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
   /// a menu was used.
   void _closed() {
     if (_open > 0) _open--;
+    WindowMenuBar._menusOpen = _open;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_open > 0) return;
       final before = _focusBefore;
@@ -809,12 +816,34 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_onAppKey);
+    FocusManager.instance.addEarlyKeyEventHandler(_onMenuKey);
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onAppKey);
+    FocusManager.instance.removeEarlyKeyEventHandler(_onMenuKey);
+    WindowMenuBar._menusOpen = 0;
     super.dispose();
+  }
+
+  /// The menu bar's own shortcuts (Ctrl+E, Ctrl+Shift+H, Ctrl+Shift+T, F1,
+  /// Ctrl+N / O on the project list) are answered BEFORE the focus tree
+  /// is asked (1.17): wherever the keyboard focus is - a slider of the
+  /// side panel, the Text window, the timeline - and whatever that widget
+  /// does with keys itself. The [CallbackShortcuts] below stay as the
+  /// second way in.
+  KeyEventResult _onMenuKey(KeyEvent event) {
+    if (!mounted || event is! KeyDownEvent || WindowMenuBar.menuOpen) {
+      return KeyEventResult.ignored;
+    }
+    for (final e in windowMenuShortcuts(controller, help).entries) {
+      if (e.key.accepts(event, HardwareKeyboard.instance)) {
+        e.value();
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
   }
 
   /// Ctrl+, opens Settings from anywhere in the app: also when nothing has

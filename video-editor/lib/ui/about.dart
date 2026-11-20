@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/build_info.dart';
+import '../core/perf_log.dart';
 import '../core/update/update_log.dart';
 import '../core/links.dart';
 import 'feedback/feedback_screen.dart';
@@ -21,6 +22,9 @@ import 'update/update_controller.dart' show updatePlatformProvider;
 
 /// This app's build. Tests put another one here.
 final buildInfoProvider = Provider<BuildInfo>((ref) => BuildInfo.current);
+
+/// The performance log (core/perf_log.dart). Tests put their own here.
+final perfLogProvider = Provider<PerfLog>((ref) => PerfLog.instance);
 
 /// The system and device, for "Copy version info".
 class DeviceDetails {
@@ -89,6 +93,21 @@ Future<void> copyVersionInfo(BuildContext context) async {
     }
     final log = updateLogReport(await updates.stateDir());
     if (log != null) text = '$text\n\n$log';
+  } catch (_) {}
+  // The performance log (1.17): its last lines here, the whole of it in
+  // perf-log.txt in ClipForge's data folder, written now.
+  try {
+    final perf = container.read(perfLogProvider);
+    if (perf.last(1).isNotEmpty || perf.previousRun.isNotEmpty) {
+      text = '$text\n\n${perf.shared()}';
+      final written = await perf
+          .write(header: info.describe())
+          .timeout(const Duration(seconds: 2), onTimeout: () => null);
+      if (written != null) {
+        text = '$text\nThe whole log is in $kPerfLogFileName in '
+            "ClipForge's data folder.";
+      }
+    }
   } catch (_) {}
   await Clipboard.setData(ClipboardData(text: text));
   messenger

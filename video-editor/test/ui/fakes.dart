@@ -58,6 +58,9 @@ class FakeProjectStore implements ProjectStore {
   /// Set to make every [save] fail, like a full disk.
   bool failSaves = false;
 
+  /// Saves of the projects this says true for fail.
+  bool Function(Project project)? failWhen;
+
   @override
   Future<List<ProjectInfo>> list() async {
     final sorted = projects.values.toList()
@@ -89,7 +92,9 @@ class FakeProjectStore implements ProjectStore {
 
   @override
   Future<void> save(Project project) async {
-    if (failSaves) throw const FileSystemException('No space left on device');
+    if (failSaves || (failWhen?.call(project) ?? false)) {
+      throw const FileSystemException('No space left on device');
+    }
     saves++;
     projects[project.id] = project;
   }
@@ -1204,6 +1209,15 @@ class FakeSpeech implements SpeechService {
     final b = backend;
     if (b == null) {
       return SpeechPlan(problem: noBackendExplanation('windows'), language: language);
+    }
+    // The user's own file, by the app's own rule (speech_models.dart).
+    final file = modelFile;
+    if (file != null && quality == SpeechQuality.auto) {
+      final own = ownModelFile(file, 148 * 1024 * 1024);
+      if (ownModelServes(own, language)) {
+        return SpeechPlan(
+            backend: b, model: own, modelName: own.model.id, language: language);
+      }
     }
     final ids = modelIdsFor(language == 'auto' ? '' : language, quality);
     for (final id in ids) {

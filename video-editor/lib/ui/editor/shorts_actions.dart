@@ -92,27 +92,33 @@ Future<Project> createShort(EditorSession s, ShortRequest r) async {
   await s.saveNow?.call();
   final name = await freeProjectName(store, r.name);
   final copy = await store.duplicate(s.project.id, name: name);
-  final e = ProjectEditor(
-      copy.copyWith(publishing: PublishingNotes.empty, markers: const []));
-  final transcribed = s.transcripts.value.isNotEmpty;
-  final language =
-      transcribed ? s.transcripts.value.values.first.language : '';
-  final built = buildShort(e,
-      fromMs: r.fromMs,
-      toMs: r.toMs,
-      blur: true,
-      shortCaptions: r.shortCaptions,
-      title: r.title,
-      words: (short) =>
-          transcribed ? timelineWords(short, s.transcriptOf) : null,
-      skipWord: transcribed ? isFillerSound(fillersFor(language)) : null,
-      newId: _uuid.v4);
-  if (!built.ok) {
-    await store.delete(copy.id);
-    throw StateError('This part holds no video');
+  try {
+    final e = ProjectEditor(
+        copy.copyWith(publishing: PublishingNotes.empty, markers: const []));
+    final transcribed = s.transcripts.value.isNotEmpty;
+    final language =
+        transcribed ? s.transcripts.value.values.first.language : '';
+    final built = buildShort(e,
+        fromMs: r.fromMs,
+        toMs: r.toMs,
+        blur: true,
+        shortCaptions: r.shortCaptions,
+        title: r.title,
+        words: (short) =>
+            transcribed ? timelineWords(short, s.transcriptOf) : null,
+        skipWord: transcribed ? isFillerSound(fillersFor(language)) : null,
+        newId: _uuid.v4);
+    if (!built.ok) throw StateError('This part holds no video');
+    await store.save(e.project);
+    return e.project;
+  } catch (_) {
+    // Never leave the full-length copy in the project list under the
+    // short's name.
+    try {
+      await store.delete(copy.id);
+    } catch (_) {}
+    rethrow;
   }
-  await store.save(e.project);
-  return e.project;
 }
 
 String _shortName(Project p, int fromMs) =>
@@ -161,25 +167,36 @@ Future<void> showMakeShort(
 }
 
 Future<void> _offerToOpen(
-    BuildContext context, EditorSession s, List<Project> made) async {
+    BuildContext context, EditorSession s, List<Project> made,
+    {int? wanted, List<String> problems = const []}) async {
   final one = made.length == 1;
+  // Fewer than promised (1.17: a real test was promised two and got "The
+  // short is ready"): the message counts them and says what went wrong.
+  final missing = wanted != null && made.length < wanted;
   final open = await showDialog<bool>(
     context: context,
     builder: (d) => AlertDialog(
       key: const ValueKey('short-made'),
-      title: Text(one ? 'The short is ready' : '${made.length} shorts are ready'),
+      title: Text(missing
+          ? '${made.length} of $wanted shorts ${one ? 'was' : 'were'} made'
+          : one
+              ? 'The short is ready'
+              : '${made.length} shorts are ready'),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
-        child: Text(one
-            ? '"${made.single.name}" (${formatLength(made.single.durationMs)}) '
-                'is a new project in your project list. This video was not '
-                'changed.\n\nOpen it to check the picture (Crop and position '
-                'keeps the person in shot) and export it for Shorts / Reels '
-                '/ TikTok.'
-            : 'They are new projects in your project list:\n'
-                '${made.map((p) => '• ${p.name} (${formatLength(p.durationMs)})').join('\n')}\n\n'
-                'This video was not changed. Open each one to check the '
-                'picture and export it.'),
+        child: Text((one
+                ? '"${made.single.name}" (${formatLength(made.single.durationMs)}) '
+                    'is a new project in your project list. This video was not '
+                    'changed.\n\nOpen it to check the picture (Crop and position '
+                    'keeps the person in shot) and export it for Shorts / Reels '
+                    '/ TikTok.'
+                : 'They are new projects in your project list:\n'
+                    '${made.map((p) => '• ${p.name} (${formatLength(p.durationMs)})').join('\n')}\n\n'
+                    'This video was not changed. Open each one to check the '
+                    'picture and export it.') +
+            (missing
+                ? '\n\nNot made:\n${problems.map((p) => '• $p').join('\n')}'
+                : '')),
       ),
       actions: [
         TextButton(
@@ -617,7 +634,9 @@ List<({Marker marker, Span range})> markerShorts(EditorSession s) => [
         ),
     ];
 
-/// "Make shorts from markers…": one short around each marker.
+/// "Make shorts from markers…": one short around each marker. As many
+/// shorts are made as the window says; when fewer could be made the end
+/// message says how many, and why.
 Future<void> makeShortsFromMarkers(BuildContext context, EditorSession s) async {
   if (s.store == null) return;
   final plan = markerShorts(s);
@@ -627,81 +646,153 @@ Future<void> makeShortsFromMarkers(BuildContext context, EditorSession s) async 
   }
   s.playback.pause();
   var shortCaptions = true;
+  final each = [for (final x in plan) x.range];
+  // Markers close together (or a short video): their shorts would show
+  // mostly the same part. The user chooses; one short covering both is
+  // what is ticked.
+  final overlapping =
+      overlappingGroups(each).any((g) => g.length > 1);
+  var join = overlapping;
+  List<Span> ranges() => shortRangesFor(each, joinOverlapping: join);
   final ok = await showDialog<bool>(
     context: context,
     builder: (d) => StatefulBuilder(
-      builder: (context, setState) => AlertDialog(
-        key: const ValueKey('markers-shorts-dialog'),
-        title: Text(plan.length == 1
-            ? 'Make a short from the marker?'
-            : 'Make ${plan.length} shorts from the markers?'),
-        content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                      'One new upright project around each marker: about '
-                      '20 seconds before it to 25 seconds after, starting '
-                      'and ending at a pause in the talk. This video is not '
-                      'changed.'),
-                  const SizedBox(height: 8),
-                  for (final x in plan)
-                    Text(
-                        '• ${formatTime(x.range.startMs)} – '
-                        '${formatTime(x.range.endMs)} '
-                        '(${formatLength(x.range.endMs - x.range.startMs)})',
-                        key: ValueKey('markers-short-${x.marker.id}')),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    value: shortCaptions,
-                    onChanged: (v) => setState(() => shortCaptions = v ?? true),
-                    title: const Text('Short caption look'),
-                  ),
-                ],
+      builder: (context, setState) {
+        final list = ranges();
+        final n = list.length;
+        return AlertDialog(
+          key: const ValueKey('markers-shorts-dialog'),
+          title: Text(
+              n == 1
+                  ? (plan.length == 1
+                      ? 'Make a short from the marker?'
+                      : 'Make 1 short from the ${plan.length} markers?')
+                  : 'Make $n shorts from the markers?',
+              key: const ValueKey('markers-shorts-title')),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                        'One new upright project around each marker: about '
+                        '20 seconds before it to 25 seconds after (less in '
+                        'a short video), starting and ending at a pause in '
+                        'the talk. This video is not changed.'),
+                    if (overlapping) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                          plan.length == 2
+                              ? 'The two markers are close together: their '
+                                  'shorts would show mostly the same part.'
+                              : 'Some markers are close together: their '
+                                  'shorts would show mostly the same part.',
+                          key: const ValueKey('markers-overlap-note'),
+                          style: const TextStyle(color: Color(0xFFFFC56B))),
+                      RadioGroup<bool>(
+                        groupValue: join,
+                        onChanged: (v) => setState(() => join = v ?? true),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            RadioListTile<bool>(
+                              key: const ValueKey('markers-join'),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              value: true,
+                              title: Text(plan.length == 2
+                                  ? 'One short covering both'
+                                  : 'One short for markers that are close '
+                                      'together'),
+                            ),
+                            RadioListTile<bool>(
+                              key: const ValueKey('markers-separate'),
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              value: false,
+                              title: Text(plan.length == 2
+                                  ? 'Two shorts'
+                                  : 'A short for every marker '
+                                      '(${plan.length})'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    for (final (i, r) in list.indexed)
+                      Text(
+                          '• ${formatTime(r.startMs)} – '
+                          '${formatTime(r.endMs)} '
+                          '(${formatLength(r.endMs - r.startMs)})',
+                          key: ValueKey('markers-short-range-$i')),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: shortCaptions,
+                      onChanged: (v) =>
+                          setState(() => shortCaptions = v ?? true),
+                      title: const Text('Short caption look'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(d).pop(false),
-              child: const Text('Cancel')),
-          FilledButton(
-              key: const ValueKey('markers-shorts-go'),
-              onPressed: () => Navigator.of(d).pop(true),
-              child: Text(plan.length == 1 ? 'Make it' : 'Make them')),
-        ],
-      ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.of(d).pop(false),
+                child: const Text('Cancel')),
+            FilledButton(
+                key: const ValueKey('markers-shorts-go'),
+                onPressed: () => Navigator.of(d).pop(true),
+                child: Text(n == 1 ? 'Make it' : 'Make them')),
+          ],
+        );
+      },
     ),
   );
   if (ok != true || !context.mounted) return;
+  final wanted = ranges();
   final made = <Project>[];
-  String? problem;
-  for (final x in plan) {
+  final problems = <String>[];
+  for (final r in wanted) {
+    // The name says where the short starts; a marker inside it gives the
+    // time when there is exactly one.
+    final inside = [
+      for (final x in plan)
+        if (x.marker.ms >= r.startMs && x.marker.ms <= r.endMs) x.marker.ms,
+    ];
+    final request = ShortRequest(
+      fromMs: r.startMs,
+      toMs: r.endMs,
+      name: _shortName(s.project, inside.length == 1 ? inside.single : r.startMs),
+      shortCaptions: shortCaptions,
+    );
     try {
-      made.add(await createShort(
-          s,
-          ShortRequest(
-            fromMs: x.range.startMs,
-            toMs: x.range.endMs,
-            name: _shortName(s.project, x.marker.ms),
-            shortCaptions: shortCaptions,
-          )));
-    } catch (e) {
-      problem = e is StateError ? e.message : '$e';
+      made.add(await createShort(s, request));
+    } catch (first) {
+      // Once more: the project list may have been busy with the short
+      // before this one.
+      try {
+        made.add(await createShort(s, request));
+      } catch (e) {
+        problems.add('${formatTime(r.startMs)} – ${formatTime(r.endMs)}: '
+            '${e is StateError ? e.message : e}');
+      }
     }
   }
   if (!context.mounted) return;
   if (made.isEmpty) {
-    _say(context, 'No short could be made${problem == null ? '' : ' ($problem)'}.');
+    _say(context,
+        'No short could be made${problems.isEmpty ? '' : ' (${problems.first})'}.');
     return;
   }
-  await _offerToOpen(context, s, made);
+  await _offerToOpen(context, s, made,
+      wanted: wanted.length, problems: problems);
 }

@@ -141,6 +141,11 @@ class _FeedbackBodyState extends ConsumerState<FeedbackBody> {
   String _system = '';
   List<String> _logLines = const [];
   bool _includeLog = false;
+
+  /// The performance log (core/perf_log.dart) as it was when the page
+  /// opened: sent only when ticked, and shown before it is.
+  List<String> _detailLines = const [];
+  bool _includeDetails = false;
   bool _sending = false;
   bool _sent = false;
   bool _touched = false;
@@ -160,6 +165,9 @@ class _FeedbackBodyState extends ConsumerState<FeedbackBody> {
     _build = ref.read(buildInfoProvider);
     _platform = ref.read(updatePlatformProvider);
     if (widget.updateFailed) _kind = FeedbackKind.problem;
+    try {
+      _detailLines = ref.read(perfLogProvider).shared().split('\n');
+    } catch (_) {}
     _message.addListener(_changed);
     _email.addListener(_changed);
     _load();
@@ -242,6 +250,7 @@ class _FeedbackBodyState extends ConsumerState<FeedbackBody> {
         build: _build.buildNumber,
         system: _system.isEmpty ? _platform.os : _system,
         logLines: _withLog ? _logLines : const [],
+        detailLines: _includeDetails ? _detailLines : const [],
       );
 
   Future<void> _send() async {
@@ -472,6 +481,23 @@ class _FeedbackBodyState extends ConsumerState<FeedbackBody> {
                 'they are sent.'),
           ),
         ],
+        if (_detailLines.length > 1)
+          CheckboxListTile(
+            key: const ValueKey('feedback-include-details'),
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            value: _includeDetails,
+            onChanged: _sending
+                ? null
+                : (v) => setState(() => _includeDetails = v ?? false),
+            title: const Text('Include details about how ClipForge ran'),
+            subtitle: const Text(
+                'The performance log: when ClipForge opened a project, saved, '
+                'drew sound waves, and when it could not respond. No file '
+                'names, no project names, nothing you typed. Useful when '
+                'ClipForge was slow or stopped answering. You see the lines '
+                'below before they are sent.'),
+          ),
         const SizedBox(height: 12),
         Container(
           key: const ValueKey('feedback-what-is-sent'),

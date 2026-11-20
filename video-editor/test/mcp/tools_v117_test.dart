@@ -278,4 +278,79 @@ void main() {
     t = (await load()).soundTracks.firstWhere((t) => t.name == 'Voice');
     expect(t.gate, isFalse);
   });
+
+  // Second pass (same version) -------------------------------------------
+
+  test('list_markers in a short video (35.3 s, markers at 0:11.6 and '
+      '0:23.7): two different parts, not the whole video twice', () async {
+    await b.seed('clip', clips: [b.video('v', file: 'clip.mp4', source: 35300)]);
+    for (final at in [11600, 23700]) {
+      await c.ok('add_marker', {'project_id': 'clip', 'at_ms': at});
+    }
+    final r = await c.ok('list_markers', {'project_id': 'clip'});
+    final rows = [for (final m in r.data['markers'] as List) m as Map];
+    expect(rows, hasLength(2));
+    final ranges = [
+      for (final m in rows) (m['shortFromMs'] as int, m['shortToMs'] as int),
+    ];
+    expect(ranges[0], isNot(ranges[1]));
+    for (final (i, (from, to)) in ranges.indexed) {
+      expect(to - from, lessThan(35300 * 0.6), reason: 'not the whole video');
+      expect(from, lessThan(rows[i]['atMs'] as int));
+      expect(to, greaterThan(rows[i]['atMs'] as int));
+      expect(to, lessThanOrEqualTo(35300));
+    }
+    expect(r.data.containsKey('overlapping'), isFalse);
+    expect(r.text, isNot(contains('overlap by more than')));
+  });
+
+  test('list_markers says when two shorts would show the same part, with '
+      'the one range that covers both', () async {
+    await b.seed('clip', clips: [b.video('v', file: 'clip.mp4', source: 35300)]);
+    final ids = <String>[];
+    for (final at in [15000, 17000]) {
+      final r = await c.ok('add_marker', {'project_id': 'clip', 'at_ms': at});
+      ids.add(r.data['markerId'] as String);
+    }
+    final r = await c.ok('list_markers', {'project_id': 'clip'});
+    final together = (r.data['overlapping'] as List).single as Map;
+    expect(together['markerIds'], ids);
+    final rows = [for (final m in r.data['markers'] as List) m as Map];
+    expect(together['oneShortFromMs'], rows.first['shortFromMs']);
+    expect(together['oneShortToMs'], rows.last['shortToMs']);
+    expect(r.text, contains('overlap by more than 70 %'));
+    expect(r.text, contains('Tell the user how many shorts you made'));
+  });
+
+  test('restore_cut brings the captions of a cut part back', () async {
+    await b.seed('caps', clips: [
+      b.video('v', file: 'caps.mp4', source: 60000),
+    ], titles: [
+      for (var i = 0; i < 30; i++)
+        TitleOverlay(
+            id: 'c$i',
+            text: 'said $i',
+            startMs: i * 2000,
+            endMs: i * 2000 + 1800,
+            kind: TitleKind.caption),
+    ]);
+    await c.ok('edit_part', {
+      'project_id': 'caps',
+      'action': 'cut_out',
+      'from_ms': 20000,
+      'to_ms': 30000,
+    });
+    var p = await b.store.load('caps');
+    expect(p.durationMs, 50000);
+    expect(p.titles.any((t) => t.text == 'said 12'), isFalse);
+    expect(p.autoCuts.single.titles, isNotEmpty);
+    await c.ok('restore_cut',
+        {'project_id': 'caps', 'cut_id': p.autoCuts.single.id});
+    p = await b.store.load('caps');
+    expect(p.durationMs, 60000);
+    final back = p.titles.singleWhere((t) => t.text == 'said 12');
+    expect(back.startMs, closeTo(24000, 2));
+    expect(back.kind, TitleKind.caption);
+    expect(p.titles.length, 30);
+  });
 }

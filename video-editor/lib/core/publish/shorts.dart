@@ -370,13 +370,103 @@ List<Span> pausesBetween(Iterable<Span> talk, int totalMs, {int minMs = 300}) {
   );
 }
 
+/// A marker's short is never shorter than this (where the video allows).
+const int kMarkerMinMs = 8000;
+
+/// From this length of the video on, a marker's short takes the full
+/// [kMarkerBeforeMs] + [kMarkerAfterMs]; in a shorter video, half of it.
+const int kMarkerFullFromMs = 60000;
+
+/// Two marker shorts that share more than this much of the shorter one
+/// show mostly the same part: the user is asked whether one short should
+/// cover both.
+const double kMarkerOverlapShare = 0.7;
+
 /// The part of the video a short around a marker at [markerMs] takes
 /// (before snapping): [kMarkerBeforeMs] before to [kMarkerAfterMs] after,
 /// inside the video.
-Span markerRange(int markerMs, int totalMs) => (
-      startMs: (markerMs - kMarkerBeforeMs).clamp(0, totalMs),
-      endMs: (markerMs + kMarkerAfterMs).clamp(0, totalMs),
-    );
+///
+/// A SHORT video (under [kMarkerFullFromMs], a minute) gets a smaller
+/// window in the same proportion - half the video, at least
+/// [kMarkerMinMs] - so that two markers in a 35-second video do not both
+/// become the whole video (1.17; a real test got 0:00-0:35 twice). A
+/// window cut off by the start or the end of the video is made up on the
+/// other side to [kMarkerMinMs].
+Span markerRange(int markerMs, int totalMs) {
+  if (totalMs <= 0) return (startMs: 0, endMs: 0);
+  const full = kMarkerBeforeMs + kMarkerAfterMs;
+  var window = full;
+  if (totalMs < kMarkerFullFromMs) {
+    window = totalMs ~/ 2;
+    if (window < kMarkerMinMs) window = kMarkerMinMs;
+    if (window > totalMs) window = totalMs;
+  }
+  final before = window * kMarkerBeforeMs ~/ full;
+  final m = markerMs.clamp(0, totalMs);
+  var start = (m - before).clamp(0, totalMs);
+  var end = (m - before + window).clamp(0, totalMs);
+  final least = kMarkerMinMs < totalMs ? kMarkerMinMs : totalMs;
+  if (end - start < least) {
+    if (start == 0) {
+      end = least;
+    } else {
+      start = end - least;
+    }
+  }
+  return (startMs: start, endMs: end);
+}
+
+/// How much of the shorter of [a] and [b] the two share (0..1).
+double spanOverlapShare(Span a, Span b) {
+  final from = a.startMs > b.startMs ? a.startMs : b.startMs;
+  final to = a.endMs < b.endMs ? a.endMs : b.endMs;
+  if (to <= from) return 0;
+  final la = a.endMs - a.startMs, lb = b.endMs - b.startMs;
+  final shorter = la < lb ? la : lb;
+  return shorter <= 0 ? 0 : (to - from) / shorter;
+}
+
+/// [ranges] (in time order of their markers) in groups of neighbours
+/// that overlap by more than [share]: each group is a list of indexes
+/// into [ranges]. A group of one is a range that stands by itself.
+List<List<int>> overlappingGroups(List<Span> ranges,
+    {double share = kMarkerOverlapShare}) {
+  final order = [for (var i = 0; i < ranges.length; i++) i]
+    ..sort((a, b) => ranges[a].startMs != ranges[b].startMs
+        ? ranges[a].startMs.compareTo(ranges[b].startMs)
+        : a.compareTo(b));
+  final groups = <List<int>>[];
+  Span? union;
+  for (final i in order) {
+    final r = ranges[i];
+    if (union != null && spanOverlapShare(union, r) > share) {
+      groups.last.add(i);
+      union = (
+        startMs: union.startMs < r.startMs ? union.startMs : r.startMs,
+        endMs: union.endMs > r.endMs ? union.endMs : r.endMs,
+      );
+    } else {
+      groups.add([i]);
+      union = r;
+    }
+  }
+  return groups;
+}
+
+/// The ranges to make shorts of when overlapping ones are joined
+/// ([joinOverlapping]): one range per group of [overlappingGroups],
+/// from the earliest start to the latest end. Otherwise [ranges] as they
+/// are.
+List<Span> shortRangesFor(List<Span> ranges, {required bool joinOverlapping}) {
+  if (!joinOverlapping) return [...ranges];
+  return [
+    for (final g in overlappingGroups(ranges))
+      (
+        startMs: g.map((i) => ranges[i].startMs).reduce((a, b) => a < b ? a : b),
+        endMs: g.map((i) => ranges[i].endMs).reduce((a, b) => a > b ? a : b),
+      ),
+  ];
+}
 
 /// Something said: a word of a transcript, or a caption.
 class Spoken {

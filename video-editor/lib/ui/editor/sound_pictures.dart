@@ -9,6 +9,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 
 import '../../core/model/project.dart';
+import '../../core/perf_log.dart';
 import '../../media/media_api.dart';
 import '../../media/sound_peaks_job.dart';
 import '../../media/speech_map.dart';
@@ -67,13 +68,31 @@ class SoundPictures extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Reads the missing pictures after all ("Draw the sound").
+  /// Reads the missing pictures after all ("Draw the sound", "Turn back
+  /// on").
   void resume() {
     if (!_stopped) return;
     _stopped = false;
+    _pausedForApp = false;
     if (_project != null) update(_project!);
     notifyListeners();
   }
+
+  /// The safety valve (1.17): the app could not respond for [gapMs] while
+  /// pictures were being drawn. Picture work stops for this editor (the
+  /// setting stays as it is) and the timeline says so in one line, with
+  /// "Turn back on" ([resume]). Does nothing when no picture is in work.
+  void pauseForResponsiveness(int gapMs) {
+    if (_disposed || !busy || _stopped) return;
+    PerfLog.instance.note('sound pictures paused: the app did not respond '
+        'for $gapMs ms while they were drawn');
+    _pausedForApp = true;
+    stop();
+  }
+
+  /// True after [pauseForResponsiveness], until [resume].
+  bool get pausedForApp => _pausedForApp;
+  bool _pausedForApp = false;
 
   /// Debug builds: how long each picture took (never in a release).
   static bool logTimings = false;
@@ -118,6 +137,7 @@ class SoundPictures extends ChangeNotifier {
       if (!needed && c != null && !c.isCompleted) c.complete();
     } else {
       _stopped = false;
+      _pausedForApp = false;
     }
     if (_project != null) update(_project!);
     notifyListeners();
@@ -189,6 +209,20 @@ class SoundPictures extends ChangeNotifier {
   bool _long = false;
   bool _delayed = false;
 
+  /// The length of the file [path] in whole seconds as the project knows
+  /// it (-1: unknown), for the performance log.
+  int _secondsOf(String path) {
+    final p = _project;
+    if (p == null) return -1;
+    for (final c in p.clips) {
+      if (c.path == path) return c.sourceDurationMs ~/ 1000;
+    }
+    for (final a in p.audio) {
+      if (a.path == path) return a.sourceDurationMs ~/ 1000;
+    }
+    return -1;
+  }
+
   bool get _wanted =>
       _enabled || (_project != null && _gateNeeds(_project!));
 
@@ -225,6 +259,11 @@ class SoundPictures extends ChangeNotifier {
         _current = job;
         final cancel = _cancel = Completer<void>();
         final watch = Stopwatch()..start();
+        // Kind and length only: never a file name in the log.
+        final seconds = _secondsOf(job.path);
+        final noted = PerfLog.instance.span('sound picture '
+            '${_done + 1} of $totalCount (${seconds < 0 ? 'unknown length' : '$seconds s'})');
+        var outcome = 'end';
         notifyListeners();
         try {
           final e = engine;
@@ -246,6 +285,7 @@ class SoundPictures extends ChangeNotifier {
             if (_disposed) return;
           }
           if (peaks == null) {
+            outcome = 'no sound';
             _failed.add(key);
           } else {
             _peaks[key] = peaks;
@@ -257,10 +297,13 @@ class SoundPictures extends ChangeNotifier {
         } on SoundPeaksCancelled {
           // Stopped on purpose: not a failure, it is asked for again
           // when wanted.
+          outcome = 'stopped';
         } catch (_) {
           // Unreadable sound: the block stays plain.
+          outcome = 'failed';
           _failed.add(key);
         } finally {
+          noted(outcome);
           _current = null;
           if (identical(_cancel, cancel)) _cancel = null;
         }

@@ -668,8 +668,10 @@ extension _PublishTools on ClipForgeTools {
           '"${project.name}" (${_mss(project.durationMs)} long). "short" is '
           'the part a short around the marker would take '
           '(${kMarkerBeforeMs ~/ 1000} s before to ${kMarkerAfterMs ~/ 1000} '
-          's after, moved outward to pauses).');
+          's after - less in a video under a minute - moved outward to '
+          'pauses).');
     final rows = <Map<String, dynamic>>[];
+    final ranges = <Span>[];
     for (final m in project.markers) {
       final range = markerRange(m.ms, project.durationMs);
       final snapped = snapShortRange(range.startMs, range.endMs,
@@ -689,9 +691,33 @@ extension _PublishTools on ClipForgeTools {
         'shortFromMs': snapped.fromMs,
         'shortToMs': snapped.toMs,
       });
+      ranges.add((startMs: snapped.fromMs, endMs: snapped.toMs));
     }
-    return ToolResult(text.toString().trimRight(),
-        structured: {'projectId': project.id, 'markers': rows});
+    // Markers close together: say so, with the one range that covers
+    // them, so that as many shorts are made as were announced.
+    final together = <Map<String, dynamic>>[];
+    for (final g in overlappingGroups(ranges)) {
+      if (g.length < 2) continue;
+      final from =
+          g.map((i) => ranges[i].startMs).reduce((a, b) => a < b ? a : b);
+      final to = g.map((i) => ranges[i].endMs).reduce((a, b) => a > b ? a : b);
+      text.writeln('Note: the shorts of markers '
+          '${g.map((i) => project.markers[i].id).join(', ')} overlap by more '
+          'than ${(kMarkerOverlapShare * 100).round()} %: they would show '
+          'mostly the same part. Ask the user: one short covering them '
+          '($from-$to) or one each. Tell the user how many shorts you '
+          'made.');
+      together.add({
+        'markerIds': [for (final i in g) project.markers[i].id],
+        'oneShortFromMs': from,
+        'oneShortToMs': to,
+      });
+    }
+    return ToolResult(text.toString().trimRight(), structured: {
+      'projectId': project.id,
+      'markers': rows,
+      if (together.isNotEmpty) 'overlapping': together,
+    });
   }
 
   // export_kit ---------------------------------------------------------------

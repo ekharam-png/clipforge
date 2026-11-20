@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../model/project.dart';
+import '../perf_log.dart';
 import '../storage/project_store.dart';
 import 'editor_controller.dart';
 
@@ -45,10 +46,35 @@ class Autosaver {
     _timer?.cancel();
     _timer = null;
     if (!hasPendingChanges) return;
+    // A file that was just added is written AT ONCE (1.17): on a real PC
+    // an imported 25-minute video was lost because the app stalled before
+    // the quiet time was over. A save waits for nothing but the disk:
+    // not for the sound pictures, thumbnails or any other media work.
+    if (_addsMedia(controller.project, _saved)) {
+      PerfLog.instance.note('save: a file was added, saving at once');
+      _drain();
+      return;
+    }
     _timer = Timer(debounce, () {
       _timer = null;
       _drain();
     });
+  }
+
+  /// True when [now] uses a media file that [before] does not.
+  static bool _addsMedia(Project now, Project before) {
+    final count = now.clips.length + now.audio.length + now.overlays.length;
+    final was =
+        before.clips.length + before.audio.length + before.overlays.length;
+    if (count <= was) return false;
+    final known = <String>{
+      for (final c in before.clips) c.path,
+      for (final a in before.audio) a.path,
+      for (final o in before.overlays) o.path,
+    };
+    return now.clips.any((c) => !known.contains(c.path)) ||
+        now.audio.any((a) => !known.contains(a.path)) ||
+        now.overlays.any((o) => !known.contains(o.path));
   }
 
   /// Runs saves until the disk matches the controller (or a save fails).
@@ -61,13 +87,16 @@ class Autosaver {
     while (true) {
       final snapshot = controller.project;
       if (identical(snapshot, _saved)) return;
+      final noted = PerfLog.instance.span('save');
       try {
         await store.save(snapshot);
         _saved = snapshot;
         lastError = null;
+        noted();
       } catch (e) {
         lastError = e;
         _lastRunFailed = true;
+        noted('failed (${e.runtimeType})');
         return;
       }
     }

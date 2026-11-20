@@ -139,11 +139,39 @@ void main() {
         c.trimClip('a', inMs: 900);
       });
       async.elapse(ms * 800);
-      expect(store.saved.single.clips.single.inMs, 900);
+      // (The added file itself was written at once, see below.)
+      expect(store.saved.last.clips.single.inMs, 900);
+      final before = store.saved.length;
       c.undo();
       async.elapse(ms * 800);
-      expect(store.saved, hasLength(2));
+      expect(store.saved, hasLength(before + 1));
       expect(store.saved.last.clips, isEmpty);
+      saver.dispose();
+    });
+  });
+
+  test('1.17: a file that was added is saved at once, not after the quiet '
+      'time', () {
+    fakeAsync((async) {
+      final saver = Autosaver(c, store);
+      c.addClip(video('a'));
+      // No time passes: only the save itself runs.
+      async.elapse(Duration.zero);
+      expect(store.saved, hasLength(1));
+      expect(store.saved.single.clips.single.id, 'a');
+      expect(saver.hasPendingChanges, isFalse);
+      // An edit of what is already there waits as before.
+      c.trimClip('a', inMs: 500);
+      async.elapse(Duration.zero);
+      expect(store.saved, hasLength(1));
+      async.elapse(ms * 800);
+      expect(store.saved, hasLength(2));
+      // Splitting makes more clips but adds no file: no immediate save.
+      expect(c.splitAt(2000), isTrue);
+      async.elapse(Duration.zero);
+      expect(store.saved, hasLength(2));
+      async.elapse(ms * 800);
+      expect(store.saved, hasLength(3));
       saver.dispose();
     });
   });

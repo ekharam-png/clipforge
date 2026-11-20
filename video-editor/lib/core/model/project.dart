@@ -1499,6 +1499,35 @@ class TitleOverlay {
       );
 }
 
+/// A title or caption that went with an automatic cut (1.17), so that
+/// "Put back" can bring it back with the footage: the title as it was and
+/// where it started, counted from the start of the cut on the timeline
+/// (negative: it began before the cut).
+class RemovedTitle {
+  const RemovedTitle(this.offsetMs, this.title);
+  final int offsetMs;
+  final TitleOverlay title;
+
+  Map<String, dynamic> toJson() =>
+      {'offsetMs': offsetMs, 'title': title.toJson()};
+
+  static RemovedTitle? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final t = j['title'];
+    if (t is! Map) return null;
+    try {
+      return RemovedTitle((j['offsetMs'] as num?)?.toInt() ?? 0,
+          TitleOverlay.fromJson(Map<String, dynamic>.from(t)));
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+/// At most this many titles and captions are kept with one cut (a cut of
+/// half an hour of captions would otherwise double the project file).
+const int kAutoCutTitlesMax = 200;
+
 /// One automatic cut, as the project remembers it (1.11): a stretch of a
 /// media file that "Remove filler words" or "Remove silences" took out.
 /// Clips keep their source ranges, so the stretch can be put back.
@@ -1514,10 +1543,15 @@ class AutoCut {
     this.by = 'app',
     this.jump,
     this.smoothed = false,
+    this.titles = const [],
   });
   final String id;
 
-  /// "filler" or "silence".
+  /// The titles and captions that went with this cut (kinds "text" and
+  /// "part"; at most [kAutoCutTitlesMax]); "Put back" brings them back.
+  final List<RemovedTitle> titles;
+
+  /// "filler", "silence", "text" or "part".
   final String kind;
 
   /// The media file, and the part of it that was removed (source time).
@@ -1552,6 +1586,7 @@ class AutoCut {
         'by': by,
         'jump': ?jump,
         'smoothed': smoothed,
+        if (titles.isNotEmpty) 'titles': [for (final t in titles) t.toJson()],
       };
 
   factory AutoCut.fromJson(Map<String, dynamic> j) => AutoCut(
@@ -1566,7 +1601,40 @@ class AutoCut {
         by: '${j['by'] ?? 'app'}',
         jump: (j['jump'] as num?)?.toDouble(),
         smoothed: j['smoothed'] == true,
+        titles: [
+          if (j['titles'] is List)
+            for (final t in j['titles'] as List)
+              if (RemovedTitle.fromJson(t) case final RemovedTitle r) r,
+        ],
       );
+}
+
+/// The titles and captions that [before] has and [after] no longer has
+/// (they went with a cut that began at [cutStartMs] on [before]'s
+/// timeline), for [AutoCut.titles]. At most [kAutoCutTitlesMax].
+List<RemovedTitle> titlesRemovedBy(
+    Project before, Project after, int cutStartMs) {
+  if (before.titles.isEmpty) return const [];
+  final left = {for (final t in after.titles) t.id};
+  final gone = [
+    for (final t in before.titles)
+      if (!left.contains(t.id)) RemovedTitle(t.startMs - cutStartMs, t),
+  ]..sort((a, b) => a.offsetMs.compareTo(b.offsetMs));
+  return gone.length <= kAutoCutTitlesMax
+      ? gone
+      : gone.sublist(0, kAutoCutTitlesMax);
+}
+
+/// Where the source time [sourceMs] of the clip [clipId] was on [p]'s
+/// timeline (the start of a cut, before it is made).
+int timelineOfSource(Project p, String clipId, int sourceMs) {
+  final i = p.clips.indexWhere((c) => c.id == clipId);
+  if (i < 0) return 0;
+  final c = p.clips[i];
+  if (c.type != ClipType.video) return p.clipStartMs(i);
+  final speed = c.speed <= 0 ? 1.0 : c.speed;
+  final into = ((sourceMs - c.inMs) / speed).round();
+  return p.clipStartMs(i) + (into < 0 ? 0 : into);
 }
 
 /// How an overlay item sits on the picture of the main track.

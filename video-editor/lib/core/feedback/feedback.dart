@@ -100,14 +100,30 @@ String _short(String value) {
       : clean.substring(0, kFeedbackMaxShort).trimRight();
 }
 
+/// What comes between the message and the performance log lines.
+const String kFeedbackDetailsHeading =
+    'How ClipForge ran (performance log, no file names):';
+
 /// The message as it is sent: [message], and under it the [logLines] of
-/// the update log when the user ticked them. Older lines are left out
-/// first when everything together would pass [kFeedbackMaxMessage].
-String feedbackMessage(String message, {List<String> logLines = const []}) {
+/// the update log and the [detailLines] of the performance log when the
+/// user ticked them. Older lines are left out first (the performance log
+/// before the update log) when everything together would pass
+/// [kFeedbackMaxMessage].
+String feedbackMessage(String message,
+    {List<String> logLines = const [], List<String> detailLines = const []}) {
   final text = message.trim();
-  if (logLines.isEmpty) return text;
+  if (logLines.isEmpty && detailLines.isEmpty) return text;
   var lines = [for (final l in logLines) l.trimRight()];
-  String build() => '$text\n\n$kFeedbackLogHeading\n${lines.join('\n')}';
+  var details = [for (final l in detailLines) l.trimRight()];
+  String build() => [
+        text,
+        if (lines.isNotEmpty) '$kFeedbackLogHeading\n${lines.join('\n')}',
+        if (details.isNotEmpty)
+          '$kFeedbackDetailsHeading\n${details.join('\n')}',
+      ].join('\n\n');
+  while (details.length > 1 && build().length > kFeedbackMaxMessage) {
+    details = details.sublist(1);
+  }
   while (lines.length > 1 && build().length > kFeedbackMaxMessage) {
     lines = lines.sublist(1);
   }
@@ -144,13 +160,15 @@ Map<String, Object?> buildFeedbackPayload({
   String? build,
   required String system,
   List<String> logLines = const [],
+  List<String> detailLines = const [],
 }) {
   final address = email.trim();
   final number = build == null ? '' : _short(build);
   return {
     'v': 1,
     'kind': kind.name,
-    'message': feedbackMessage(message, logLines: logLines),
+    'message': feedbackMessage(message,
+        logLines: logLines, detailLines: detailLines),
     if (address.isNotEmpty) 'email': address,
     'app': {
       'version': _short(version),

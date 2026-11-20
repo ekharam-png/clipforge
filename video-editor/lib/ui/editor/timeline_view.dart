@@ -1573,6 +1573,32 @@ class _TimelineViewState extends State<TimelineView> {
             listenable: _s.pictures,
             builder: (context, _) {
               final pics = _s.pictures;
+              if (pics.pausedForApp) {
+                // The safety valve: one line, and the way back.
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                        'Sound waves were paused to keep ClipForge '
+                        'responsive · ',
+                        key: ValueKey('sound-waves-paused'),
+                        style: TextStyle(
+                            fontSize: 11, color: AppColors.textDim)),
+                    InkWell(
+                      key: const ValueKey('sound-waves-resume'),
+                      onTap: pics.resume,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 2),
+                        child: Text('Turn back on',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.accent,
+                                decoration: TextDecoration.underline)),
+                      ),
+                    ),
+                  ],
+                );
+              }
               if (!pics.busy) return const SizedBox.shrink();
               final total = pics.totalCount;
               final at = math.min(total, pics.doneCount + 1);

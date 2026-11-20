@@ -8,11 +8,15 @@ import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit_config.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_session.dart';
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/log_redirection_strategy.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/model/project.dart';
+import '../core/perf_log.dart';
 import 'ffmpeg_command.dart';
+import 'ffmpeg_lane.dart';
+import 'kit_runner.dart';
 import 'hardware_encoding.dart';
 import 'media_api.dart';
 import 'media_common.dart';
@@ -51,7 +55,9 @@ class FfmpegKitMediaEngine
       () => HardwareEncoders(
             platform: _platform,
             listEncoders: _listEncoders,
-            run: _ffmpeg,
+            // Not in the lane: a short test that must not time out behind
+            // a long run.
+            run: _session,
           ));
 
   /// The filters of the FFmpeg in the app, asked once per run.
@@ -60,18 +66,12 @@ class FfmpegKitMediaEngine
 
   /// FFmpegKit prints the `-filters` table through its log, like
   /// `-encoders`.
-  Future<String?> _listFilters() async {
-    final session =
-        await FFmpegKit.executeWithArguments(const ['-hide_banner', '-filters']);
-    return session.getAllLogsAsString();
-  }
+  Future<String?> _listFilters() async =>
+      (await _session(const ['-filters'])).log;
 
   /// FFmpegKit prints the `-encoders` table through its log.
-  Future<String?> _listEncoders() async {
-    final session =
-        await FFmpegKit.executeWithArguments(const ['-hide_banner', '-encoders']);
-    return session.getAllLogsAsString();
-  }
+  Future<String?> _listEncoders() async =>
+      (await _session(const ['-encoders'])).log;
 
   @override
   Future<bool> hasHardwareEncoder() => _encoders.available();
@@ -93,6 +93,22 @@ class FfmpegKitMediaEngine
 
   @override
   Future<MediaInfo> probe(String path) async {
+    // Never in the lane: a probe is what the user waits for when a file
+    // is added, and it must not sit behind a sound picture.
+    await _quiet();
+    final end = PerfLog.instance.span('probe');
+    try {
+      final info = await _probe(path);
+      end('end (${info.hasVideo ? 'video' : 'sound'} '
+          '${info.durationMs ~/ 1000} s)');
+      return info;
+    } catch (_) {
+      end('failed');
+      rethrow;
+    }
+  }
+
+  Future<MediaInfo> _probe(String path) async {
     // Our own arguments also ask for the first frame (EXIF orientation of
     // photos); fall back to the plugin's stock command if that yields nothing.
     var session = await FFprobeKit.getMediaInformationFromCommandArguments(
@@ -105,7 +121,7 @@ class FfmpegKitMediaEngine
     if (props == null) {
       String? log;
       try {
-        log = await session.getAllLogsAsString();
+        log = await session.getAllLogsAsString(_logWaitMs);
       } catch (_) {}
       throw ExportException('Cannot read media file: $path', log: log);
     }
@@ -120,57 +136,48 @@ class FfmpegKitMediaEngine
     final file = File(out);
     if (await file.exists() && await file.length() > 0) return out;
 
-    Future<FFmpegSession> run(int t) => FFmpegKit.executeWithArguments([
-          '-hide_banner', '-loglevel', 'error',
+    Future<FfmpegRun> run(int t) => _ffmpeg([
+          '-loglevel', 'error', '-nostats',
           ...buildThumbnailCommand(
               path: path, outputPath: out, timeMs: t, maxHeight: maxHeight),
         ]);
-    Future<bool> ok(FFmpegSession s) async =>
-        ReturnCode.isSuccess(await s.getReturnCode()) &&
-        await file.exists() &&
-        await file.length() > 0;
+    Future<bool> ok(FfmpegRun r) async =>
+        r.ok && await file.exists() && await file.length() > 0;
 
-    var session = await run(timeMs);
-    if (!await ok(session) && timeMs > 0) session = await run(0);
-    if (!await ok(session)) {
+    var r = await run(timeMs);
+    if (!await ok(r) && timeMs > 0) r = await run(0);
+    if (!await ok(r)) {
       await deleteQuietly(file);
-      String? log;
-      try {
-        log = await session.getAllLogsAsString();
-      } catch (_) {}
-      throw ExportException('Cannot create a thumbnail of $path', log: log);
+      throw ExportException('Cannot create a thumbnail of $path', log: r.log);
     }
     return out;
   }
 
-  /// One-shot runs (thumbnails, thumbnail strips, single frames, probes of
-  /// levels) go ONE AT A TIME (1.17): opening a long project asks for many
-  /// at once, and each is a whole FFmpeg inside the app's own process,
-  /// with its own threads, next to the preview's players. In a queue they
-  /// take the same time in total and leave the processor to the players.
-  Future<void> _oneShot = Future<void>.value();
+  /// Every FFmpeg run of this engine goes through here: see
+  /// kit_runner.dart for how FFmpeg inside the app is kept from holding
+  /// up the app (no log messages to Dart, `-loglevel error -nostats`,
+  /// throttled progress, one run at a time with the user's first).
+  static final KitRunner _kit = KitRunner(_PluginPlatform());
 
-  Future<FfmpegRun> _ffmpeg(List<String> args) {
-    final done = Completer<FfmpegRun>();
-    _oneShot = _oneShot.then((_) async {
-      try {
-        done.complete(await _ffmpegNow(args));
-      } catch (e, st) {
-        done.completeError(e, st);
-      }
-    });
-    return done.future;
-  }
+  /// The lane (the editor's status, tests).
+  static FfmpegLane get lane => _kit.lane;
 
-  Future<FfmpegRun> _ffmpegNow(List<String> args) async {
-    final session =
-        await FFmpegKit.executeWithArguments(['-hide_banner', ...args]);
-    var log = '';
-    try {
-      log = await session.getAllLogsAsString() ?? '';
-    } catch (_) {}
-    return FfmpegRun(ReturnCode.isSuccess(await session.getReturnCode()), log);
-  }
+  static Future<void> _quiet() => _kit.quiet();
+
+  /// Fetching a session's log waits (on the platform thread) for lines
+  /// still on their way: never the plugin's default of five seconds.
+  static const int _logWaitMs = kKitLogWaitMs;
+
+  Future<FfmpegRun> _session(List<String> args) => _kit.session(args);
+
+  Future<FfmpegRun> _ffmpeg(List<String> args) => _kit.user(args);
+
+  Future<FfmpegRun> _ffmpegStreaming(List<String> args,
+          void Function(int timeMs) onTimeMs, Future<void> cancel) =>
+      _kit.streaming(args, onTimeMs, cancel);
+
+  Future<FfmpegRun> _background(List<String> args, {Future<void>? cancel}) =>
+      _kit.background(args, cancel: cancel);
 
   @override
   Future<String> extractFrame(String path, int timeMs, String outputPath) =>
@@ -197,7 +204,7 @@ class FfmpegKitMediaEngine
   @override
   Future<SoundPeaks?> soundPeaks(String path,
           {int audioTrack = 0, String? cacheDir}) =>
-      soundPeaksWith(_ffmpeg, probe, path,
+      soundPeaksWith(_background, probe, path,
           audioTrack: audioTrack, cacheDir: cacheDir);
 
   @override
@@ -205,10 +212,10 @@ class FfmpegKitMediaEngine
           {int audioTrack = 0,
           String? cacheDir,
           required Future<void> cancel}) =>
-      soundPeaksWith(_ffmpeg, probe, path,
+      soundPeaksWith(_background, probe, path,
           audioTrack: audioTrack,
           cacheDir: cacheDir,
-          streaming: _ffmpegStreaming,
+          streaming: (args, _, stop) => _background(args, cancel: stop),
           cancel: cancel);
 
   @override
@@ -222,15 +229,24 @@ class FfmpegKitMediaEngine
         outputPath,
         leaveOut: () async => (await _filters.check()).unavailable,
         launch: (args, {required onTimeMs, required onLog}) async {
+          await _quiet();
           final finished = Completer<FFmpegSession>();
+          final throttle = Throttle<int>(onTimeMs);
           final session = await FFmpegKit.executeWithArgumentsAsync(
-            ['-hide_banner', '-loglevel', 'warning', ...args],
-            (s) {
+            ['-hide_banner', '-loglevel', 'error', ...args],
+            (s) async {
+              throttle.close();
+              // The log is asked for once, and only after a failure.
+              if (!ReturnCode.isSuccess(await s.getReturnCode())) {
+                try {
+                  onLog(await s.getAllLogsAsString(_logWaitMs) ?? '');
+                } catch (_) {}
+              }
               if (!finished.isCompleted) finished.complete(s);
             },
-            (l) => onLog(l.getMessage()),
+            null,
             // Statistics time is the output position in milliseconds.
-            (st) => onTimeMs(st.getTime().round()),
+            (st) => throttle.add(st.getTime().round()),
           );
           return _KitRun(session, finished.future);
         },
@@ -239,7 +255,7 @@ class FfmpegKitMediaEngine
   @override
   Future<ThumbnailStrip> thumbnailStrip(String path,
           {int durationMs = 0, int height = kStripFrameHeight}) =>
-      thumbnailStripWith(_ffmpeg, probe, path,
+      thumbnailStripWith(_background, probe, path,
           durationMs: durationMs, height: height, cacheDir: thumbnailDir);
 
   @override
@@ -257,42 +273,6 @@ class FfmpegKitMediaEngine
           channel: channel,
           fromMs: fromMs,
           toMs: toMs);
-
-  /// Runs FFmpeg in the background, reporting its position through the
-  /// statistics callback; the session is cancelled when [cancel]
-  /// completes. No `-nostats`: FFmpegKit's statistics come from the same
-  /// report that option turns off.
-  Future<FfmpegRun> _ffmpegStreaming(List<String> args,
-      void Function(int timeMs) onTimeMs, Future<void> cancel) async {
-    final log = StringBuffer();
-    final finished = Completer<FFmpegSession>();
-    final session = await FFmpegKit.executeWithArgumentsAsync(
-      ['-hide_banner', ...args],
-      (s) {
-        if (!finished.isCompleted) finished.complete(s);
-      },
-      (l) => log.write(l.getMessage()),
-      (st) {
-        final t = st.getTime();
-        if (t > 0) onTimeMs(t.round());
-      },
-    );
-    unawaited(cancel.then((_) async {
-      if (finished.isCompleted) return;
-      try {
-        await session.cancel();
-      } catch (_) {}
-    }));
-    final ended = await finished.future;
-    var text = log.toString();
-    if (!text.contains('silence_')) {
-      // The log callback can miss lines that arrive after completion.
-      try {
-        text = await ended.getAllLogsAsString() ?? text;
-      } catch (_) {}
-    }
-    return FfmpegRun(ReturnCode.isSuccess(await ended.getReturnCode()), text);
-  }
 
   @override
   ExportJob export(Project project, String outputPath,
@@ -347,6 +327,7 @@ class _KitExportJob implements ExportJob {
       FfmpegKitMediaEngine engine, Project project, ExportOptions options) async {
     Directory? work;
     final log = LogTail();
+    var inLane = false;
     try {
       await Future<void>.delayed(Duration.zero);
       await checkSourcesExist(project);
@@ -377,19 +358,26 @@ class _KitExportJob implements ExportJob {
       if (_cancelled) throw ExportException('Export cancelled', cancelled: true);
       _emit(0);
 
+      await FfmpegKitMediaEngine._quiet();
       final finished = Completer<FFmpegSession>();
+      final throttle = Throttle<double>(_emit);
+      // Sound pictures and thumbnail strips wait while this runs.
+      FfmpegKitMediaEngine.lane.exportStarted();
+      inLane = true;
       final session = await FFmpegKit.executeWithArgumentsAsync(
         ['-hide_banner', '-loglevel', 'warning', ...args],
         (s) {
           if (!finished.isCompleted) finished.complete(s);
         },
-        (l) => log.add(l.getMessage()),
+        // No log callback: the lines stay with the session and are read
+        // once, below, when the export failed.
+        null,
         (st) {
           // Statistics time is the output position in milliseconds.
           final t = st.getTime();
           if (t > 0 && cmd.durationMs > 0) {
             final f = t / cmd.durationMs;
-            _emit(f >= 1 ? 0.99 : f);
+            throttle.add(f >= 1 ? 0.99 : f);
           }
         },
       );
@@ -397,7 +385,15 @@ class _KitExportJob implements ExportJob {
       if (_cancelled) await session.cancel();
 
       final ended = await finished.future;
+      throttle.close();
       final rc = await ended.getReturnCode();
+      if (!ReturnCode.isSuccess(rc)) {
+        try {
+          log.add(await ended.getAllLogsAsString(
+                  FfmpegKitMediaEngine._logWaitMs) ??
+              '');
+        } catch (_) {}
+      }
       if (_cancelled || ReturnCode.isCancel(rc)) {
         _cancelled = true;
         throw ExportException('Export cancelled', cancelled: true);
@@ -423,6 +419,7 @@ class _KitExportJob implements ExportJob {
         _done.completeError(ex);
       }
     } finally {
+      if (inLane) FfmpegKitMediaEngine.lane.exportEnded();
       if (work != null) await deleteQuietly(work);
       await _progress.close();
     }
@@ -453,4 +450,65 @@ class _KitRun implements FfmpegRunHandle {
 
   @override
   Future<void> stop() => _session.cancel();
+}
+
+/// The plugin behind [KitRunner].
+class _PluginPlatform implements KitPlatform {
+  @override
+  Future<void> quiet() async {
+    await FFmpegKitConfig.init();
+    FFmpegKitConfig.setLogRedirectionStrategy(
+        LogRedirectionStrategy.neverPrintLogs);
+    // From here on no log line of FFmpeg is sent to Dart; the native
+    // session still keeps them for [KitSession.log].
+    await FFmpegKitConfig.disableLogs();
+  }
+
+  @override
+  Future<KitSession> start(List<String> args,
+      {void Function(int timeMs)? onStatistics}) async {
+    final finished = Completer<FFmpegSession>();
+    final session = await FFmpegKit.executeWithArgumentsAsync(
+      args,
+      (s) {
+        if (!finished.isCompleted) finished.complete(s);
+      },
+      // Never a log callback.
+      null,
+      onStatistics == null
+          ? null
+          : (st) {
+              // Statistics time is the output position in milliseconds.
+              final t = st.getTime();
+              if (t > 0) onStatistics(t.round());
+            },
+    );
+    return _PluginSession(session, finished.future);
+  }
+}
+
+class _PluginSession implements KitSession {
+  _PluginSession(this._session, this._ended);
+  final FFmpegSession _session;
+  final Future<FFmpegSession> _ended;
+
+  @override
+  Future<bool> get finished async =>
+      ReturnCode.isSuccess(await (await _ended).getReturnCode());
+
+  @override
+  Future<void> cancel() async {
+    try {
+      await _session.cancel();
+    } catch (_) {}
+  }
+
+  @override
+  Future<String> log(int waitMs) async {
+    try {
+      return await (await _ended).getAllLogsAsString(waitMs) ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
 }

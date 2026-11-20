@@ -29,6 +29,7 @@
 // (astats `measure_overall` since 4.4).
 
 import '../core/model/project.dart' show AudioChannel;
+import 'ffmpeg_command.dart' show escapeFilterPath;
 
 /// Length of one measured window.
 const int kLevelWindowMs = 40;
@@ -158,12 +159,18 @@ List<({int startMs, int endMs})> silencesFromLevels(SilenceLevels l,
 /// [kLevelWindowMs] window of audio stream [audioTrack] of [path] to the
 /// log (level info), for source times [fromMs]..[fromMs] + [spanMs]
 /// ([spanMs] 0: to the end). See [parseLevelLog].
+///
+/// With [outputFile] the levels are written to that file instead of the
+/// log (1.17): two lines per 40 ms are 77 000 log lines for 25 minutes,
+/// and with FFmpeg inside the app every log line is a message to the
+/// app's own isolate. The file has the same lines without the log prefix.
 List<String> buildLevelScanCommand({
   required String path,
   int audioTrack = 0,
   AudioChannel channel = AudioChannel.both,
   int fromMs = 0,
   int spanMs = 0,
+  String? outputFile,
 }) {
   const rate = 48000;
   final n = rate * kLevelWindowMs ~/ 1000;
@@ -181,7 +188,8 @@ List<String> buildLevelScanCommand({
     }}aresample=$rate,asetnsamples=n=$n:p=0,'
         'astats=metadata=1:reset=1:measure_perchannel=none'
         ':measure_overall=RMS_level,'
-        'ametadata=mode=print:key=lavfi.astats.Overall.RMS_level',
+        'ametadata=mode=print:key=lavfi.astats.Overall.RMS_level'
+        '${outputFile == null ? '' : ':file=${escapeFilterPath(outputFile)}'}',
     '-f', 'null',
     '-',
   ];
