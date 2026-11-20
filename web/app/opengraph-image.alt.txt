@@ -1,0 +1,1 @@
+The ClipForge editor: a video preview with a title, a tools panel, and a timeline with video, music and title tracks.

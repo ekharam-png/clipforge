@@ -72,6 +72,18 @@ you or your videos is sent.
 
 ClipForge is a beta, made for personal use, and comes with no warranty.
 
+## Website
+
+The website is a small Next.js app in [`web/`](web/), made for Vercel
+(Root Directory `web`): downloads and install steps, a walk-through with
+real screenshots, features, examples, the help with a search, what's new,
+and a feedback form that sends one e-mail and stores nothing. It builds its
+Help, What's new and Features pages from the app's own files, so it does
+not drift from the app. See [`web/README.md`](web/README.md) for how it
+works and [`web/SETUP.md`](web/SETUP.md) for putting it online. Until it
+is live, the download page in [`site/`](site/) (GitHub Pages) stays the
+place to get ClipForge.
+
 ## For developers
 
 The app is a Flutter project in [`video-editor/`](video-editor/). See

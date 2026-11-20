@@ -1,0 +1,74 @@
+{
+  "// how to add an example": "Copy one entry and change it. 'before', 'after' and 'poster' are screenshot names from shots.json. To show a real video add ONE line: \"video\": \"https://…/my-video.mp4\" (anywhere that serves the file over https), or \"video\": \"/media/my-video.mp4\" for a small web-ready file (under 5 MB) saved in web/public/media. See web/README.md.",
+  "notice": "Sample videos are coming. Until then, every picture here is a real screenshot of ClipForge at work on small test clips, which is why the preview shows a plain blue picture instead of somebody's holiday.",
+  "examples": [
+    {
+      "id": "family-trip",
+      "title": "A family trip, start to finish",
+      "kind": "Family video",
+      "description": "Three clips and a photo from a summer trip become one video with a title and music that ends on the last frame.",
+      "done": [
+        "Put the clips in order and trimmed the ends",
+        "Added the title Summer 2026 in the Handwritten style",
+        "Added a song and pressed Fit music to video",
+        "Exported for WhatsApp and for YouTube in one go"
+      ],
+      "before": "editor_desktop_music",
+      "after": "editor_desktop_fit_music",
+      "beforeLabel": "The music runs on after the video",
+      "afterLabel": "After Fit music to video",
+      "link": { "href": "/walkthrough#family", "label": "The family video recipe" }
+    },
+    {
+      "id": "podcast",
+      "title": "A kitchen-table podcast, cleaned up",
+      "kind": "Podcast",
+      "description": "Two people, one camera, and a microphone file each. The voices are lined up with the picture, the long pauses are cut, and captions are written from what was said.",
+      "done": [
+        "Added each microphone file as Voice for the video",
+        "Remove silences, on the whole talk",
+        "Captions from speech (computer), then read through for names",
+        "Podcast audio and a YouTube video from Export several"
+      ],
+      "before": "timeline_waves_desktop",
+      "after": "text_window_desktop_wide",
+      "beforeLabel": "Two voices, lined up by their sound",
+      "afterLabel": "Everything said, as a page you can read",
+      "link": { "href": "/walkthrough#podcast", "label": "The podcast recipe" }
+    },
+    {
+      "id": "sport-highlight",
+      "title": "The goal, in slow motion",
+      "kind": "Sport clip",
+      "description": "A long recording of a match becomes a handful of short clips: mark each good moment while watching, then let ClipForge make a short around each one.",
+      "done": [
+        "Pressed M at every good moment",
+        "Make shorts from markers",
+        "Slowed the best seconds down to 0.5×",
+        "Exported at 60 frames per second"
+      ],
+      "before": "markers_desktop",
+      "after": "editor_desktop_speed",
+      "beforeLabel": "Watching, with Mark a good moment at hand",
+      "afterLabel": "Speed for one clip",
+      "link": { "href": "/walkthrough#sport", "label": "The sport highlight recipe" }
+    },
+    {
+      "id": "vertical-short",
+      "title": "One good sentence as a Reel",
+      "kind": "Vertical short",
+      "description": "Seven seconds picked from the text of a long talk become an upright video with big captions and a title at the top. The long video is not changed.",
+      "done": [
+        "Selected the sentence in the Text window",
+        "Make a short from this, with Short caption look",
+        "Crop and position to keep the person in shot",
+        "Exported for Shorts / Reels / TikTok"
+      ],
+      "before": "short_dialog_desktop",
+      "after": "short_made_desktop",
+      "beforeLabel": "Make a short, from a selection",
+      "afterLabel": "A new upright project, ready to open",
+      "link": { "href": "/walkthrough#short", "label": "The vertical short recipe" }
+    }
+  ]
+}

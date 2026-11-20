@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.vercel/
+.env
+.env.*
+!.env.example
+
+# Made by scripts/build-content.mjs on every build (from ../video-editor).
+content/generated/
+public/shots/
+public/help-index.json
