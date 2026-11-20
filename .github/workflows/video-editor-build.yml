@@ -226,6 +226,8 @@ jobs:
             --display "${{ steps.version.outputs.display }}" --out "$RUNNER_TEMP/mcpb-check"
       - uses: actions/upload-artifact@v7
         with:
+          # Test builds are only needed until a version is published.
+          retention-days: 5
           path: video-editor/dist/ClipForge-${{ steps.version.outputs.version }}-claude-skill.zip
           archive: false
           if-no-files-found: error
@@ -325,6 +327,8 @@ jobs:
           fi
       - uses: actions/upload-artifact@v7
         with:
+          # Test builds are only needed until a version is published.
+          retention-days: 5
           path: video-editor/dist/${{ env.CF_NAME }}-android.apk
           archive: false
           if-no-files-found: error
@@ -584,17 +588,23 @@ jobs:
           Write-Host "OK: install, update in place and uninstall work"
       - uses: actions/upload-artifact@v7
         with:
+          # Test builds are only needed until a version is published.
+          retention-days: 5
           path: video-editor/dist/${{ env.CF_NAME }}-windows.zip
           archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         if: steps.installer.outputs.built == 'true'
         with:
+          # Test builds are only needed until a version is published.
+          retention-days: 5
           path: video-editor/dist/${{ env.CF_NAME }}-windows-setup.exe
           archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
+          # Test builds are only needed until a version is published.
+          retention-days: 5
           path: video-editor/dist/${{ env.CF_NAME }}-claude-windows.mcpb
           archive: false
           if-no-files-found: error
@@ -602,6 +612,8 @@ jobs:
       # carry it; it is inside the installer and the zip).
       - uses: actions/upload-artifact@v7
         with:
+          # Test builds are only needed until a version is published.
+          retention-days: 5
           path: video-editor/dist/${{ env.CF_NAME }}-readme-windows.html
           archive: false
           if-no-files-found: error
@@ -738,11 +750,15 @@ jobs:
           if grep -q "Release notes.txt" <<<"$names"; then echo "::error::Release notes.txt must not be in the macOS zip any more"; exit 1; fi
       - uses: actions/upload-artifact@v7
         with:
+          # Test builds are only needed until a version is published.
+          retention-days: 5
           path: video-editor/dist/${{ env.CF_NAME }}-macos.zip
           archive: false
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
+          # Test builds are only needed until a version is published.
+          retention-days: 5
           path: video-editor/dist/${{ env.CF_NAME }}-claude-macos.mcpb
           archive: false
           if-no-files-found: error
@@ -750,6 +766,8 @@ jobs:
       # carry it; it is inside the macOS zip).
       - uses: actions/upload-artifact@v7
         with:
+          # Test builds are only needed until a version is published.
+          retention-days: 5
           path: video-editor/dist/${{ env.CF_NAME }}-readme-macos.html
           archive: false
           if-no-files-found: error
