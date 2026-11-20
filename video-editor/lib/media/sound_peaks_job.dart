@@ -6,7 +6,11 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'dart:async';
+import 'dart:isolate';
+
 import '../core/storage/media_import.dart' show mediaFingerprint;
+import 'media_jobs.dart' show StreamingFfmpegRunner;
 import 'media_api.dart';
 import 'media_common.dart';
 import 'sound_align.dart' show buildAlignDecodeCommand;
@@ -22,6 +26,25 @@ abstract interface class SoundPeaksEngine {
   /// file cannot be read.
   Future<SoundPeaks?> soundPeaks(String path,
       {int audioTrack = 0, String? cacheDir});
+}
+
+/// An engine whose reading of a sound picture can be stopped (1.17): the
+/// editor stops it when the project is left, when "Show sound waves" is
+/// switched off, and when the user presses the ✕ next to "Drawing
+/// sound…".
+abstract interface class CancellableSoundPeaksEngine
+    implements SoundPeaksEngine {
+  /// Like [SoundPeaksEngine.soundPeaks]; when [cancel] completes first the
+  /// ffmpeg run is stopped and [SoundPeaksCancelled] is thrown.
+  Future<SoundPeaks?> soundPeaksCancellable(String path,
+      {int audioTrack = 0, String? cacheDir, required Future<void> cancel});
+}
+
+/// Reading a sound picture was stopped on purpose.
+class SoundPeaksCancelled implements Exception {
+  const SoundPeaksCancelled();
+  @override
+  String toString() => 'Reading the sound was stopped';
 }
 
 /// Size limit of the peaks folder: about 200 files of 40 minutes.
@@ -42,7 +65,11 @@ Future<SoundPeaks?> soundPeaksWith(
   String path, {
   int audioTrack = 0,
   String? cacheDir,
+  StreamingFfmpegRunner? streaming,
+  Future<void>? cancel,
 }) async {
+  var cancelled = false;
+  if (cancel != null) unawaited(cancel.then((_) => cancelled = true));
   File? cached;
   if (cacheDir != null) {
     try {
@@ -59,23 +86,37 @@ Future<SoundPeaks?> soundPeaksWith(
       cached = null;
     }
   }
+  if (cancelled) throw const SoundPeaksCancelled();
   final info = await probe(path);
   if (!info.hasAudio) return null;
+  if (cancelled) throw const SoundPeaksCancelled();
   final track = audioTrack > 0 && audioTrack < info.audioStreams.length
       ? audioTrack
       : 0;
   final dir = await Directory.systemTemp.createTemp('clipforge_peaks_');
   try {
     final raw = p.join(dir.path, 'sound.raw');
-    final r = await run([
-      '-nostats', '-loglevel', 'error',
+    // One thread: a sound picture is background work and must never take
+    // the processor away from the preview's players (1.17; a 23-minute
+    // project with two voices stalled on a real Windows PC while its
+    // pictures were read).
+    final args = [
+      '-nostats', '-loglevel', 'error', '-threads', '1',
+      '-filter_threads', '1',
       ...buildAlignDecodeCommand(path: path, outputPath: raw, audioTrack: track),
-    ]);
+    ];
+    final r = streaming != null && cancel != null
+        ? await streaming(args, (_) {}, cancel)
+        : await run(args);
+    if (cancelled) throw const SoundPeaksCancelled();
     if (!r.ok || !await File(raw).exists()) {
       throw ExportException('Cannot read the sound of ${p.basename(path)}',
           log: (LogTail()..add(r.log)).toString());
     }
-    final peaks = await SoundPeaks.fromRawFile(raw);
+    // 40 minutes are 38 MB of samples: reduced on another isolate, so the
+    // app's own (UI) isolate only receives the 240 KB result.
+    final peaks = await reduceRawSound(raw);
+    if (cancelled) throw const SoundPeaksCancelled();
     if (cached != null) {
       try {
         await cached.parent.create(recursive: true);
@@ -91,6 +132,11 @@ Future<SoundPeaks?> soundPeaksWith(
     await deleteQuietly(dir);
   }
 }
+
+/// The sound picture of the raw samples in [rawPath] (what
+/// `buildAlignDecodeCommand` writes), worked out on ANOTHER isolate.
+Future<SoundPeaks> reduceRawSound(String rawPath) =>
+    Isolate.run(() => SoundPeaks.fromRawFile(rawPath));
 
 /// Deletes the least recently used peaks files in [dir] until they add up
 /// to at most [maxBytes] (the rule of the processed sound cache).

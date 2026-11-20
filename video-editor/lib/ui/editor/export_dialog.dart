@@ -11,6 +11,7 @@ import '../../core/music/openverse.dart' show creditsText;
 import '../../core/publish/chapters.dart';
 import '../../media/destinations.dart';
 import '../../media/export_estimate.dart';
+import '../../media/ffmpeg_command.dart' as ff show exportSize;
 import '../../media/export_kit.dart';
 import '../../media/media_api.dart';
 import '../../media/video_encoder.dart' show encoderDescription, encoderLabel;
@@ -35,6 +36,7 @@ Future<void> showExportDialog(
   required FileService files,
   JobTracker? jobs,
   Map<String, String> Function()? processedSound,
+  Map<String, List<QuietRange>> gates = const {},
   ValueChanged<VideoSize>? onVideoSize,
   DocumentService? documents,
   PublishService? publish,
@@ -53,6 +55,7 @@ Future<void> showExportDialog(
         files: files,
         jobs: jobs,
         processedSound: processedSound,
+        gates: gates,
         onVideoSize: onVideoSize,
         documents: documents,
         publish: publish,
@@ -199,6 +202,7 @@ class ExportDialog extends StatefulWidget {
     required this.files,
     this.jobs,
     this.processedSound,
+    this.gates = const {},
     this.onVideoSize,
     this.documents,
     this.publish,
@@ -251,6 +255,10 @@ class ExportDialog extends StatefulWidget {
   /// ([ExportOptions.processedSound]); the export reads them instead of
   /// running clean-up and voice focus again.
   final Map<String, String> Function()? processedSound;
+
+  /// "Only when speaking" ([ExportOptions.gates]), worked out by the
+  /// editor before the window opened.
+  final Map<String, List<QuietRange>> gates;
 
   @override
   State<ExportDialog> createState() => _ExportDialogState();
@@ -539,6 +547,7 @@ class _ExportDialogState extends State<ExportDialog> {
         fps: _exportFps,
         useHardwareEncoder: useGpu,
         format: _format,
+        gates: widget.gates,
         processedSound: widget.processedSound?.call() ?? const {});
     if (!await _roomFor(path, options) || !mounted) return;
     // A destination: the project in its shape and size. "Make a copy in
@@ -698,6 +707,7 @@ class _ExportDialogState extends State<ExportDialog> {
     final plan = planKit(_project, choices,
         fps: _exportFps,
         useHardwareEncoder: useGpu,
+        gates: widget.gates,
         processedSound: widget.processedSound?.call() ?? const {});
     String? folder;
     try {
@@ -1191,7 +1201,7 @@ class _ExportDialogState extends State<ExportDialog> {
           ChoiceRow<int?>(
             key: const ValueKey('export-fps'),
             values: const [null, ...ExportOptions.frameRateChoices],
-            label: (v) => v == null ? 'As clips' : '$v',
+            label: (v) => v == null ? 'Same as the clips' : '$v',
             selected: _fps,
             onSelected: (v) => setState(() => _fps = v),
           ),
@@ -1318,8 +1328,14 @@ class _ExportDialogState extends State<ExportDialog> {
     final d = _dest;
     final choice = _choice;
     final shape = choice.shapeInUse;
-    final canvas = destinationVariant(_project, choice, keepShape: _asIs)
-        .canvasSize;
+    final variant = destinationVariant(_project, choice, keepShape: _asIs);
+    final canvas = variant.canvasSize;
+    // The size that is WRITTEN: a destination "for sending" makes the
+    // video smaller than the project is (1.17: the line said 1920 × 1080
+    // next to "720p").
+    final written = ff.exportSize(variant, d.quality);
+    final smaller =
+        written.width != canvas.width || written.height != canvas.height;
     return [
       if (d.shapes.length > 1) ...[
         ChoiceRow<CanvasAspect>(
@@ -1345,8 +1361,9 @@ class _ExportDialogState extends State<ExportDialog> {
       ],
       if (_shapeDiffers) ...[
         Text(
-            'Your video is ${aspectName(_project.aspect) == 'Original' ? '${_project.canvasSize.width} × ${_project.canvasSize.height}' : aspectName(_project.aspect)}; '
-            'this needs ${aspectName(shape!)}.',
+            // Both as shapes (not one as pixels and one as a ratio).
+            'Your video is ${shapeWords(_project.canvasSize.width, _project.canvasSize.height)}; '
+            'this needs ${shape!.ratio == null ? aspectName(shape) : shapeWords((shape.ratio! * 1000).round(), 1000)}.',
             key: const ValueKey('export-shape-differs'),
             style: text.bodyMedium),
         RadioGroup<bool>(
@@ -1381,8 +1398,11 @@ class _ExportDialogState extends State<ExportDialog> {
         ),
       ],
       if (!_format.audioOnly)
-        Text('${canvas.width} × ${canvas.height}'
-            '${d.quality == ExportQuality.small ? ', made smaller for sending (720p)' : ''}',
+        Text(
+            smaller
+                ? '${written.width} × ${written.height}: made smaller for '
+                    'sending (the project is ${canvas.width} × ${canvas.height})'
+                : '${written.width} × ${written.height}',
             key: const ValueKey('export-dest-size'),
             style: text.bodySmall?.copyWith(color: AppColors.textDim)),
       for (final w in destinationWarnings(_project, choice))
@@ -1859,7 +1879,11 @@ class _ExportDialogState extends State<ExportDialog> {
                 onPressed: () =>
                     publish.openUrl(u.url).catchError((Object _) {}),
                 icon: const Icon(Icons.open_in_new, size: 16),
-                label: Text('Open ${u.label} upload page'),
+                // Instagram has no upload page of its own on the web: the
+                // link opens the site, and the button says so.
+                label: Text(u.url.endsWith('instagram.com/')
+                    ? 'Open ${u.label}'
+                    : 'Open ${u.label} upload page'),
               ),
           ],
         ),
@@ -1910,6 +1934,23 @@ class _ExportDialogState extends State<ExportDialog> {
       ],
     );
   }
+}
+
+/// A picture's shape in words: "16:9 wide", "9:16 upright", "1:1 square",
+/// "4:5 upright", else "wide (1.85:1)" / "upright (1:2.2)".
+String shapeWords(int width, int height) {
+  if (width <= 0 || height <= 0) return 'of no known shape';
+  final r = width / height;
+  bool near(double want) => (r - want).abs() / want < 0.02;
+  if (near(16 / 9)) return '16:9 wide';
+  if (near(9 / 16)) return '9:16 upright';
+  if (near(1)) return '1:1 square';
+  if (near(4 / 5)) return '4:5 upright';
+  if (near(4 / 3)) return '4:3 wide';
+  if (near(3 / 4)) return '3:4 upright';
+  return r > 1
+      ? 'wide (${r.toStringAsFixed(2)}:1)'
+      : 'upright (1:${(1 / r).toStringAsFixed(2)})';
 }
 
 /// "Same as the first clip", "720p", "1080p", "4K".

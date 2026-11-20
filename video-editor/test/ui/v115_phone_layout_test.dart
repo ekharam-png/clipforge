@@ -142,7 +142,7 @@ void main() {
               .widgetList<SheetHeading>(find.descendant(
                   of: sheet, matching: find.byType(SheetHeading)))
               .map((h) => h.text),
-          ['Clip', 'Edit', 'Sound', 'Text']);
+          ['Clip', 'Part', 'Edit', 'Sound', 'Text']);
       expect(find.text('Trim start to here'), findsOneWidget);
       expect(find.text('Trim end to here'), findsOneWidget);
       expect(find.text('Crop and position'), findsOneWidget);
@@ -173,7 +173,7 @@ void main() {
           .widgetList<SheetHeading>(find.byType(SheetHeading))
           .map((h) => h.text)
           .toList();
-      expect(headings(), ['Clip', 'Sound', 'Text', 'Edit']);
+      expect(headings(), ['Clip', 'Part', 'Sound', 'Text', 'Edit']);
       expect(find.text('Lower music under speech'), findsOneWidget);
       // Settings are not mixed into More any longer.
       expect(find.text('Show sound waves'), findsNothing);
@@ -187,7 +187,7 @@ void main() {
       expect(toolBar(tester), ['Done', 'Edit', 'Fit', 'More', 'Delete']);
       await tester.tap(find.byKey(const ValueKey('tool-more')));
       await tester.pumpAndSettle();
-      expect(headings(), ['Sound', 'Text', 'Edit']);
+      expect(headings(), ['Sound', 'Part', 'Text', 'Edit']);
       for (final label in [
         'Fit music to video', 'Line up voice with video', 'Add sound track', //
         'Lower music under speech', 'Copy music credits',
@@ -213,7 +213,8 @@ void main() {
         for (final i in items)
           ((i.child as Row).children.last as Text).data,
       ], [
-        'Shape and size', 'Fade in and out', 'Publishing notes', 'Text', //
+        'Shape and size', 'Fade in and out', 'Select part', //
+        'Publishing notes', 'Text', //
         'History', 'Markers', 'Settings', 'Help', 'Send feedback',
       ]);
       for (final i in items) {
@@ -330,7 +331,7 @@ void main() {
       expect(s.selectedAudio?.id, 'm1');
       expect(shown(), [
         Act.fitMusic, Act.lineUpVoice, Act.putSoundBack, Act.lowerMusic, //
-        Act.copyCredits, Act.delete,
+        Act.copyCredits, Act.partOfItem, Act.delete,
       ]);
       await tester.tap(find.byKey(const ValueKey('context-lowerMusic')));
       await tester.pumpAndSettle();
@@ -339,7 +340,8 @@ void main() {
       // A title.
       await rightClick(block('title-t1'));
       expect(s.selectedTitle?.id, 't1');
-      expect(shown(), [Act.duplicate, Act.textWindow, Act.delete]);
+      expect(shown(),
+          [Act.duplicate, Act.textWindow, Act.partOfItem, Act.delete]);
       await tester.tap(find.byKey(const ValueKey('context-delete')));
       await tester.pumpAndSettle();
       expect(s.project.titles, isEmpty);

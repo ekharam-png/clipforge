@@ -112,6 +112,8 @@ List<ToolAction> buildToolActions(
               () => tool == ClipTool.crop
                   ? showCropSheet(context, s, overlay.id)
                   : showOverlayToolSheet(context, s, tool)),
+      // 1.17: an overlay has a More too (rotate, select its time, history).
+      if (compact) more,
       delete,
     ];
   }
@@ -1252,7 +1254,10 @@ class ShortsPanel extends StatelessWidget {
                     key: const ValueKey('panel-mark-moment'),
                     onPressed: () => markGoodMoment(host, s),
                     icon: const Icon(Icons.flag_outlined, size: 18),
-                    label: const Text('Good moment marker (M)'),
+                    label: Text(MediaQuery.sizeOf(context).width <
+                            kWideLayoutWidth
+                        ? 'Good moment marker'
+                        : 'Good moment marker (M)'),
                   ),
                 OutlinedButton.icon(
                   key: const ValueKey('panel-good-moments'),

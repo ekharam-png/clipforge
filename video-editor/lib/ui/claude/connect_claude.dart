@@ -438,18 +438,42 @@ class _ConnectClaudeState extends ConsumerState<ConnectClaudeScreen> {
                                 desktop.state == ConnectState.unreadable
                             ? null
                             : () => _changeDesktop(launcher),
-                        child: const Text('Connect'),
+                        // An old copy is connected: ONE clear action.
+                        child: Text(
+                            desktop.state == ConnectState.connectedElsewhere
+                                ? 'Replace with this version'
+                                : 'Connect'),
                       ),
                     if (desktop.command != null)
-                      OutlinedButton(
-                        key: const ValueKey('claude-desktop-disconnect'),
-                        onPressed: _busy
-                            ? null
-                            : () => _changeDesktop(launcher, remove: true),
-                        child: const Text('Disconnect'),
-                      ),
+                      desktop.state == ConnectState.connectedElsewhere
+                          ? TextButton(
+                              key: const ValueKey('claude-desktop-disconnect'),
+                              onPressed: _busy
+                                  ? null
+                                  : () =>
+                                      _changeDesktop(launcher, remove: true),
+                              child: const Text('Disconnect instead'),
+                            )
+                          : OutlinedButton(
+                              key: const ValueKey('claude-desktop-disconnect'),
+                              onPressed: _busy
+                                  ? null
+                                  : () =>
+                                      _changeDesktop(launcher, remove: true),
+                              child: const Text('Disconnect'),
+                            ),
                   ],
                 ),
+                if (desktop.state == ConnectState.connectedElsewhere)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text(
+                        '"Replace with this version" points Claude at the '
+                        'ClipForge that is running now, in place of the old '
+                        'copy. Restart Claude afterwards.',
+                        key: ValueKey('claude-desktop-replace-note'),
+                        style: TextStyle(fontSize: 13)),
+                  ),
                 _outcome('claude-desktop', _desktopOutcome),
                 _details('claude-desktop',
                     [desktop.detail, ?_desktopOutcome?.log].join('\n')),
@@ -497,16 +521,34 @@ class _ConnectClaudeState extends ConsumerState<ConnectClaudeScreen> {
                             _busy || !s.installed || code.program == null
                                 ? null
                                 : () => _connectCode(launcher),
-                        child: const Text('Connect'),
+                        child: Text(
+                            code.state == ConnectState.connectedElsewhere
+                                ? 'Replace with this version'
+                                : 'Connect'),
                       ),
                     if (code.command != null && code.program != null)
-                      OutlinedButton(
-                        key: const ValueKey('claude-code-disconnect'),
-                        onPressed: _busy ? null : _disconnectCode,
-                        child: const Text('Disconnect'),
-                      ),
+                      code.state == ConnectState.connectedElsewhere
+                          ? TextButton(
+                              key: const ValueKey('claude-code-disconnect'),
+                              onPressed: _busy ? null : _disconnectCode,
+                              child: const Text('Disconnect instead'),
+                            )
+                          : OutlinedButton(
+                              key: const ValueKey('claude-code-disconnect'),
+                              onPressed: _busy ? null : _disconnectCode,
+                              child: const Text('Disconnect'),
+                            ),
                   ],
                 ),
+                if (code.state == ConnectState.connectedElsewhere)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text(
+                        '"Replace with this version" points Claude Code at '
+                        'the ClipForge that is running now, in place of the '
+                        'old copy.',
+                        style: TextStyle(fontSize: 13)),
+                  ),
                 _outcome('claude-code', _codeOutcome),
                 _details('claude-code', [code.detail, ?_codeOutcome?.log].join('\n')),
                 const Divider(height: 20),

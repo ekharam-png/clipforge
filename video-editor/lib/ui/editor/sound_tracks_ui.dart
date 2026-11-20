@@ -6,12 +6,16 @@ import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
 
+import 'package:flutter/services.dart' show HardwareKeyboard;
+
 import '../../core/editor/editor_controller.dart';
+import '../../core/editor/part.dart';
 import '../../core/model/project.dart';
 import '../help/help_screen.dart';
 import '../speaker_colors.dart';
 import '../theme.dart';
 import 'clip_panels.dart';
+import 'part_actions.dart';
 import 'session.dart';
 import 'sound_status.dart';
 import 'voice_actions.dart';
@@ -54,10 +58,18 @@ class TrackHeaders extends StatelessWidget {
   final int titleRows;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+        // While a part is selected every row has a tick box (1.17).
+        listenable: Listenable.merge(
+            [session.part, session.partRows, session.partPreview]),
+        builder: (context, _) => _build(context),
+      );
+
+  Widget _build(BuildContext context) {
     final p = session.project;
     final tracks = p.soundTracks;
     final canAdd = tracks.length < EditorController.maxSoundTracks;
+    final ticks = session.part.value != null;
     return DecoratedBox(
       decoration: const BoxDecoration(
         color: AppColors.panel,
@@ -116,7 +128,13 @@ class TrackHeaders extends StatelessWidget {
                       ? MainAxisAlignment.center
                       : MainAxisAlignment.start,
                   children: [
-                    if (!compact) const SizedBox(width: 8),
+                    if (ticks)
+                      RowTick(
+                          session: session,
+                          row: const PartRow(
+                              kRowOverlay, 'Overlay', PartRowKind.overlay))
+                    else if (!compact)
+                      const SizedBox(width: 8),
                     const Icon(Icons.picture_in_picture_alt,
                         size: 16, color: AppColors.textDim),
                     if (!compact) ...[
@@ -182,7 +200,13 @@ class TrackHeaders extends StatelessWidget {
                           ? MainAxisAlignment.center
                           : MainAxisAlignment.start,
                       children: [
-                        if (!compact) const SizedBox(width: 8),
+                        if (ticks && p.titles.isNotEmpty)
+                          RowTick(
+                              session: session,
+                              row: const PartRow(kRowTitles,
+                                  'Titles and captions', PartRowKind.titles))
+                        else if (!compact)
+                          const SizedBox(width: 8),
                         const Icon(Icons.title, size: 16, color: AppColors.textDim),
                         if (!compact) ...[
                           const SizedBox(width: 6),
@@ -227,8 +251,12 @@ class _Header extends StatelessWidget {
     ].join(', ');
     final name = _video ? 'Video sound' : '${track.name} track';
     void open() => showSoundTrackMenu(context, session, track.id);
+    final ticks = session.part.value != null &&
+        (!_video || p.clips.isNotEmpty);
+    final row = PartRow(track.id, _video ? 'Video' : track.name,
+        _video ? PartRowKind.video : PartRowKind.sound);
     if (compact) {
-      return Semantics(
+      final button = Semantics(
         label: '$name${state.isEmpty ? '' : ', $state'}',
         button: true,
         child: InkWell(
@@ -258,9 +286,17 @@ class _Header extends StatelessWidget {
           ),
         ),
       );
+      if (!ticks) return button;
+      return Row(
+        children: [
+          RowTick(session: session, row: row),
+          Expanded(child: button),
+        ],
+      );
     }
     return Row(
       children: [
+        if (ticks) RowTick(session: session, row: row),
         Expanded(
           child: Tooltip(
             message: '$name: volume, mute, solo${_video ? '' : ', rename'}',
@@ -295,6 +331,9 @@ class _Header extends StatelessWidget {
             ),
           ),
         ),
+        // While the rows have tick boxes the name needs the room: mute
+        // and solo are in the track's menu (a click on the name).
+        if (!ticks) ...[
         _Toggle(
           key: ValueKey('track-mute-${track.id}'),
           on: track.muted,
@@ -311,8 +350,67 @@ class _Header extends StatelessWidget {
           onColor: AppColors.accent,
           onTap: () => editor.setSoundTrack(track.id, solo: !track.solo),
         ),
+        ],
         const SizedBox(width: 2),
       ],
+    );
+  }
+}
+
+/// The tick box of a row while a part is selected: ticked rows are what
+/// the actions on the part change. A click ticks or unticks; Alt+click
+/// (or a long press) keeps only this row. While the pointer is on an
+/// action in the part bar, a row that action cannot change is shown
+/// crossed out, with the reason as its tooltip.
+class RowTick extends StatelessWidget {
+  const RowTick({super.key, required this.session, required this.row});
+  final EditorSession session;
+  final PartRow row;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = session;
+    final part = s.part.value;
+    if (part == null) return const SizedBox.shrink();
+    final ticked = rowTicked(s.partRows.value, row.id);
+    final preview = s.partPreview.value;
+    final problem = preview == null || !ticked
+        ? null
+        : partRowProblem(s.project, part, preview, row);
+    return Tooltip(
+      message: problem != null
+          ? '${row.name}: $problem'
+          : ticked
+              ? '${row.name}: actions on the part change this row. '
+                  'Click to leave it alone; Alt+click for only this row'
+              : '${row.name}: left alone. Click to include it',
+      child: Semantics(
+        label: '${row.name} row',
+        checked: ticked,
+        child: InkWell(
+          key: ValueKey('part-row-${row.id}'),
+          onTap: () => HardwareKeyboard.instance.isAltPressed
+              ? onlyPartRow(s, row.id)
+              : togglePartRow(s, row.id),
+          onLongPress: () => onlyPartRow(s, row.id),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            child: Icon(
+              problem != null
+                  ? Icons.disabled_by_default_outlined
+                  : ticked
+                      ? Icons.check_box
+                      : Icons.check_box_outline_blank,
+              size: 16,
+              color: problem != null
+                  ? const Color(0x809AA0AC)
+                  : ticked
+                      ? AppColors.accent
+                      : AppColors.textDim,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -552,6 +650,8 @@ class _TrackMenuState extends State<_TrackMenu> {
                 value: t.speech,
                 onChanged: (v) => editor.setSoundTrack(t.id, speech: v),
               ),
+              if (t.speech)
+                OnlyWhenSpeakingTile(session: _s, trackId: t.id),
               const SizedBox(height: 4),
               Builder(builder: (context) {
                 final order = _s.project.soundTracks;
@@ -888,6 +988,17 @@ class SoundClipOptions extends StatelessWidget {
                 style: _dim),
             value: track.duck,
             onChanged: (v) => editor.setSoundTrack(track.id, duck: v),
+          ),
+        // Silenced / lowered stretches of this sound (1.17).
+        if (!a.looped)
+          QuietPartsList(
+            session: session,
+            itemId: a.id,
+            quiet: a.quiet,
+            startMs: a.startMs,
+            inMs: a.inMs,
+            outMs: a.outMs,
+            speed: a.speed,
           ),
         if (a.isVoice) ...[
           const Divider(height: 20),

@@ -13,8 +13,8 @@ import 'theme.dart';
 // draw - the macOS menu bar ([buildAppMenus]) and the bar inside the window
 // on Windows and Linux ([WindowMenuBar]) - so they cannot drift apart.
 //
-//   File · Edit · Add · Clip · Sound · Text and speech · View · Playback ·
-//   Help
+//   File · Edit · Add · Clip · Part · Sound · Text and speech · View ·
+//   Playback · Help
 //
 // An item that cannot be used now stays in its place, greyed out, and its
 // label says why: "Fit music to video (select a music clip)". The reason
@@ -224,10 +224,12 @@ class MenuNode {
     this.onSelected,
     this.checked,
     this.mixed = false,
+    this.also,
   })  : children = null,
         divider = false;
   const MenuNode.submenu(this.label, List<MenuNode> this.children, {this.id})
       : shortcut = null,
+        also = null,
         onSelected = null,
         checked = null,
         mixed = false,
@@ -240,7 +242,13 @@ class MenuNode {
         checked = null,
         mixed = false,
         children = null,
+        also = null,
         divider = true;
+
+  /// A second key that does the same ("Ctrl+Y" next to Ctrl+Shift+Z):
+  /// shown after the shortcut in the window's menu bar (a Mac's menu bar
+  /// shows one key per item).
+  final String? also;
 
   final String label;
 
@@ -294,7 +302,7 @@ List<String> describeMenuTree(List<MenuNode> menus) {
         walk('$path > ${n.label}', n.children!);
       } else {
         out.add('$path > ${n.label}'
-            '${n.shortcut == null ? '' : '  [${describeShortcut(n.shortcut!)}]'}');
+            '${n.shortcut == null ? '' : '  [${describeShortcut(n.shortcut!)}${n.also == null ? '' : ' / ${n.also}'}]'}');
       }
     }
   }
@@ -305,8 +313,10 @@ List<String> describeMenuTree(List<MenuNode> menus) {
   return out;
 }
 
-/// THE menu tree: File, Edit, Add, Clip, Sound, Text and speech, View,
-/// Playback, Help. [platform] decides the modifier key (Cmd on macOS, Ctrl
+const String _toProjects = 'go back to the projects first';
+
+/// THE menu tree: File, Edit, Add, Clip, Part, Sound, Text and speech,
+/// View, Playback, Help. [platform] decides the modifier key (Cmd on macOS, Ctrl
 /// elsewhere), Delete / Backspace, the Help key and Quit / Exit.
 ///
 /// Items carry their shortcuts (Undo, Delete, Play = Space, the
@@ -328,14 +338,19 @@ List<MenuNode> buildMenuTree(
       SingleActivator(k, meta: mac, control: !mac, shift: shift);
   SingleActivator plain(LogicalKeyboardKey k) => SingleActivator(k);
 
-  MenuNode act(Act a, String id, {SingleActivator? shortcut, String? label}) {
+  MenuNode act(Act a, String id,
+      {SingleActivator? shortcut, String? label, String? also}) {
     final entry = e?.entries[a];
     final base = label ?? entry?.label ?? actLabel(a);
-    final reason = entry?.reason;
+    // On the project list every editing item is greyed out for the same
+    // reason; it is said on each (1.17: a greyed item without a word
+    // looked broken).
+    final reason = e == null ? 'open a project first' : entry?.reason;
     return MenuNode.item(
       reason == null ? base : '$base ($reason)',
       id: id,
       shortcut: shortcut,
+      also: also,
       onSelected: entry?.onTap,
       checked: entry?.checked,
       mixed: entry?.mixed ?? false,
@@ -347,11 +362,15 @@ List<MenuNode> buildMenuTree(
   final shortcuts = e?.entries[Act.shortcuts]?.onTap ?? help?.showShortcuts;
   return [
     MenuNode.submenu('File', [
-      MenuNode.item('New project',
+      MenuNode.item(
+          e == null ? 'New project' : 'New project ($_toProjects)',
           id: 'new-project',
           shortcut: key(LogicalKeyboardKey.keyN),
           onSelected: h?.newProject),
-      MenuNode.item('Open project file…',
+      MenuNode.item(
+          e == null
+              ? 'Open project file…'
+              : 'Open project file… ($_toProjects)',
           id: 'open-project-file',
           shortcut: key(LogicalKeyboardKey.keyO),
           onSelected: h?.openProjectFile),
@@ -385,7 +404,8 @@ List<MenuNode> buildMenuTree(
       // Ctrl+Y works too (Help > Keyboard shortcuts says so); the menu
       // shows the same keys as on a Mac.
       act(Act.redo, 'redo',
-          shortcut: key(LogicalKeyboardKey.keyZ, shift: true)),
+          shortcut: key(LogicalKeyboardKey.keyZ, shift: true),
+          also: mac ? null : 'Ctrl+Y'),
       act(Act.history, 'history',
           shortcut: key(LogicalKeyboardKey.keyH, shift: true)),
       divider,
@@ -398,7 +418,8 @@ List<MenuNode> buildMenuTree(
       act(Act.delete, 'delete',
           shortcut: plain(mac
               ? LogicalKeyboardKey.backspace
-              : LogicalKeyboardKey.delete)),
+              : LogicalKeyboardKey.delete),
+          also: mac ? null : 'Backspace'),
       divider,
       act(Act.findInText, 'find-text', shortcut: key(LogicalKeyboardKey.keyF)),
     ]),
@@ -410,15 +431,17 @@ List<MenuNode> buildMenuTree(
       act(Act.addCaption, 'add-caption'),
       act(Act.importSubtitles, 'import-subtitles'),
       act(Act.addOverlay, 'add-overlay'),
+      act(Act.addFromPath, 'add-from-path'),
       act(Act.markMoment, 'mark-moment',
           shortcut: plain(LogicalKeyboardKey.keyM)),
     ]),
     MenuNode.submenu('Clip', [
       act(Act.split, 'split', shortcut: plain(LogicalKeyboardKey.keyS)),
+      // Q / W since 1.17: I and O mark a part (the Part menu).
       act(Act.startAtPlayhead, 'start-at-playhead',
-          shortcut: plain(LogicalKeyboardKey.keyI)),
+          shortcut: plain(LogicalKeyboardKey.keyQ)),
       act(Act.endAtPlayhead, 'end-at-playhead',
-          shortcut: plain(LogicalKeyboardKey.keyO)),
+          shortcut: plain(LogicalKeyboardKey.keyW)),
       act(Act.freezeFrame, 'freeze-frame'),
       act(Act.removeSilences, 'remove-silences'),
       act(Act.crop, 'crop'),
@@ -430,6 +453,34 @@ List<MenuNode> buildMenuTree(
       act(Act.shortsFromMarkers, 'shorts-from-markers'),
       act(Act.goodMoments, 'good-moments'),
     ]),
+    // 1.17: select a part of the timeline, then act on it.
+    MenuNode.submenu('Part', [
+      act(Act.selectPart, 'select-part'),
+      act(Act.partStart, 'part-start',
+          shortcut: plain(LogicalKeyboardKey.keyI)),
+      act(Act.partEnd, 'part-end', shortcut: plain(LogicalKeyboardKey.keyO)),
+      act(Act.partOfItem, 'part-of-item'),
+      act(Act.partTurn, 'part-turn'),
+      act(Act.partPause, 'part-pause'),
+      act(Act.partBetweenMarkers, 'part-between-markers'),
+      act(Act.partFromStart, 'part-from-start'),
+      act(Act.partToEnd, 'part-to-end'),
+      // Esc clears it too; not shown as a menu key, so that a Mac's menu
+      // bar does not take Esc away from dialogs and text boxes.
+      act(Act.clearPart, 'clear-part'),
+      divider,
+      act(Act.partCutOut, 'part-cut-out'),
+      act(Act.partDelete, 'part-delete'),
+      act(Act.partSilence, 'part-silence'),
+      act(Act.partLower, 'part-lower'),
+      act(Act.partSpeed, 'part-speed'),
+      act(Act.partClean, 'part-clean'),
+      divider,
+      act(Act.partShort, 'part-short'),
+      act(Act.partDuplicate, 'part-duplicate'),
+      act(Act.partTitle, 'part-title'),
+      act(Act.partMarker, 'part-marker'),
+    ]),
     MenuNode.submenu('Sound', [
       act(Act.fitMusic, 'fit-music'),
       act(Act.lineUpVoice, 'line-up-voice'),
@@ -437,6 +488,7 @@ List<MenuNode> buildMenuTree(
       act(Act.putSoundBack, 'put-sound-back'),
       act(Act.addSoundTrack, 'add-sound-track'),
       act(Act.lowerMusic, 'lower-music'),
+      act(Act.onlyWhenSpeaking, 'only-when-speaking'),
       act(Act.copyCredits, 'copy-credits'),
     ]),
     MenuNode.submenu('Text and speech', [
@@ -669,7 +721,6 @@ Map<ShortcutActivator, VoidCallback> windowMenuShortcuts(
   final export = e?.run(Act.export);
   final history = e?.run(Act.history);
   final text = e?.run(Act.textWindow);
-  final settings = e?.run(Act.settings) ?? help?.openSettings;
   return {
     if (h != null) ...{
       const SingleActivator(LogicalKeyboardKey.keyN, control: true):
@@ -682,13 +733,30 @@ Map<ShortcutActivator, VoidCallback> windowMenuShortcuts(
         control: true, shift: true): ?history,
     const SingleActivator(LogicalKeyboardKey.keyT,
         control: true, shift: true): ?text,
-    const SingleActivator(LogicalKeyboardKey.comma, control: true): ?settings,
+    // Ctrl+, is handled for the whole app by [isSettingsShortcut] (see
+    // WindowMenuBar): by the key's place on the keyboard too, and
+    // wherever the keyboard focus is.
     if (help != null) const SingleActivator(LogicalKeyboardKey.f1): help.openHelp,
     if (defaultTargetPlatform == TargetPlatform.linux)
       const SingleActivator(LogicalKeyboardKey.keyQ, control: true): () {
         requestAppQuit();
       },
   };
+}
+
+/// True for Ctrl+, (Settings) on Windows and Linux: the comma by what it
+/// types OR by its place on the keyboard. With a Russian or Hebrew layout
+/// the comma key types another letter, and Flutter only maps letters and
+/// digits back to their Latin keys, so matching the typed character alone
+/// missed it (1.17; Ctrl+, did nothing in a real Windows test).
+bool isSettingsShortcut(KeyEvent event) {
+  if (event is! KeyDownEvent) return false;
+  final keys = HardwareKeyboard.instance;
+  if (!keys.isControlPressed || keys.isAltPressed || keys.isMetaPressed) {
+    return false;
+  }
+  return event.logicalKey == LogicalKeyboardKey.comma ||
+      event.physicalKey == PhysicalKeyboardKey.comma;
 }
 
 /// The menu bar along the top of the window on Windows and Linux: the same
@@ -736,6 +804,29 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
   AppMenuController get controller => widget.controller;
   HelpMenuActions? get help => widget.help;
   static const double height = WindowMenuBar.height;
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onAppKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onAppKey);
+    super.dispose();
+  }
+
+  /// Ctrl+, opens Settings from anywhere in the app: also when nothing has
+  /// the keyboard focus (the project list right after start), where the
+  /// shortcuts of the widget tree are never asked.
+  bool _onAppKey(KeyEvent event) {
+    if (!mounted || !isSettingsShortcut(event)) return false;
+    final open = controller.editor?.run(Act.settings) ?? help?.openSettings;
+    if (open == null) return false;
+    open();
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -808,7 +899,20 @@ class _WindowMenuBarState extends State<WindowMenuBar> {
       return MenuItemButton(
         key: key,
         style: itemStyle,
-        shortcut: n.shortcut,
+        // The keys in OUR words ([describeShortcut]): "+" for zoom in,
+        // not "=" (the key it shares on most keyboards).
+        trailingIcon: n.shortcut == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(left: 24),
+                child: Text(
+                    '${describeShortcut(n.shortcut!)}'
+                    '${n.also == null ? '' : ' / ${n.also}'}',
+                    style: itemText.copyWith(
+                        color: n.onSelected == null
+                            ? AppColors.textDim.withValues(alpha: 0.5)
+                            : AppColors.textDim)),
+              ),
         onPressed: n.onSelected,
         leadingIcon: checked == null
             ? (ticks ? const SizedBox(width: 18) : null)

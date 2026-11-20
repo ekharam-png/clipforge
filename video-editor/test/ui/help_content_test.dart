@@ -63,7 +63,7 @@ void main() {
 
   group('help file', () {
     test('every article parses and has what it needs', () {
-      expect(library.articles.length, inInclusiveRange(25, 72));
+      expect(library.articles.length, inInclusiveRange(25, 80));
       for (final a in library.articles) {
         expect(a.title, isNotEmpty, reason: a.id);
         expect(a.keywords, isNotEmpty, reason: a.id);

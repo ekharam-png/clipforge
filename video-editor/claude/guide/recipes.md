@@ -293,6 +293,31 @@ ASK. ClipForge never uploads: the owner posts the files themselves.
     with its own title". Pass on any warning with "check the site". Ask
     them to watch each file once before posting.
 
+## Take one thing out of one microphone (a cough, a remark)
+
+1. Find it: `get_speech_map` (who talks when) or `find_in_transcript`.
+2. `edit_part` `action: "silence"`, `from_ms` / `to_ms`, `rows: ["<that
+   speaker's track>"]`. Nothing moves; the others play on. `dry_run` first
+   when unsure which rows it would touch.
+3. Too much gone? `list_quiet_parts`, then `remove_quiet_part`.
+
+To remove the moment for everyone (picture and all sound): `edit_part`
+`action: "cut_out"` without `rows`; `restore_cut` brings it back.
+
+## Two or more microphones recorded together (Zoom, podcast)
+
+Each microphone also hears the other people. `set_only_when_speaking`
+`track_id: "all"` turns each one down while its own speaker is silent
+(-18 dB of room sound stays by default; `room_db: -100` for silence). It
+goes by loudness: tell the owner to listen to a stretch in ClipForge before
+exporting, and that it can be switched off again without any loss.
+
+## Slow motion for one moment
+
+`edit_part` `action: "speed"`, `speed: 0.5` (or 0.25), `from_ms` / `to_ms`.
+The part's own sound is switched off below 0.5 unless `mute_own_sound:
+false`. Music keeps its place: say so when the project has music.
+
 ## Finished look
 
 - `set_project_settings` `fade_in_ms: 1000`, `fade_out_ms: 1500`.

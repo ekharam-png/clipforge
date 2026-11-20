@@ -2,10 +2,15 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/editor/editor_controller.dart';
+import '../../core/editor/part.dart';
+import '../../core/editor/snapping.dart';
 import '../../core/model/project.dart';
 import '../../core/storage/project_store.dart';
 import '../../media/media_api.dart';
 import '../../media/processed_sound_cache.dart';
+import '../../media/sound_peaks_job.dart';
+import '../../media/speech_gate.dart';
+import '../../media/speech_gate_job.dart';
 import '../../media/speech_map.dart';
 import '../playback/playback_controller.dart';
 import '../playback/timeline_player.dart';
@@ -199,8 +204,211 @@ class EditorSession {
           cacheDir: () async =>
               p.join(p.dirname(await documents.mediaDir()), 'peaks'),
           fileExists: (path) => !playback.isMissing(path),
+          // Long files: never read while the video plays.
+          playing: () => playback.playing,
         );
     this.pictures.update(editor.project);
+    // "Only when speaking": the preview turns a gated microphone down by
+    // the same lists the export gets.
+    playback.gateOf = (a) => gates[loopBaseId(a.id)];
+    part.addListener(_onPartChanged);
+  }
+
+  // A selected part of the timeline (1.17) -----------------------------------
+
+  /// The part of the timeline that is selected (null: none). One at a
+  /// time; NOT in the project file and not an undo step.
+  final ValueNotifier<TimelinePart?> part = ValueNotifier(null);
+
+  /// The rows the part applies to, by row id (core/editor/part.dart);
+  /// null: everything. Remembered only while the part stays selected.
+  final ValueNotifier<Set<String>?> partRows = ValueNotifier(null);
+
+  /// The action the pointer is on in the part bar: the row headers then
+  /// show which rows it cannot change, and why.
+  final ValueNotifier<PartAction?> partPreview = ValueNotifier(null);
+
+  /// The step of the nudge buttons on phones: false = one frame, true =
+  /// a tenth of a second.
+  final ValueNotifier<bool> partNudgeTenths = ValueNotifier(false);
+
+  void _onPartChanged() {
+    if (part.value == null) {
+      partRows.value = null;
+      partPreview.value = null;
+    }
+  }
+
+  /// The longest the timeline is: the video or whatever runs past it.
+  int get timelineEndMs {
+    var end = project.durationMs;
+    for (final a in project.audio) {
+      if (a.endMs > end) end = a.endMs;
+    }
+    for (final t in project.titles) {
+      if (t.endMs > end) end = t.endMs;
+    }
+    for (final o in project.overlays) {
+      if (o.endMs > end) end = o.endMs;
+    }
+    return end;
+  }
+
+  /// Selects [from]..[to] (in either order), kept inside the timeline. A
+  /// part with no length clears the selection.
+  void setPart(int from, int to) {
+    final end = timelineEndMs;
+    final p = TimelinePart.between(from, to).clampTo(end);
+    part.value = p.isEmpty ? null : p;
+  }
+
+  void clearPart() => part.value = null;
+
+  /// I: the part starts at [ms]. Without a part (or with one that ends
+  /// before [ms]) it runs to the end of the video - which is also "from
+  /// the play line to the end".
+  void markPartStart(int ms) {
+    final p = part.value;
+    final end = p != null && p.endMs > ms ? p.endMs : project.durationMs;
+    setPart(ms, end);
+  }
+
+  /// O: the part ends at [ms]. Without a part (or with one that starts
+  /// after [ms]) it starts at the beginning of the video.
+  void markPartEnd(int ms) {
+    final p = part.value;
+    final start = p != null && p.startMs < ms ? p.startMs : 0;
+    setPart(start, ms);
+  }
+
+  /// Shift+click: the nearer edge of the part moves to [ms]; without a
+  /// part, the part runs from the playhead to [ms].
+  void extendPartTo(int ms) {
+    final p = part.value;
+    if (p == null) {
+      setPart(playback.positionMs, ms);
+    } else if ((ms - p.startMs).abs() <= (ms - p.endMs).abs()) {
+      setPart(ms, p.endMs);
+    } else {
+      setPart(p.startMs, ms);
+    }
+  }
+
+  /// Moves one edge of the part by [deltaMs] (the nudge buttons).
+  void nudgePart({required bool start, required int deltaMs}) {
+    final p = part.value;
+    if (p == null) return;
+    if (start) {
+      final to = (p.startMs + deltaMs).clamp(0, p.endMs - 10).toInt();
+      part.value = p.copyWith(startMs: to);
+      playback.seek(to);
+    } else {
+      final to = (p.endMs + deltaMs)
+          .clamp(p.startMs + 10, timelineEndMs)
+          .toInt();
+      part.value = p.copyWith(endMs: to);
+      playback.seek(to);
+    }
+  }
+
+  /// What the edges of a part snap to: cuts and the edges of everything,
+  /// the playhead, markers, and where speech starts and ends.
+  List<int> partSnapTargets() => snapTargets(project,
+      playheadMs: playback.positionMs,
+      extra: [
+        for (final m in project.markers) m.ms,
+        ...speechEdges(pictures.speakers),
+      ]);
+
+  /// The time of what is selected (a clip, a sound, a title, an overlay
+  /// item), else of the clip under the playhead; null when there is none.
+  TimelinePart? get itemTime {
+    final clip = selectedClip;
+    if (clip != null) return partOfClip(project, clip.id);
+    final a = selectedAudio;
+    if (a != null) return TimelinePart(a.startMs, a.endMs);
+    final t = selectedTitle;
+    if (t != null) return TimelinePart(t.startMs, t.endMs);
+    final o = selectedOverlay;
+    if (o != null) return TimelinePart(o.startMs, o.endMs);
+    final i = clipIndexUnderPlayhead;
+    return i < 0 ? null : partOfClip(project, project.clips[i].id);
+  }
+
+  /// The speaker whose talk the quick selections use: the selected
+  /// sound's track when that is a speaker, else the only speaker, else
+  /// the one talking at the playhead.
+  SpeakerTrack? get partSpeaker {
+    final tracks = pictures.speakers;
+    if (tracks.isEmpty) return null;
+    final selected = selectedAudio?.trackId;
+    for (final t in tracks) {
+      if (t.id == selected) return t;
+    }
+    if (tracks.length == 1) return tracks.single;
+    final at = playback.positionMs;
+    for (final t in tracks) {
+      if (stretchAt(t.stretches, at) != null) return t;
+    }
+    return null;
+  }
+
+  /// "This speaker's turn": the turn (talk of one speaker with pauses
+  /// under 3 s) of [trackId] at [atMs]; null when nobody talks there.
+  TimelinePart? turnAt(String trackId, int atMs) {
+    for (final t in speakerTurns(pictures.speakers)) {
+      if (t.id == trackId && atMs >= t.startMs && atMs < t.endMs) {
+        return TimelinePart(t.startMs, t.endMs);
+      }
+    }
+    return null;
+  }
+
+  /// "The pause here": the quiet stretch of [partSpeaker] under the
+  /// playhead.
+  TimelinePart? get pauseHere {
+    final t = partSpeaker;
+    if (t == null) return null;
+    return pauseAt(t.stretches, playback.positionMs, project.durationMs);
+  }
+
+  // "Only when speaking" -------------------------------------------------
+
+  /// [gates] for an export: complete even when some pictures were not
+  /// drawn yet (they are read now; the engine keeps them on disk).
+  Future<Map<String, List<QuietRange>>> exportGates() async {
+    final now = project;
+    final e = engine;
+    if (!now.soundTracks.any((t) => t.gate) || e is! SoundPeaksEngine) {
+      return const {};
+    }
+    String? dir;
+    try {
+      dir = p.join(p.dirname(await documents.mediaDir()), 'peaks');
+    } catch (_) {
+      dir = null;
+    }
+    return computeProjectGates(now, e as SoundPeaksEngine,
+        cacheDir: dir, known: pictures.peaksFor);
+  }
+
+  Project? _gatesFor;
+  int _gatesVersion = -1;
+  Map<String, List<QuietRange>> _gates = const {};
+
+  /// For every sound on a track with "Only when speaking" on: where its
+  /// microphone is turned down (file time), worked out from the sound
+  /// pictures; the preview and the export use these same lists.
+  Map<String, List<QuietRange>> get gates {
+    final p = project;
+    if (identical(p, _gatesFor) && pictures.version == _gatesVersion) {
+      return _gates;
+    }
+    _gatesFor = p;
+    _gatesVersion = pictures.version;
+    return _gates = p.soundTracks.any((t) => t.gate)
+        ? projectGates(p, pictures.peaksFor, pictures.speechCache)
+        : const {};
   }
 
   static const double minZoom = 6;
@@ -511,6 +719,10 @@ class EditorSession {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    part.dispose();
+    partRows.dispose();
+    partPreview.dispose();
+    partNudgeTenths.dispose();
     editor.removeListener(_onEdited);
     sounds.removeListener(_onSoundsChanged);
     playback.removeListener(_onPlaybackChanged);

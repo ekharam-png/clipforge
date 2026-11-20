@@ -32,6 +32,7 @@ class FfmpegKitMediaEngine
         SilenceJobEngine,
         SoundAlignEngine,
         SoundPeaksEngine,
+        CancellableSoundPeaksEngine,
         JumpCheckEngine {
   FfmpegKitMediaEngine({
     FontResolver? fontResolver,
@@ -142,7 +143,26 @@ class FfmpegKitMediaEngine
     return out;
   }
 
-  Future<FfmpegRun> _ffmpeg(List<String> args) async {
+  /// One-shot runs (thumbnails, thumbnail strips, single frames, probes of
+  /// levels) go ONE AT A TIME (1.17): opening a long project asks for many
+  /// at once, and each is a whole FFmpeg inside the app's own process,
+  /// with its own threads, next to the preview's players. In a queue they
+  /// take the same time in total and leave the processor to the players.
+  Future<void> _oneShot = Future<void>.value();
+
+  Future<FfmpegRun> _ffmpeg(List<String> args) {
+    final done = Completer<FfmpegRun>();
+    _oneShot = _oneShot.then((_) async {
+      try {
+        done.complete(await _ffmpegNow(args));
+      } catch (e, st) {
+        done.completeError(e, st);
+      }
+    });
+    return done.future;
+  }
+
+  Future<FfmpegRun> _ffmpegNow(List<String> args) async {
     final session =
         await FFmpegKit.executeWithArguments(['-hide_banner', ...args]);
     var log = '';
@@ -179,6 +199,17 @@ class FfmpegKitMediaEngine
           {int audioTrack = 0, String? cacheDir}) =>
       soundPeaksWith(_ffmpeg, probe, path,
           audioTrack: audioTrack, cacheDir: cacheDir);
+
+  @override
+  Future<SoundPeaks?> soundPeaksCancellable(String path,
+          {int audioTrack = 0,
+          String? cacheDir,
+          required Future<void> cancel}) =>
+      soundPeaksWith(_ffmpeg, probe, path,
+          audioTrack: audioTrack,
+          cacheDir: cacheDir,
+          streaming: _ffmpegStreaming,
+          cancel: cancel);
 
   @override
   Future<List<double?>> jumpScores(

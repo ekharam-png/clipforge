@@ -339,8 +339,10 @@ Project destinationVariant(Project project, KitChoice choice,
 ExportOptions destinationOptions(KitChoice choice,
         {int fps = 30,
         bool useHardwareEncoder = true,
-        Map<String, String> processedSound = const {}}) =>
+        Map<String, String> processedSound = const {},
+        Map<String, List<QuietRange>> gates = const {}}) =>
     ExportOptions(
+      gates: gates,
       quality: choice.destination.quality,
       format: choice.formatInUse,
       fps: fps,

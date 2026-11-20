@@ -27,6 +27,9 @@ const String kTextOpenedFlag = 'textOpened';
 /// needed: a first install).
 const String kWhatMovedSeenFlag = 'whatMoved115Seen';
 
+/// The 1.17 note "Two keys changed" (I / O) was shown, or not needed.
+const String kKeysMovedSeenFlag = 'keysMoved117Seen';
+
 /// [AppPrefs.flag]: an export was started at least once.
 const String kExportedOnceFlag = 'exportedOnce';
 

@@ -4,6 +4,43 @@ Newest first. The version you have is in Help > About ClipForge (and at the
 bottom of the project list). This file is also the "What's new" page in the
 app's Help.
 
+## 1.17.0 – 20 November 2026
+
+Select a part of the timeline, say which rows it is about, and do something with it: cut it out, silence it, slow it down. And long projects no longer make ClipForge wait for the sound pictures.
+
+- **Select a part** of the timeline.
+  - Computer: drag along the thin strip under the time ruler, or put the playhead at the start and press **I**, at the end **O**. **Shift** and drag on the ruler works too, and **Shift** and click stretches the part to there. Drag the handles at its edges to change it; they snap to cuts, to where speech starts and stops, to markers and to the playhead. **Esc** or a click on an empty place clears it. The ruler itself still moves the playhead.
+  - Phone: **More** > **Select part** (also in the three dots at the top and when you hold an empty place). Two handles to drag, and a bar with the start, the end and the length, with arrows that move an edge by one frame or 0.1 s.
+  - Quick ways: double-click a clip for exactly that clip; double-click where someone talks on a voice row for that speaker's turn; **Select the pause here**; **Select between the markers here**; from the start to the playhead and from the playhead to the end; and in the Text window, **Select this part on the timeline** for the sentences you selected.
+  - **I and O changed**: they used to trim the selected clip to the playhead. That is **Q** and **W** now (still **Start at playhead** and **End at playhead** in the Clip menu, and **Trim start to here** / **Trim end to here** on a phone). A short note says so once after the update.
+- **Rows**: while a part is selected every row has a tick box (the video, each sound track, the overlay row, titles and captions). Everything is ticked at first; untick rows to leave them alone, or **Alt** and click for only that row.
+- What you can do with the part (the bar next to the timeline, the new **Part** menu, a right-click inside the part; on a phone **Actions**). Each is one step for **Undo** and has its line in the History.
+  - **Cut out**: removes that time from everything and closes the gap. It is listed under **Automatic cuts** and can be **Put back** there. It needs every row, and says why when some are unticked.
+  - **Delete and leave a gap**: for music, sound effects, overlays, titles and captions on the ticked rows; nothing moves.
+  - **Silence** and **Lower volume…** (6, 12 or 18 dB, or a slider): for the ticked sound rows, for example a cough on one microphone. Nothing moves and nothing clicks: the sound goes down and comes back over a blink. The sound waves show it. It stays on the same words when you later cut, trim or change the speed. The clip's or sound's settings list its **Quiet parts**, with **Remove**.
+  - **Speed…**: slow motion or faster for the part (0.25×, 0.5×, 1.5×, 2× or any speed). The clip's own sound and voices lined up with it follow; music keeps its place, and the window says so. **Mute this part's own sound** is ticked by itself below 0.5×.
+  - **Clean up sound here**: clean-up for this part only.
+  - **Make a short from the part…**, **Duplicate the part**, **Title over the part**, **Good moment marker at its start**.
+- **Only when speaking** (the track's menu, or **Sound** > **Only when speaking…**): with one sound file per speaker, each microphone is turned down while its own speaker is not talking, so the other voices and the room it picked up are not mixed in. It opens just before the speaker starts and leaves a little room sound between the turns (you can choose silence). In the preview and the export. It goes by loudness, not by words, and the help says what that means. Off unless you switch it on; a suggestion offers it when a project has two voice tracks.
+- Long projects (the report was a 23-minute video with two voice recordings on Windows, where the picture stayed black and the buttons did not answer while "Drawing sound…" was shown):
+  - The sound pictures are now background work of the lowest priority. For a long project they start only after the video is on screen, one file at a time, never while the video plays, on one processor thread; the reduction of the sound to a picture and the comparison of the microphones run apart from the app's own work.
+  - "Drawing sound… 1 of 3" with a cross that stops it. Switching **Show sound waves** off stops a picture that is being drawn, not only the ones waiting.
+  - Thumbnails and other small jobs on Windows, Mac and Android go one at a time instead of all at once.
+  - The preview says "Loading the video…" until the first picture is there, instead of staying black without a word.
+- **Add** > **Add from a folder path…** (computer): type or paste the path of a file or a folder and tick what to add, without the system's file window. With a path copied, **Ctrl+V** on the timeline opens it.
+- Smaller things:
+  - **Ctrl+comma** opens Settings also with a keyboard layout where the comma key types another letter, and when nothing on the page has the keyboard.
+  - The Export window shows the size that will really be written for WhatsApp / Telegram (for example 1280 × 720), not the project's size next to "720p".
+  - The View menu shows **+** for **Zoom in**. Where two keys do the same, the menus on Windows and Linux show both (Redo, Delete).
+  - Greyed menu items on the project list say "open a project first"; **New project** and **Open project file…** in a project say "go back to the projects first".
+  - A long right-click menu on the timeline never runs past the window.
+  - Connect to Claude: when an old copy is connected, the one highlighted button is **Replace with this version**, with a line that says what it does.
+  - Phone: the Add list has **Subtitle file (.srt)**; an overlay has **More**; **More** has a **Part** group.
+  - The button for Instagram says "Open Instagram" (it opens the site; Instagram has no upload page on the web). Frames per second: **Same as the clips**. When the shape differs, both shapes are named the same way ("Your video is 16:9 wide; this needs 9:16 upright"). Several shorts made at once: **Open the first**.
+  - The suggestion about a clip of another shape comes back for the next such clip.
+- For Claude: `edit_part` (cut out, silence, lower, delete, speed, clean, duplicate a part, with the rows), `list_quiet_parts`, `remove_quiet_part`, `set_only_when_speaking`. Exports started by Claude apply "Only when speaking" too.
+- New help articles: "Select a part", "Silence or lower a part", "Slow down a part", "Only when speaking".
+
 ## 1.16.0 – 20 November 2026
 
 You can now write to the maker of ClipForge from inside the app, and ClipForge has a website.

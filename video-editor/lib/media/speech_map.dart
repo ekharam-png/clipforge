@@ -28,6 +28,25 @@ class SpeechCache {
 
   List<TimeRange> single(SoundPeaks p) => _single[p] ??= speechStretches(p);
 
+  /// True when [single] / [group] would not have to work anything out.
+  bool hasSingle(SoundPeaks p) => _single[p] != null;
+  bool hasGroup(String key, List<({SoundPeaks peaks, int offsetMs})> mics) {
+    final known = _groups[key];
+    if (known == null || known.of.length != mics.length) return false;
+    for (var i = 0; i < mics.length; i++) {
+      if (!identical(known.of[i], mics[i].peaks)) return false;
+    }
+    return true;
+  }
+
+  /// Results worked out elsewhere (another isolate, for long files).
+  void putSingle(SoundPeaks p, List<TimeRange> result) => _single[p] = result;
+  void putGroup(String key, List<({SoundPeaks peaks, int offsetMs})> mics,
+      List<List<TimeRange>> result) {
+    _groups[key] = (of: [for (final m in mics) m.peaks], result: result);
+    if (_groups.length > 32) _groups.remove(_groups.keys.first);
+  }
+
   List<List<TimeRange>> group(
       String key, List<({SoundPeaks peaks, int offsetMs})> mics) {
     final known = _groups[key];
@@ -83,15 +102,19 @@ class SpeechResolver {
   bool isSpeech(AudioClip a) =>
       !a.looped && (a.isVoice || _speechTracks.contains(a.trackId));
 
-  /// The stretches where someone talks in [a]'s FILE (its own time), or
-  /// null when [a] is not speech or its sound picture is not there yet.
-  List<TimeRange>? fileStretches(AudioClip a) {
+  /// What [fileStretches] of [a] is worked out from: one sound picture
+  /// ([key] null), or the microphones recorded with it ([key] names the
+  /// group and [at] is [a]'s place in it). Null when [a] is not speech or
+  /// its picture is not there yet.
+  ({String? key, List<({SoundPeaks peaks, int offsetMs})> mics, int at})?
+      speechJob(AudioClip a) {
     if (!isSpeech(a)) return null;
     final peaks = lookup(a.path, _trackOf(a));
     if (peaks == null) return null;
+    final alone = (key: null, mics: [(peaks: peaks, offsetMs: 0)], at: 0);
     final video = a.isVoice ? _clipPath[a.sourceClipId] : null;
     final mates = video == null ? null : _voicesOfVideo[video];
-    if (mates == null || mates.length < 2) return cache.single(peaks);
+    if (mates == null || mates.length < 2) return alone;
     final mics = <({SoundPeaks peaks, int offsetMs})>[];
     final ids = <String>[];
     for (final m in mates) {
@@ -101,8 +124,18 @@ class SpeechResolver {
       ids.add(_micId(m));
     }
     final at = ids.indexOf(_micId(a));
-    if (at < 0) return cache.single(peaks);
-    return cache.group('$video>${ids.join('>')}', mics)[at];
+    if (at < 0) return alone;
+    return (key: '$video>${ids.join('>')}', mics: mics, at: at);
+  }
+
+  /// The stretches where someone talks in [a]'s FILE (its own time), or
+  /// null when [a] is not speech or its sound picture is not there yet.
+  List<TimeRange>? fileStretches(AudioClip a) {
+    final job = speechJob(a);
+    if (job == null) return null;
+    final key = job.key;
+    if (key == null) return cache.single(job.mics.single.peaks);
+    return cache.group(key, job.mics)[job.at];
   }
 }
 

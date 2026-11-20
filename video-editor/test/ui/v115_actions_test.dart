@@ -157,7 +157,7 @@ void main() {
     expect(labels, contains('Clip > Move earlier (select a clip)'));
     expect(labels, contains('Sound > Fit music to video'));
     expect(labels,
-        contains('Edit > Redo (nothing to redo)  [Ctrl+Shift+Z]'));
+        contains('Edit > Redo (nothing to redo)  [Ctrl+Shift+Z / Ctrl+Y]'));
   });
 
   testWidgets('the bar in the window: every menu opens (pictures)',

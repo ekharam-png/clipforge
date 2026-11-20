@@ -130,6 +130,7 @@ class MemoryAppPrefs implements AppPrefs {
   MemoryAppPrefs.settled(String version, {bool suggestions = false})
       : answered = true {
     flags.add('whatMoved115Seen');
+    flags.add('keysMoved117Seen');
     if (!suggestions) flags.add('suggestionsOff');
     texts['lastRunVersion'] = version;
     texts['updatedLineSeen'] = version;

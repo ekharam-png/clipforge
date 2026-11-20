@@ -9,10 +9,12 @@ import '../app_settings.dart';
 import '../help/help_screen.dart';
 import '../settings/settings_screen.dart';
 import 'acts.dart';
+import 'add_from_path.dart';
 import 'clip_actions.dart';
 import 'history_panel.dart';
 import 'import_actions.dart';
 import 'music_actions.dart';
+import 'part_actions.dart';
 import 'publishing_panel.dart';
 import 'session.dart';
 import 'shorts_actions.dart';
@@ -105,6 +107,8 @@ class EditorActions {
       case Act.goodMoments:
       case Act.fades:
         return _has ? null : _needVideo;
+      case Act.addFromPath:
+        return s.files.canChooseSaveLocation ? null : 'on computers only';
       case Act.exportSubtitles:
         return hasCaptions(p) ? null : 'no captions yet';
       case Act.undo:
@@ -198,6 +202,32 @@ class EditorActions {
         return hasSpeechStarts ? null : 'no speech found yet';
       case Act.editItem:
         return s.selection.value != null ? null : 'select something first';
+      case Act.selectPart:
+      case Act.partStart:
+      case Act.partEnd:
+      case Act.partOfItem:
+      case Act.partTurn:
+      case Act.partPause:
+      case Act.partBetweenMarkers:
+      case Act.partFromStart:
+      case Act.partToEnd:
+      case Act.clearPart:
+      case Act.partCutOut:
+      case Act.partDelete:
+      case Act.partSilence:
+      case Act.partLower:
+      case Act.partSpeed:
+      case Act.partClean:
+      case Act.partShort:
+      case Act.partDuplicate:
+      case Act.partTitle:
+      case Act.partMarker:
+        return partWhyNot(s, a);
+      case Act.onlyWhenSpeaking:
+        return p.soundTracks
+                .any((t) => t.speech && p.audio.any((x) => x.trackId == t.id))
+            ? null
+            : 'add a voice on a speech track first';
     }
   }
 
@@ -216,6 +246,7 @@ class EditorActions {
         Act.snapping => s.snapping.value,
         Act.soundWaves => s.showWaves.value,
         Act.history => null,
+        Act.onlyWhenSpeaking => _p.soundTracks.any((t) => t.gate) ? true : null,
         _ => null,
       };
 
@@ -227,7 +258,9 @@ class EditorActions {
   /// speech (some tracks)" is a state, not a reason).
   String label(Act a) => mixed(a)
       ? '${actLabel(a)} — on for some tracks'
-      : actLabel(a);
+      : a == Act.partOfItem
+          ? partOfItemLabel(s)
+          : actLabel(a);
 
   /// [a] as a list shows it; tapping runs it from [context] (the editor's
   /// own context, not a sheet's).
@@ -303,6 +336,8 @@ class EditorActions {
         showCaptionsDialog(context, s);
       case Act.importSubtitles:
         importSubtitles(context, s);
+      case Act.addFromPath:
+        showAddFromPath(context, s);
       case Act.addOverlay:
         addOverlay(context, s);
       case Act.markMoment:
@@ -408,6 +443,30 @@ class EditorActions {
         showFadesSheet(context, s);
       case Act.editItem:
         openItemSettings(context, s);
+      case Act.selectPart:
+      case Act.partStart:
+      case Act.partEnd:
+      case Act.partOfItem:
+      case Act.partTurn:
+      case Act.partPause:
+      case Act.partBetweenMarkers:
+      case Act.partFromStart:
+      case Act.partToEnd:
+      case Act.clearPart:
+      case Act.partCutOut:
+      case Act.partDelete:
+      case Act.partSilence:
+      case Act.partLower:
+      case Act.partSpeed:
+      case Act.partClean:
+      case Act.partShort:
+      case Act.partDuplicate:
+      case Act.partTitle:
+      case Act.partMarker:
+        hooks?.stopReverse();
+        runPartAct(context, s, a);
+      case Act.onlyWhenSpeaking:
+        showOnlyWhenSpeaking(context, s);
     }
   }
 }

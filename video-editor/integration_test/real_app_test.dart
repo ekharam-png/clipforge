@@ -804,10 +804,11 @@ void main() {
     s.editor.setAspect(CanvasAspect.original);
     await wait(300);
 
-    // 4b. 1.15: the nine menus, Settings, the context menu, suggestions ------
+    // 4b. 1.15: the menus (ten since 1.17: Part), Settings, the context
+    // menu, suggestions ------
     for (final m in [
-      'File', 'Edit', 'Add', 'Clip', 'Sound', 'Text and speech', 'View', //
-      'Playback', 'Help',
+      'File', 'Edit', 'Add', 'Clip', 'Part', 'Sound', 'Text and speech', //
+      'View', 'Playback', 'Help',
     ]) {
       expect(find.widgetWithText(SubmenuButton, m), findsOneWidget,
           reason: 'menu $m');
@@ -878,6 +879,51 @@ void main() {
         .setSuggestions(false);
     await wait(300);
 
+    // 4c. 1.17: select a part by dragging along the strip under the ruler,
+    // keep only the Video row, Silence; the export below must be silent
+    // there and nowhere else. ------------------------------------------------
+    final strip = find.byKey(const ValueKey('part-strip'));
+    expect(strip, findsOneWidget);
+    final pxPerMs = s.zoom.value / 1000;
+    Offset onStrip(int ms) =>
+        tester.getTopLeft(strip) + Offset(28 + ms * pxPerMs, 8);
+    final partDrag = await tester.startGesture(onStrip(500),
+        kind: ui.PointerDeviceKind.mouse);
+    for (final ms in [700, 1000, 1300, 1500]) {
+      await partDrag.moveTo(onStrip(ms));
+      await wait(40);
+    }
+    await partDrag.up();
+    await wait(400);
+    final quietPart = s.part.value!;
+    log('PART selected ${quietPart.startMs}..${quietPart.endMs} ms');
+    expect(quietPart.startMs, closeTo(500, 120));
+    expect(quietPart.endMs, closeTo(1500, 120));
+    expect(find.byKey(const ValueKey('part-bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('part-band')), findsOneWidget);
+    // Only the Video row: Alt+click its tick box.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.tap(find.byKey(const ValueKey('part-row-video')));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await wait(300);
+    expect(s.partRows.value, {'video'});
+    await shot('06f-part-selected');
+    await tester.tap(find.byKey(const ValueKey('part-partSilence')));
+    await wait(500);
+    final silenced = [
+      for (final c in s.project.clips)
+        if (c.quiet.isNotEmpty) c,
+    ];
+    log('PART silenced on ${silenced.length} clip(s): '
+        '${silenced.map((c) => c.quiet).join(' ')}; '
+        'history: ${s.editor.history.last.label}');
+    expect(silenced, isNotEmpty);
+    expect(s.editor.history.last.label, startsWith('Silenced a part'));
+    await shot('06g-part-silenced');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await wait(300);
+    expect(s.part.value, isNull, reason: 'Esc clears the part');
+
     // 5. Export ---------------------------------------------------------------
     await tester.tap(find.widgetWithText(FilledButton, 'Export'));
     await waitFor(() => find.text('Export video').evaluate().isNotEmpty,
@@ -908,6 +954,39 @@ void main() {
     expect((v['width'], v['height']), (640, 360));
     expect(streams.any((x) => x['codec_name'] == 'aac'), isTrue);
     expect(dur, closeTo(total2 / 1000, 0.25));
+    // 4c, continued: in the export the clip's own sound (a 440 Hz tone)
+    // is gone inside the silenced part, and the music (220 Hz, another
+    // row, not ticked) plays on.
+    Future<double> levelOf(int hz, int fromMs, int toMs) async {
+      final band = 'bandpass=f=$hz:width_type=q:w=8';
+      final r = await tester.runAsync(() => Process.run('ffmpeg', [
+            '-hide_banner', '-nostats', '-ss', '${fromMs / 1000}', '-t',
+            '${(toMs - fromMs) / 1000}', '-i', exportPath, '-vn', '-af',
+            '$band,$band,volumedetect', '-f', 'null', '-',
+          ]));
+      final m = RegExp(r'mean_volume: (-?[\d.]+|-inf) dB')
+          .firstMatch('${r!.stderr}');
+      return m == null || m.group(1) == '-inf' ? -200 : double.parse(m.group(1)!);
+    }
+
+    final qa = quietPart.startMs + 120, qb = quietPart.endMs - 120;
+    final ownInside = await levelOf(440, qa, qb);
+    final ownAfter = await levelOf(440, quietPart.endMs + 150, quietPart.endMs + 900);
+    final musicInside = await levelOf(220, qa, qb);
+    final musicAfter = await levelOf(220, quietPart.endMs + 150, quietPart.endMs + 900);
+    log('PART export: the clip\'s own sound (440 Hz) inside the silenced '
+        'part $ownInside dB, after it $ownAfter dB; the music (220 Hz) '
+        'inside $musicInside dB, after it $musicAfter dB');
+    expect(ownInside, lessThan(ownAfter - 20),
+        reason: 'the silenced row is silent there in the export');
+    if (musicAfter > -60) {
+      expect(musicInside, closeTo(musicAfter, 4),
+          reason: 'the other row plays on');
+    }
+    // Back to the project as the later steps expect it.
+    s.editor.undo();
+    await wait(300);
+    expect(s.project.clips.every((c) => c.quiet.isEmpty), isTrue);
 
     // 5b. Export several (1.14): one job, real engine, one folder ------------
     await tester.tap(find.widgetWithText(FilledButton, 'Export'));

@@ -211,16 +211,17 @@ void main() {
     expect(s.project.clips.firstWhere((c) => c.id == 'c').filter, LookFilter.cool);
     expect(s.editor.history.last.label, startsWith('Pasted settings on clip'));
 
-    // I: the first clip starts at the playhead (1 s in).
+    // Q (I until 1.16; I and O mark a part since 1.17): the first clip
+    // starts at the playhead (1 s in).
     await tester.tap(block('clip-a'));
     await tester.pumpAndSettle();
     s.playback.seek(1000);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyI);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyQ);
     await tester.pumpAndSettle();
     expect(s.project.clips.first.inMs, 1000);
     expect(s.editor.history.last.label, 'Start of clip 1 at playhead');
     s.playback.seek(2000);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyO);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
     await tester.pumpAndSettle();
     expect(s.project.clips.first.outMs, 3000);
 

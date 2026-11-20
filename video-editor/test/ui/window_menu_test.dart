@@ -117,8 +117,11 @@ void main() {
       await _open(tester, 'File');
       expect(_item(tester, 'New project').onPressed, isNotNull);
       expect(_item(tester, 'Open project file…').onPressed, isNotNull);
-      expect(_item(tester, 'Back to projects').onPressed, isNull);
-      expect(_item(tester, 'Export…').onPressed, isNull);
+      // 1.17: a greyed item says why, on the project list too.
+      expect(
+          _item(tester, 'Back to projects (open a project first)').onPressed,
+          isNull);
+      expect(_item(tester, 'Export… (open a project first)').onPressed, isNull);
       expect(
         find.text(platform == TargetPlatform.windows ? 'Exit' : 'Quit'),
         findsOneWidget,
@@ -136,7 +139,10 @@ void main() {
       c.attach(c, _editor(calls, canUndo: false));
       await tester.pump();
       await _open(tester, 'File');
-      expect(_item(tester, 'New project').onPressed, isNull);
+      expect(
+          _item(tester, 'New project (go back to the projects first)')
+              .onPressed,
+          isNull);
       expect(_item(tester, 'Export…').onPressed, isNotNull);
       await tester.tap(find.text('Back to projects'));
       await tester.pumpAndSettle();
@@ -146,7 +152,9 @@ void main() {
       expect(_item(tester, 'Undo (nothing to undo)').onPressed, isNull);
       expect(_item(tester, 'Delete').onPressed, isNotNull);
       expect(find.text('Ctrl+Z'), findsOneWidget);
-      expect(find.text('Ctrl+Shift+Z'), findsOneWidget);
+      // Both keys that redo, both keys that delete (1.17).
+      expect(find.text('Ctrl+Shift+Z / Ctrl+Y'), findsOneWidget);
+      expect(find.text('Delete / Backspace'), findsOneWidget);
       expect(find.text('Ctrl+D'), findsOneWidget);
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();

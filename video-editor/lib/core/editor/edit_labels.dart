@@ -109,9 +109,9 @@ String aspectName(CanvasAspect a) => switch (a) {
       CanvasAspect.portrait4x5 => '4:5',
     };
 
-/// "Match first clip", "720p", "1080p", "4K".
+/// "Same as the first clip", "720p", "1080p", "4K" (the words of the menus).
 String videoSizeName(VideoSize s) => switch (s) {
-      VideoSize.matchFirstClip => 'Match first clip',
+      VideoSize.matchFirstClip => 'same as the first clip',
       VideoSize.p720 => '720p',
       VideoSize.p1080 => '1080p',
       VideoSize.p2160 => '4K',

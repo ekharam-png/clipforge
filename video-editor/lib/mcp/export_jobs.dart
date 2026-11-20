@@ -28,6 +28,8 @@ import '../core/model/project.dart';
 import '../core/storage/project_lock.dart' show processAlive, localHostName;
 import '../media/destinations.dart';
 import '../media/export_kit.dart';
+import '../media/sound_peaks_job.dart';
+import '../media/speech_gate_job.dart';
 import '../media/ffmpeg_command.dart' show exportSize;
 import '../media/media_api.dart';
 import '../media/process_media_engine.dart';
@@ -441,6 +443,21 @@ Future<int> runExportWorker(String jobFile) async {
   return 0;
 }
 
+/// "Only when speaking" (1.17) for an export job: the gates of [project],
+/// worked out here from the sound itself (the pictures are kept next to
+/// the jobs, so the next export of the same files does not listen again).
+/// Empty when no track is gated or the engine cannot listen.
+Future<Map<String, List<QuietRange>>> jobGates(
+    ExportJobStore store, Project project, MediaEngine engine) async {
+  if (engine is! SoundPeaksEngine) return const {};
+  try {
+    return await computeProjectGates(project, engine as SoundPeaksEngine,
+        cacheDir: p.join(store.dir, 'sound-pictures'));
+  } catch (_) {
+    return const {};
+  }
+}
+
 /// Renders job [id] with [engine]: progress and heartbeat into the job
 /// file, the `.part` file renamed when done, the result (size, length,
 /// encoder) or the error written at the end. Never throws.
@@ -487,7 +504,8 @@ Future<void> runExportJob(ExportJobStore store, String id, MediaEngine engine,
             quality: quality,
             fps: r.fps,
             useHardwareEncoder: r.hardware,
-            format: format));
+            format: format,
+            gates: await jobGates(store, project, engine)));
     final progress = running.progress.listen((pr) {
       final f = pr.fraction.clamp(0.0, 0.99);
       if (f > r.progress) r.progress = f;
@@ -816,7 +834,10 @@ Future<void> runKitJob(ExportJobStore store, ExportJobRecord r, MediaEngine engi
     }
     final plans = [
       for (final part in parts)
-        planKit(part.project, part.choices, fps: r.fps, useHardwareEncoder: r.hardware),
+        planKit(part.project, part.choices,
+            fps: r.fps,
+            useHardwareEncoder: r.hardware,
+            gates: await jobGates(store, part.project, engine)),
     ];
     final count = plans.fold<int>(0, (n, pl) => n + pl.items.length);
     var cancelling = false;

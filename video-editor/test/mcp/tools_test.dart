@@ -51,6 +51,9 @@ void main() {
         'remove_fillers', 'list_auto_cuts', 'restore_cut', 'make_short',
         // 1.13: captions as text, find and replace, who speaks.
         'get_captions', 'replace_in_captions', 'get_speech_map',
+        // 1.17: a part of the timeline, quiet parts, only when speaking.
+        'edit_part', 'list_quiet_parts', 'remove_quiet_part',
+        'set_only_when_speaking',
         // 1.14: shorts, publishing notes, kits, markers.
         'suggest_shorts', 'get_publishing_notes', 'set_publishing_notes',
         'make_chapters', 'export_kit', 'add_marker', 'list_markers',

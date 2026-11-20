@@ -2,7 +2,11 @@
 
 Read this first in a new session. It records what was built, why, how it fits
 together, how to build and test it, and what is still open. Last updated
-20 November 2026 (1.16.0: Send feedback from inside the app, ONE source
+20 November 2026 (1.17.0: select a part of the timeline and act on it per
+row, quiet ranges, "Only when speaking", I / O now mark a part, and the
+sound pictures moved off the app's own isolate after a stall on a real
+Windows PC; see "Select a part, quiet ranges, only when speaking; the
+Windows stall (1.17.0)". Before that 1.16.0: Send feedback from inside the app, ONE source
 for the outside addresses - `tool/ci/links.json`, which also travels in
 latest.json so installed apps follow a move of the site - the website in
 `web/`, the old Pages page as a signpost, and `docs/RENAMING.md`; see
@@ -105,7 +109,7 @@ what must not change.
   `lib/core/feedback/feedback.dart` (payload, the one request, limits),
   `lib/ui/feedback/feedback_screen.dart`, `tool/ci/links.json` +
   `links.py`, `docs/RENAMING.md`.
-- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1931 tests (1.16.0; 1888 at 1.15.0, 1827 at 1.14.1, 1796 at 1.14.0, 1690 at 1.13.0, 1611 at 1.12.0, 1516 at 1.11.0).
+- `test/core`, `test/media`, `test/ui`, `test/mcp` — 2001 tests (1.17.0; 1931 at 1.16.0, 1888 at 1.15.0, 1827 at 1.14.1, 1796 at 1.14.0, 1690 at 1.13.0, 1611 at 1.12.0, 1516 at 1.11.0).
   `integration_test/real_app_test.dart` — drives the real app on Linux.
 
 ## What was built, and why
@@ -1929,7 +1933,8 @@ buttons, **Open … upload page** per destination.
   45 / 60 s from there). **Timeline: there is no range concept** (I / O
   trim the clip), so the light action was built: **Make a short from
   here…** (30 / 45 / 60 s from the playhead; Edit > Shorts, Project panel,
-  phones More > Shorts and good moments). The short is a new project
+  phones More > Shorts and good moments; since 1.17 there IS a range:
+  "Make a short from the part…"). The short is a new project
   (store.duplicate -> buildShort -> save; notes and markers are not
   copied); then "Open it" (`EditorSession.openProject` = save, release the
   lock, pushReplacement) or "Stay here". Warning over `kShortMaxSeconds`,
@@ -2278,6 +2283,269 @@ so neither class could show.
   reaction to the unsigned installer; `chcp 65001` + `for /f` on a
   remove list with non-ASCII paths in the cmd script (CI uses ASCII
   there); the 15 s wait on a slow PC with a scanner.
+
+## Select a part, quiet ranges, only when speaking; the Windows stall (1.17.0, 20 Nov 2026)
+
+Owner (podcasts with one sound file per speaker, family videos, sport):
+select a PART of the timeline, choose the rows it applies to, act on it.
+Plus a P1 from a real Windows test of 1.15 and seven smaller findings
+(end of this section).
+
+### Where the code is
+
+- `lib/core/editor/part.dart` (pure): `TimelinePart`, the rows
+  (`partRowsOf`, ids `video` / `overlay` / `titles` / a track id),
+  `PartAction`, `partRowProblem` / `partActionProblem` (THE "why not" for
+  parts), `clipsInPart`, `soundSourceRange`, quick selections
+  (`partOfClip`, `partBetweenMarkers`, `stretchAt`, `pauseAt`).
+- `lib/core/editor/part_edits.dart` (`part of project_editor.dart`, an
+  extension on `ProjectEditor`): `silencePart`, `removeQuiet`, `cutPart`,
+  `deletePart`, `speedPart`, `cleanPart`, `duplicatePart`,
+  `setOnlyWhenSpeaking`, `unripplePart`.
+- `lib/core/model/project.dart`: `QuietRange`, `quietGainAt`,
+  `addQuietRange`, `Clip.quiet`, `AudioClip.quiet`, `SoundTrack.gate` /
+  `gateLevel`.
+- `lib/media/clip_audio.dart` `quietFilter` / `quietExpression`,
+  `lib/media/speech_gate.dart` (`gateRangesOf`, `projectGates`),
+  `speech_gate_job.dart` (`computeProjectGates` for exports).
+- `lib/ui/editor/part_actions.dart`: `PartBar`, `showPartSheet`, the
+  Lower / Speed / Only when speaking dialogs, `QuietPartsList`,
+  `partWhyNot` / `runPartAct` (called by `EditorActions`).
+  `session.dart`: `part`, `partRows`, `partPreview`, `markPartStart/End`,
+  `extendPartTo`, `nudgePart`, `partSnapTargets`, `gates`, `exportGates`.
+  `timeline_view.dart`: the strip, the band, the handles, double-click.
+  `sound_tracks_ui.dart`: `RowTick`. `lib/ui/editor/add_from_path.dart`.
+- `lib/mcp/tools_part.dart`: `edit_part`, `list_quiet_parts`,
+  `remove_quiet_part`, `set_only_when_speaking`.
+
+### The interaction scheme, and why (the two conflicts)
+
+- **I / O mark the part** (start / end at the playhead, also while
+  playing; with no part, I gives "playhead to the end" and O "start to the
+  playhead"). That is the meaning of I / O in Premiere, Resolve, Final
+  Cut, Avid, Kdenlive, Shotcut; the owner compares with other editors and
+  will read tutorials for them. **Trim to the playhead moved to Q / W**
+  (Premiere's keys for exactly that) and stays in the Clip menu, the
+  context menu and the phone's More ("Trim start / end to here"). A
+  one-time note says so (`showKeysMoved`, flag `keysMoved117Seen`:
+  existing users coming from 1.15 / 1.16 on a computer; older versions get
+  the line inside "What moved"). Esc clears the part (handled in the
+  editor's `_onKey`; NOT a menu shortcut, so a Mac's menu bar does not
+  take Esc from dialogs).
+- **The ruler keeps scrubbing.** Dragging on it selects a part only with
+  Shift. The discoverable way is a **16 px strip directly under the
+  ruler** (`part-strip`, wide layout only) with the words "Drag here to
+  select a part". Rejected: plain drag on the ruler (breaks the most used
+  gesture), drag in empty timeline space (the main track has no empty
+  space, the sound rows only sometimes), a tool mode (modes are what
+  non-technical users trip over). Cost: the rows start 16 px lower in the
+  wide layout (`_firstRowTop`).
+- **Phones** have no strip (a finger's horizontal drag scrolls): "Select
+  part" (More > Part, the project menu, long press on an empty place)
+  puts a 5 s part at the playhead (or the selected item's time) with two
+  30 px tabs on the ruler; `PartBar(phone: true)` between the timeline
+  and the tool bar has start / end with nudge arrows (1 frame / 0.1 s,
+  the Step button), the length, Actions (a sheet: rows with tick boxes
+  and "Only this", then the actions) and a cross.
+- **The bar is docked above the timeline, not floating at the selection**
+  (changed from the brief): a floating bar covers the rows and their tick
+  boxes, moves while a handle is dragged and is gone when the part is
+  scrolled out of view; docked, it is always in the same place and the
+  rows stay free. While the pointer is on one of its actions the row
+  headers show which rows that action cannot change (crossed box, the
+  reason as tooltip; `session.partPreview`); the tooltip of the action
+  lists the rows too (`partActionSummary`).
+- **Double-click** selects the time of a clip / sound / title / overlay;
+  on a voice it selects that speaker's turn (`speakerTurns`, pause under
+  3 s). It is detected by hand (`_secondTap`, 400 ms) because
+  `onDoubleTap` would delay every single click by the double-tap timeout.
+  Before 1.17 a double-click did nothing special.
+- **"Tap elsewhere clears it"** = a tap on empty timeline background or
+  on the strip outside the part. A tap on the ruler (scrubbing) or on an
+  item (selecting it) does not: the part is usually auditioned and
+  adjusted before it is used.
+- **Cut out needs every row** (`partActionProblem`); with fewer, the bar
+  shows one line why (lips and voice would no longer match) and points to
+  Silence / Delete and leave a gap.
+- **Menus**: a tenth menu **Part** between Clip and Sound (selection
+  first, then actions); Sound gained "Only when speaking…". The part is
+  not in the project file and not an undo step; `partRows` is reset when
+  the part is cleared.
+
+### Data model
+
+- `QuietRange(fromMs, toMs, level)` in **SOURCE time** of the item's file
+  (level linear, 0 = silence), a list per `Clip` (the video's own sound),
+  `AudioClip` and overlay clip; JSON key `quiet`, written only when not
+  empty (schema stays 2). Because it is source time, split / trim / speed
+  / Remove silences / linked-voice mirroring need NO bookkeeping:
+  `copyWith` carries the list and what lies outside the trim has no
+  effect (`quietInUse`). `separateSound` / `reattachSound` carry it over.
+- `QuietRange.gainAt`: 1 outside, the level inside, a straight line over
+  `kQuietFadeMs` (40 ms) just INSIDE each edge. `addQuietRange`: a new
+  range lies over older ones, neighbours of one level join, level 1
+  clears ("Remove"). `silencePart` makes a range 80 ms longer than what
+  the item plays where the part runs past the item's own edge
+  (`_quietOver`), so a part covering a cut does not let two 40 ms fades
+  through at the cut (found by the run test).
+- **Cut out** = the editor's own operations per clip (so titles, markers
+  and linked sound follow), then `_rippleFree` takes the same stretch out
+  of sound that does not follow a clip and of overlay items and moves the
+  later ones up (the two halves of a divided sound get `kJoinFadeMs` =
+  20 ms fades). Logged per video file as `AutoCut(kind: 'part')`;
+  `restoreAutoCut` (speech_edits.dart `_restoreAndShift`) then also moves
+  the free items back and joins a divided sound again (`unripplePart`).
+- **Delete and leave a gap**: the main track cannot have gaps (clips are a
+  sequence), so the video row is refused with that reason; linked sound
+  mirrors its clip, so it is refused too ("use Silence").
+- **Clean up sound here**: DECISION split, not a per-range cache. The
+  processed-sound cache is keyed by file + settings, so every cleaned
+  piece of a file shares one rendered file; a per-range key would need a
+  new cache and a new renderer for no gain.
+- **Only when speaking**: `SoundTrack.gate` + `gateLevel` only. The quiet
+  stretches are COMPUTED (`gateRangesOf`: outside the 1.13 speech
+  stretches, bleed already removed by `groupSpeechStretches`; pre-roll
+  80 ms, hold 200 ms, quiet stretches under 400 ms stay open, the 40 ms
+  fade inside the quiet stretch) and used by preview, export and
+  waveform; nothing per stretch is stored. With "Show sound waves" off
+  the pictures of the speech tracks are still read when a gate is on
+  (`SoundPictures._gateNeeds`).
+
+### Export and preview
+
+- Export (`quietFilter`): `asetnsamples=n=48` (1 ms frames),
+  `volume=volume='<expr>':eval=frame`, back to 1024. One expression per
+  list (the item's ranges; the gate), a balanced `if(lt(t,S),..)` tree
+  over the ranges with leaves `1-K*clip(min(t-A,B-t)/F,0,1)`: about
+  log2(n) comparisons per millisecond for a microphone with hundreds of
+  pauses. Placed before `atempo`, where `t` is still source time: single
+  clips (`-ss inMs`), pieces of a run (after each piece's `atrim`, origin
+  = the piece's place on the frame grid, so runs still share one input)
+  and `clipTail` of the sound tracks. `ExportOptions.gates` (by sound id)
+  carries the gate; the app computes it before the Export window opens
+  (`EditorSession.exportGates`), Claude's export job in the worker
+  (`jobGates`). Long graphs go through the existing graph file.
+- Preview: `PlaybackController._fadeAt` multiplies the clip's
+  `quietGainAt` at its source position, `audioGain` does the same for
+  sound items and takes the gate (`gateOf`, set by the session). Volume
+  changes ride on the players' position reports, so the preview's fades
+  are steps of a report (~30-50 ms), the export's are exact.
+- Waveform: `WavePainter.quiet` / `gate`: bars scaled by the factor, a
+  dark band behind the item's own quiet parts.
+- Measured (FFmpeg 6.1, `test/media/v117_part_integration_test.dart`):
+  silenced range -58 dB against the same export without it, other rows
+  within 0.7 dB; largest sample step at the range edges equal to the
+  plain signal's (no click); -12 dB within 0.8; gate -18 dB within 1.2
+  with the first 100 ms of the next turn untouched.
+
+### Claude (74 tools)
+
+One `edit_part` with `action` instead of five or seven tools: all take
+the same from_ms / to_ms / rows / dry_run and follow the same rules, and
+every tool's schema is sent with every conversation. `cut_out` with
+`rows` is refused with the reason. `list_auto_cuts` / `restore_cut` know
+kind "part".
+
+### P1: the stall on Windows (23 min, one video + two linked voices)
+
+Not reproducible here (Linux, system ffmpeg). What was found by reading
+and measuring, and what was changed:
+
+- NOT the cause: the Windows plugin runs "synchronous" FFmpegKit sessions
+  on a `std::thread` (checked in ffmpeg_kit_flutter_new 4.6.8,
+  `ffmpegSessionExecute`), so the decode itself does not block the
+  platform thread. The speech map is O(n): 40 minutes x 2 microphones
+  compare in 6-27 ms (unoptimised test build).
+- Was on the UI isolate: reducing the decoded samples to a picture
+  (`SoundPeaks.fromRawFile`, ~230 ms per 40-minute file in a test build,
+  in 64 KB pieces) and the microphone comparison (asked for by the
+  timeline while building a frame). Both now run in `Isolate.run`
+  (`reduceRawSound`; `SoundPictures._primeSpeech` for files of 10 minutes
+  and more, before the picture is published to the timeline).
+- Candidates that could not be tested: (a) processor starvation - on
+  opening, a thumbnail strip of the whole video, three decodes and the
+  players' own decoding all ran at once, each FFmpeg with its own threads
+  inside the app's process; (b) the same on the platform thread through
+  many small plugin calls. Changed: the peaks decode runs with
+  `-threads 1 -filter_threads 1`; one-shot FFmpegKit runs (thumbnails,
+  strips, frames) are a queue of one (`_oneShot`); for a project with a
+  file of 10 minutes or more the pictures start 1.5 s after opening, one
+  file at a time, and NO file is started while the video plays
+  (`SoundPictures.playing`); every run is cancellable
+  (`CancellableSoundPeaksEngine`, `_ffmpegStreaming` + `session.cancel()`
+  on FFmpegKit, kill on the process engine): the cross next to "Drawing
+  sound… 1 of 3", "Show sound waves" off, and leaving the project stop
+  the running decode.
+- Preview: "Loading the video…" until the front player reported its
+  first position (`PlaybackController.firstFrameShown`).
+- Tests: `test/media/v117_responsive_test.dart`: a slow fake engine with
+  40 minutes x 3 files while the test does what the timeline does per
+  frame: longest wait of the isolate 17-20 ms (limit 50); real ffmpeg on
+  generated 25-minute files: 6.8 s for three files, longest wait 15 ms;
+  stop in the middle.
+- UNVERIFIED and to be tested on the real PC with the same project: that
+  the stall is gone; FFmpegKit `session.cancel()` on Windows; whether
+  Back / Export / F1 answer while pictures are drawn. If it still stalls
+  with "Show sound waves" OFF, the cause is not the sound pictures (then
+  look at the number of players opened at once and the thumbnail strip).
+  `SoundPictures.logTimings = true` prints each picture's time in a debug
+  build.
+
+### The seven other findings
+
+1. Ctrl+comma: was matched by the typed character only, inside
+   `CallbackShortcuts` (needs focus in the tree). Now `isSettingsShortcut`
+   (logical OR physical comma) in a `HardwareKeyboard` handler of
+   `WindowMenuBar`. Likely cause on the PC: a layout where the comma key
+   types a letter, or no focus on the project list. Unverified there.
+2. Export size line: shows `exportSize` of the variant.
+3. Menu keys are drawn by `describeShortcut` (so "+"), with `MenuNode.also`
+   for a second key (Redo: Ctrl+Y; Delete: Backspace).
+4. Reasons on the project list / for New and Open in the editor.
+5. `showMenu` got `maxHeight: window - 16` (it scrolls). Not reproduced.
+6. Connect to Claude: "Replace with this version" + "Disconnect instead".
+7. `add_from_path.dart`: Add > Add from a folder path…, Ctrl+V with a
+   path; same pipeline as dropped files.
+8. Nothing to fix.
+
+### Tests (new in 1.17; 2001 in all)
+
+`test/core/v117_part_test.dart` (the part, rows and reasons, quiet ranges,
+every edit incl. across cuts, speed other than 1, linked voices,
+transitions, undo / History labels, put back),
+`test/media/v117_part_integration_test.dart` (real ffmpeg: levels inside
+and outside a silenced range per row, no sample jump, trim and speed,
+runs, speed with a linked voice in sync, the gate on a two-microphone
+fixture), `test/media/v117_responsive_test.dart` (the watchdog),
+`test/mcp/tools_v117_test.dart`, `test/ui/v117_part_ui_test.dart`
+(computer and phone; Add from a folder path), `test/ui/v117_sound_ui_test.dart`
+(waveform, gate, quick selections, "Drawing sound… 1 of 4" and its
+cross). Updated: `menu_tree_test.dart` (+ snapshot; ten menus; I / O / Q /
+W and the "What moved" line; Ctrl+comma by physical key),
+`v17_ui_test.dart` (Q / W), the phone layout, suggestions and tool-list
+tests. The Linux e2e gained step 4c: drag along the strip in the real
+app, Alt+click the Video row's tick box, Silence, Export; in the exported
+file the clip's own 440 Hz tone is at -69 dB inside the part (-24 dB after
+it) while the music row plays on. One e2e run of three failed at an
+unrelated, timing-dependent step (portrait clip not on screen 1.2 s after
+a seek); the rerun passed. Screenshots: `editor_desktop_part`,
+`editor_desktop_quiet_wave`, `phone_part`, `phone_part_sheet` (the older
+screenshots were not regenerated: on computers the rows now sit 16 px
+lower).
+
+### Not built / not verified (1.17)
+
+- Not built: auto-scroll while a handle is dragged to the edge of the
+  view; a put-back for Delete and leave a gap (Undo only); the per-row
+  tick boxes inside the Lower / Speed dialogs (they show the summary
+  line); "Hear a sample" does not apply quiet ranges of linked voices
+  (it renders one clip).
+- Unverified: everything on real devices (phone handles and nudge under
+  a thumb, the strip with a trackpad, the Mac menu bar with ten menus);
+  the preview's volume steps by ear; the gate by ear on real recordings
+  (the tests use tones); FFmpeg 8.1 for `asetnsamples` + `volume` with
+  `eval=frame` (same spelling since FFmpeg 2, measured on 6.1 only);
+  `-threads 1` before `-i` on FFmpegKit.
 
 ## Feedback, one source for addresses, rename readiness (1.16.0, 20 Nov 2026)
 
@@ -3267,7 +3535,7 @@ building** until they report results. Read the checklist marks first.
 export PATH=/opt/sdk/flutter/bin:$PATH ANDROID_HOME=/opt/sdk/android
 cd video-editor
 flutter analyze
-flutter test                                   # all tests (1931)
+flutter test                                   # all tests (2001)
 flutter build apk --release --split-per-abi --target-platform android-arm64
 python3 tool/ci/release_assets_test.py && python3 tool/ci/release_assets.py --check-links
 python3 tool/ci/links_test.py && python3 tool/ci/make_readme_html_test.py

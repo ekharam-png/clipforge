@@ -173,6 +173,79 @@ String clipSoundFilters(Clip clip, String format,
   return out.toString();
 }
 
+// ---- quiet ranges (1.17) ---------------------------------------------------
+
+/// Samples per frame while a quiet range's level is applied: the `volume`
+/// filter works out its factor once per frame, so the sound is cut into
+/// 1 ms frames first (48 samples at 48 kHz). A 40 ms fade is then 40 small
+/// steps of at most 2.5 % each - no click - and the edges are right to
+/// the millisecond.
+const int kQuietFrameSamples = 48;
+
+/// The ffmpeg stages that apply [lists] of quiet ranges (the item's own
+/// "Silence" / "Lower volume" ranges, and the computed ranges of "Only
+/// when speaking"; their factors multiply) to a 48 kHz stream whose time
+/// 0 is [originMs] of the SOURCE file. Only ranges that touch
+/// [fromMs]..[toMs] of the source are written. Each stage ends with a
+/// comma; empty when nothing applies.
+///
+/// One list becomes ONE expression: a balanced tree of `if(lt(t,S),..)`
+/// over its ranges (sorted, not overlapping), so a microphone with
+/// hundreds of pauses costs about ten comparisons per millisecond instead
+/// of hundreds; a range is `1-K*clip(min(t-A,B-t)/F,0,1)` - 1 outside,
+/// the level inside, a straight line over the fade at each edge, exactly
+/// [QuietRange.gainAt], which the preview and the waveform use.
+String quietFilter(Iterable<List<QuietRange>> lists,
+    {required num originMs, num? fromMs, num? toMs}) {
+  final stages = <String>[];
+  for (final list in lists) {
+    final ranges = [
+      for (final r in list)
+        if (r.level < 1 &&
+            r.toMs > r.fromMs &&
+            (fromMs == null || r.toMs > fromMs) &&
+            (toMs == null || r.fromMs < toMs))
+          r,
+    ]..sort((a, b) => a.fromMs.compareTo(b.fromMs));
+    if (ranges.isEmpty) continue;
+    stages.add("volume=volume='${quietExpression(ranges, originMs)}'"
+        ':eval=frame');
+  }
+  if (stages.isEmpty) return '';
+  return 'asetnsamples=n=$kQuietFrameSamples:p=0,${stages.join(',')},'
+      'asetnsamples=n=1024:p=0,';
+}
+
+/// The `volume` expression for [ranges] (sorted by start, not
+/// overlapping); `t` = 0 is [originMs] of the source.
+String quietExpression(List<QuietRange> ranges, num originMs) {
+  String sec(num ms) => _num((ms - originMs) / 1000, 4);
+  String minus(num ms) {
+    final v = sec(ms);
+    return v.startsWith('-') ? '+${v.substring(1)}' : '-$v';
+  }
+
+  String leaf(QuietRange r) {
+    final k = _num(1 - r.level, 4);
+    final f = r.fadeMs;
+    if (f <= 0) {
+      return 'if(between(t,${sec(r.fromMs)},${sec(r.toMs)}),'
+          '${_num(r.level, 4)},1)';
+    }
+    return '1-$k*clip(min(t${minus(r.fromMs)},${sec(r.toMs)}-t)'
+        '/${_num(f / 1000, 4)},0,1)';
+  }
+
+  String node(int lo, int hi) {
+    if (hi - lo == 1) return leaf(ranges[lo]);
+    final mid = (lo + hi) >> 1;
+    return 'if(lt(t,${sec(ranges[mid].fromMs)}),'
+        '${node(lo, mid)},${node(mid, hi)})';
+  }
+
+  return node(0, ranges.length);
+}
+
 // ---- preview ---------------------------------------------------------------
 //
 // The preview player is libmpv as media_kit ships it. Its FFmpeg (6.0 in

@@ -62,7 +62,15 @@ class ExportOptions {
     this.useHardwareEncoder = true,
     this.processedSound = const {},
     this.format = ExportFormat.video,
+    this.gates = const {},
   });
+
+  /// "Only when speaking" (1.17): for each sound on a gated speech track
+  /// ([SoundTrack.gate]), by sound id, the stretches of its FILE where its
+  /// speaker is not talking, with the level left there (see
+  /// media/speech_gate.dart `gateRangesOf`). Worked out by whoever starts
+  /// the export from the sound pictures; sounds not listed are not gated.
+  final Map<String, List<QuietRange>> gates;
 
   /// Video, or sound only ([ExportFormat]). Sound only ignores [quality]
   /// for the picture (there is none), [fps] and [useHardwareEncoder].

@@ -300,8 +300,10 @@ void main() {
         }
         expect(find.byKey(const ValueKey('what-moved-dialog')), findsOneWidget);
         expect(find.text('Things are easier to find now'), findsOneWidget);
-        expect(find.textContaining('every keyboard shortcut works'),
-            findsOneWidget);
+        expect(find.textContaining('Nothing was removed'), findsOneWidget);
+        // 1.17: the one shortcut that changed is in the computer's list.
+        expect(find.textContaining('The I and O keys'),
+            label == 'desktop' ? findsOneWidget : findsNothing);
         await fakes.screenshot(tester, 'what_moved_$label');
         expect(fakes.prefs.flags, contains(kWhatMovedSeenFlag));
         await tester.tap(find.byKey(const ValueKey('what-moved-settings')));
@@ -352,6 +354,12 @@ void main() {
           prepare: (prefs) => prefs.texts[kLastRunVersionText] = '1.15.0-x');
       expect(find.byKey(const ValueKey('what-moved-dialog')), findsNothing);
       expect(find.byKey(const ValueKey('updated-line')), findsOneWidget);
+      // 1.17 on a computer, coming from 1.15 / 1.16: "Two keys changed",
+      // once.
+      expect(find.byKey(const ValueKey('keys-moved-dialog')), findsOneWidget);
+      expect(find.textContaining('press Q and W'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('keys-moved-ok')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('updated-line-close')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('updated-line')), findsNothing);

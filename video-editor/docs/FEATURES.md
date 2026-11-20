@@ -9,7 +9,7 @@ not mention.
 
 Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
 1.8.0, 1.9.0, 1.10.0, 1.11.0, 1.12.0, 1.13.0, 1.14.0, 1.14.1, 1.15.0,
-1.16.0.
+1.16.0, 1.17.0.
 
 ## Projects
 
@@ -32,6 +32,25 @@ Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
 | Find file: Search the gallery (Android) | 1.8.0 | Looks for a missing file by its name on the phone and copies it in. |
 | Clean-up never deletes what is in use | 1.8.0 | Files the open project or its undo history still needs are always kept. |
 | "Open in the app" mark | 1.9.0 | An open project is marked, so Claude does not change it at the same time; leftovers of a crash are ignored and cleaned up. |
+
+## A part of the timeline (1.17.0)
+
+| Feature | Since | What it does |
+|---|---|---|
+| Select a part | 1.17.0 | A stretch of the timeline, highlighted across every row with its length: drag along the strip under the ruler, I / O at the playhead, Shift+drag on the ruler, handles on both edges, Shift+click to stretch; on phones Select part with two handles and nudge arrows (1 frame / 0.1 s). Not saved, not an undo step. |
+| Quick selections | 1.17.0 | Double-click a clip, a sound, a title; a speaker's turn; the pause here; between markers; start to playhead and playhead to end; the sentences selected in the Text window. |
+| Rows | 1.17.0 | A tick box on every row while a part is selected; Everything, Only this row (Alt+click), any mix. An action says which rows it cannot change and why. |
+| Cut out | 1.17.0 | Removes the part from everything and closes the gap; in the Automatic cuts list, with Put back (music is put back together too). |
+| Delete and leave a gap | 1.17.0 | Removes the part from music, effects, overlays, titles and captions on the ticked rows; nothing moves. |
+| Silence / Lower volume | 1.17.0 | The ticked sound rows are silent or quieter for the part (6, 12, 18 dB or a slider), with 40 ms fades; follows cuts, trims and speed; shown on the sound waves; Quiet parts list with Remove. |
+| Speed for a part | 1.17.0 | Slow motion or faster for the part; own sound and linked voices follow, music keeps its place; Mute this part's own sound. |
+| Clean up sound here | 1.17.0 | Clean-up for the part only, on the ticked rows. |
+| Short, copy, title, marker from a part | 1.17.0 | Make a short from the part, Duplicate the part, Title over the part, Good moment marker at its start. |
+| Only when speaking | 1.17.0 | Per voice track: the microphone is turned down while its speaker is silent (a little room sound, or silence), in the preview and the export. Loudness-based. |
+| I / O mark a part; Q / W trim | 1.17.0 | I and O mark the part's start and end (as in most editors); trimming the clip to the playhead moved to Q and W. |
+| Sound pictures never hold the app up | 1.17.0 | Long projects: drawn after the video shows, one file at a time, not while playing, off the app's own thread; "Drawing sound… 1 of 3" with a stop cross; "Loading the video…" in the preview. |
+| Add from a folder path (computers) | 1.17.0 | Add > Add from a folder path…: paste a file or folder path, tick the files; Ctrl+V with a copied path. |
+| Claude: parts | 1.17.0 | edit_part, list_quiet_parts, remove_quiet_part, set_only_when_speaking. |
 
 ## Feedback and the website (1.16.0)
 

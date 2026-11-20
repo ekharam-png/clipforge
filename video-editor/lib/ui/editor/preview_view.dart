@@ -136,6 +136,20 @@ class PreviewView extends StatelessWidget {
               top: 12,
               child: PreparingSoundNote(session: session),
             ),
+            // Opening the file: never plain black without a word.
+            Center(
+              child: ListenableBuilder(
+                listenable: session.playback,
+                builder: (context, _) => session.playback.loadingFirstFrame
+                    ? const IgnorePointer(
+                        child: Text('Loading the video…',
+                            key: ValueKey('preview-loading'),
+                            style: TextStyle(
+                                color: AppColors.textDim, fontSize: 13)),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ),
           ],
         );
       },

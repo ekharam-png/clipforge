@@ -73,6 +73,7 @@ KitPlan planKit(
   int fps = 30,
   bool useHardwareEncoder = true,
   Map<String, String> processedSound = const {},
+  Map<String, List<QuietRange>> gates = const {},
 }) {
   final seen = <String>{};
   final items = <KitItem>[];
@@ -86,7 +87,9 @@ KitPlan planKit(
           fps: fps,
           useHardwareEncoder: useHardwareEncoder,
           // The processed sound belongs to the clips, whatever the shape.
-          processedSound: processedSound),
+          processedSound: processedSound,
+          // "Only when speaking": by sound id, the same in every shape.
+          gates: gates),
       fileName: kitFileName(project.name, c),
       warnings: destinationWarnings(project, c),
       reshaped: !identical(variant, project) &&

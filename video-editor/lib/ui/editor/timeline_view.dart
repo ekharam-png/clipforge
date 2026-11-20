@@ -76,7 +76,14 @@ class _TimelineViewState extends State<TimelineView> {
   static const double _rulerHeight = 26;
   /// Top of the main track: right under the ruler, or under the overlay
   /// row when the project has overlay items ([_overlayRow]).
-  static const double _firstRowTop = 32;
+  double get _firstRowTop => 32 + _partStrip;
+
+  /// The strip right under the ruler where dragging selects a part of the
+  /// timeline (1.17). Computers only: a finger scrolls the timeline, so
+  /// phones select a part with "Select part" and its two handles.
+  static const double partStripHeight = 16;
+  bool _compact = false;
+  double get _partStrip => _compact ? 0 : partStripHeight;
   double get _clipTop =>
       _overlayRow ? _firstRowTop + _laneHeight + _laneGap + 4 : _firstRowTop;
 
@@ -380,6 +387,85 @@ class _TimelineViewState extends State<TimelineView> {
     final clipStart = project.clipStartMs(i);
     _s.playback.seek(
         start ? clipStart : clipStart + project.clips[i].durationMs - 1);
+  }
+
+  // Selecting a part (1.17) -------------------------------------------------
+
+  bool get _shift => HardwareKeyboard.instance.isShiftPressed;
+
+  /// Where a drag that marks a part started (timeline ms); null otherwise.
+  int? _partAnchor;
+  int _partEdgeOrigin = 0;
+
+  /// The last tap, to tell a double-click without making every single
+  /// click wait for one.
+  String? _lastTapKey;
+  DateTime _lastTapAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// True when [key] was tapped twice within a double-click's time.
+  bool _secondTap(String key) {
+    final now = DateTime.now();
+    final second = _lastTapKey == key &&
+        now.difference(_lastTapAt) < const Duration(milliseconds: 400);
+    _lastTapKey = second ? null : key;
+    _lastTapAt = now;
+    return second;
+  }
+
+  /// What a right-click or long press on an empty place is about: the
+  /// selected part when the place is inside it, else that place.
+  TimelineTarget _emptyTarget(int ms) =>
+      (_s.part.value?.contains(ms) ?? false)
+          ? const TimelineTarget.part()
+          : TimelineTarget.empty(ms);
+
+  void _partDragStart(double x) {
+    _s.playback.pause();
+    _snapTargets = _s.partSnapTargets();
+    _partAnchor = _snap(math.max(0, _ms(x)));
+  }
+
+  void _partDragTo(double x) {
+    final anchor = _partAnchor;
+    if (anchor == null) return;
+    final to = _snap(math.max(0, _ms(x)));
+    _s.setPart(anchor, to);
+  }
+
+  void _partDragEnd() {
+    _partAnchor = null;
+    _snapTargets = const [];
+    _s.snapLine.value = null;
+  }
+
+  void _partEdgeStart(bool start) {
+    final part = _s.part.value;
+    if (part == null) return;
+    _s.playback.pause();
+    _snapTargets = _s.partSnapTargets();
+    _partEdgeOrigin = start ? part.startMs : part.endMs;
+    _dragDx = 0;
+  }
+
+  /// Dragging a handle of the part: the edge follows the pointer, snaps,
+  /// and stops short of the other edge; the preview shows the frame there.
+  void _partEdgeDrag(bool start, double dx) {
+    final part = _s.part.value;
+    if (part == null) return;
+    _dragDx += dx;
+    var ms = _snap(_partEdgeOrigin + (_dragDx / _pxPerMs).round());
+    const gap = 50;
+    if (start) {
+      ms = ms.clamp(0, math.max(0, part.endMs - gap)).toInt();
+      _s.part.value = part.copyWith(startMs: ms);
+    } else {
+      ms = ms
+          .clamp(part.startMs + gap,
+              math.max(part.startMs + gap, _s.timelineEndMs))
+          .toInt();
+      _s.part.value = part.copyWith(endMs: ms);
+    }
+    _s.playback.seek(ms);
   }
 
   // Reordering the main track ---------------------------------------------
@@ -701,7 +787,7 @@ class _TimelineViewState extends State<TimelineView> {
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: Listenable.merge(
-          [_s.editor, _s.selection, _s.zoom, _s.playback, _s.pictures]),
+          [_s.editor, _s.selection, _s.zoom, _s.playback, _s.pictures, _s.part]),
       builder: (context, _) => LayoutBuilder(builder: _buildTimeline),
     );
   }
@@ -710,8 +796,9 @@ class _TimelineViewState extends State<TimelineView> {
     final project = _s.project;
     final selection = _s.selection.value;
     _overlayRow = project.overlays.isNotEmpty;
-    const overlayTop = _firstRowTop;
     final compact = box.maxWidth < TimelineView.compactBelow;
+    _compact = compact;
+    final overlayTop = _firstRowTop;
     final headerWidth = TimelineView.headerWidthFor(box.maxWidth);
     final tracks = project.soundTracks;
     final trackRow = {
@@ -779,15 +866,17 @@ class _TimelineViewState extends State<TimelineView> {
           behavior: HitTestBehavior.opaque,
           onTapUp: (d) {
             _s.clearSelection();
+            // "Tap elsewhere clears it": the selected part too.
+            _s.clearPart();
             _s.playback.seek(_ms(d.localPosition.dx));
           },
           // Right-click / long press on an empty place: what can be added
           // there.
           onSecondaryTapUp: (d) => _openContext(
-              TimelineTarget.empty(_ms(d.localPosition.dx)), d.globalPosition,
+              _emptyTarget(_ms(d.localPosition.dx)), d.globalPosition,
               touch: false),
           onLongPressStart: (d) => _openContext(
-              TimelineTarget.empty(_ms(d.localPosition.dx)), d.globalPosition,
+              _emptyTarget(_ms(d.localPosition.dx)), d.globalPosition,
               touch: true),
         ),
       ),
@@ -819,13 +908,66 @@ class _TimelineViewState extends State<TimelineView> {
         height: _rulerHeight,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTapDown: (d) => _s.playback.seek(_ms(d.localPosition.dx)),
-          onHorizontalDragStart: (d) =>
-              _s.playback.seek(_ms(d.localPosition.dx)),
-          onHorizontalDragUpdate: (d) =>
-              _s.playback.seek(_ms(d.localPosition.dx)),
+          // The ruler moves the playhead, as always. With Shift held it
+          // selects a part instead: a click extends the part to there, a
+          // drag marks a new one (from where the button went down, not
+          // from where the drag was recognised).
+          dragStartBehavior: DragStartBehavior.down,
+          onTapDown: (d) {
+            if (_shift) return;
+            _s.playback.seek(_ms(d.localPosition.dx));
+          },
+          onTapUp: (d) {
+            if (_shift) _s.extendPartTo(_ms(d.localPosition.dx));
+          },
+          onHorizontalDragStart: (d) => _shift
+              ? _partDragStart(d.localPosition.dx)
+              : _s.playback.seek(_ms(d.localPosition.dx)),
+          onHorizontalDragUpdate: (d) => _partAnchor != null
+              ? _partDragTo(d.localPosition.dx)
+              : _s.playback.seek(_ms(d.localPosition.dx)),
+          onHorizontalDragEnd: (_) => _partDragEnd(),
+          onHorizontalDragCancel: _partDragEnd,
         ),
       ),
+      // The strip under the ruler: drag along it to select a part.
+      if (_partStrip > 0)
+        Positioned(
+          key: const ValueKey('part-strip'),
+          left: 0,
+          top: _rulerHeight,
+          width: width,
+          height: _partStrip,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.precise,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              dragStartBehavior: DragStartBehavior.down,
+              onTapUp: (d) {
+                final ms = _ms(d.localPosition.dx);
+                if (_shift) {
+                  _s.extendPartTo(ms);
+                } else if (!(_s.part.value?.contains(ms) ?? false)) {
+                  _s.clearPart();
+                }
+              },
+              onSecondaryTapUp: (d) => _openContext(
+                  _emptyTarget(_ms(d.localPosition.dx)), d.globalPosition,
+                  touch: false),
+              onHorizontalDragStart: (d) => _partDragStart(d.localPosition.dx),
+              onHorizontalDragUpdate: (d) => _partDragTo(d.localPosition.dx),
+              onHorizontalDragEnd: (_) => _partDragEnd(),
+              onHorizontalDragCancel: _partDragEnd,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Color(0x14FFFFFF),
+                  border: Border(
+                      bottom: BorderSide(color: AppColors.outline)),
+                ),
+              ),
+            ),
+          ),
+        ),
       // "Good moment" markers: small flags on the ruler (a tap goes there).
       for (final m in project.markers)
         if (_x(m.ms) >= winStart - 20 && _x(m.ms) <= winEnd + 20)
@@ -911,7 +1053,16 @@ class _TimelineViewState extends State<TimelineView> {
         pxPerMs: _pxPerMs,
         visibleFrom: (winStart - left).clamp(0.0, w).toDouble(),
         visibleTo: (winEnd - left).clamp(0.0, w).toDouble(),
-        onTap: () => _s.selectClipAndShow(clip.id),
+        onTap: () {
+          // A second click right after the first: this clip's time is
+          // selected as the part.
+          if (_secondTap('clip-${clip.id}')) {
+            _s.select(ItemKind.clip, clip.id);
+            _s.setPart(project.clipStartMs(i), project.clipEndMs(i));
+          } else {
+            _s.selectClipAndShow(clip.id);
+          }
+        },
         onContext: (global) => _openContext(
             TimelineTarget.item(ItemKind.clip, clip.id), global,
             touch: false),
@@ -1012,6 +1163,8 @@ class _TimelineViewState extends State<TimelineView> {
                         fromX: from,
                         toX: to,
                         passMs: a.looped ? a.passMs - a.loopCrossfadeMs : 0,
+                        quiet: a.quiet,
+                        gate: _s.gates[a.id],
                         stretches: talk,
                         band: speaker?.withValues(alpha: 0.75),
                         color: const Color(0xD9FFFFFF),
@@ -1049,6 +1202,16 @@ class _TimelineViewState extends State<TimelineView> {
                 : null,
             selected: selected,
             onTap: () => _s.select(ItemKind.audio, a.id),
+            // Double-click: on a voice, this speaker's turn; else the
+            // sound's own time.
+            onTapAt: (dx) {
+              if (!_secondTap('audio-${a.id}')) return;
+              final at = a.startMs + (dx / _pxPerMs).round();
+              final turn = speaker == null ? null : _s.turnAt(a.trackId, at);
+              turn != null
+                  ? _s.setPart(turn.startMs, turn.endMs)
+                  : _s.setPart(a.startMs, a.endMs);
+            },
             onContext: (global, touch) => _openContext(
                 TimelineTarget.item(ItemKind.audio, a.id), global,
                 touch: touch),
@@ -1087,6 +1250,9 @@ class _TimelineViewState extends State<TimelineView> {
               : null,
           selected: selected,
           onTap: () => _s.selectOverlayAndShow(o.id),
+          onTapAt: (_) {
+            if (_secondTap('overlay-${o.id}')) _s.setPart(o.startMs, o.endMs);
+          },
           onContext: (global, touch) => _openContext(
               TimelineTarget.item(ItemKind.overlay, o.id), global,
               touch: touch),
@@ -1122,6 +1288,9 @@ class _TimelineViewState extends State<TimelineView> {
           width: w,
           selected: selected,
           onTap: () => _s.select(ItemKind.title, t.id),
+          onTapAt: (_) {
+            if (_secondTap('title-${t.id}')) _s.setPart(t.startMs, t.endMs);
+          },
           onContext: (global, touch) => _openContext(
               TimelineTarget.item(ItemKind.title, t.id), global,
               touch: touch),
@@ -1130,6 +1299,76 @@ class _TimelineViewState extends State<TimelineView> {
           onDragEnd: _endDrag,
         ),
       ));
+    }
+
+    // The selected part (1.17): a highlight across every row, its length
+    // in the strip, and a handle on each edge. It lives in the scrolled
+    // content, so it stays where it is through scrolling and zooming.
+    final part = _s.part.value;
+    if (part != null) {
+      final left = _x(part.startMs);
+      final right = _x(part.endMs);
+      children.add(Positioned(
+        key: const ValueKey('part-band'),
+        left: left,
+        top: 0,
+        width: math.max(1.0, right - left),
+        height: height,
+        child: const IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color(0x2E7C9BFF),
+              border: Border.symmetric(
+                  vertical: BorderSide(color: AppColors.accent, width: 1.5)),
+            ),
+          ),
+        ),
+      ));
+      if (_partStrip > 0 && right - left >= 46) {
+        children.add(Positioned(
+          left: left + 4,
+          top: _rulerHeight,
+          width: right - left - 8,
+          height: _partStrip,
+          child: IgnorePointer(
+            child: Center(
+              child: Text(
+                formatLength(part.lengthMs),
+                key: const ValueKey('part-band-length'),
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.clip,
+                style: const TextStyle(
+                    fontSize: 10.5,
+                    height: 1.0,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white),
+              ),
+            ),
+          ),
+        ));
+      }
+      // Computers: grips in the strip. Phones: tabs a thumb can hold, on
+      // the ruler.
+      final hw = compact ? 30.0 : 12.0;
+      final top = compact ? 0.0 : _rulerHeight - 3;
+      final hh = compact ? _firstRowTop : _partStrip + 6;
+      for (final start in [true, false]) {
+        children.add(Positioned(
+          key: ValueKey(start ? 'part-handle-start' : 'part-handle-end'),
+          left: start ? left - hw : right,
+          top: top,
+          width: hw,
+          height: hh,
+          child: _PartHandle(
+            start: start,
+            big: compact,
+            onStart: () => _partEdgeStart(start),
+            onUpdate: (dx) => _partEdgeDrag(start, dx),
+            onEnd: _partDragEnd,
+          ),
+        ));
+      }
     }
 
     // Trim handles of the selected item, drawn over its neighbours.
@@ -1313,19 +1552,60 @@ class _TimelineViewState extends State<TimelineView> {
             height: _stripHeight,
             child: _CaptionStrip(session: _s, captions: captions),
           ),
+        if (_partStrip > 0 && part == null && project.clips.isNotEmpty)
+          Positioned(
+            left: 8,
+            top: _rulerHeight,
+            height: _partStrip,
+            child: const IgnorePointer(
+              child: Center(
+                child: Text('Drag here to select a part',
+                    key: ValueKey('part-strip-hint'),
+                    style: TextStyle(
+                        fontSize: 10, height: 1.0, color: AppColors.textDim)),
+              ),
+            ),
+          ),
         Positioned(
           right: 8,
           top: 3,
           child: ListenableBuilder(
             listenable: _s.pictures,
-            builder: (context, _) => _s.pictures.busy
-                ? const IgnorePointer(
-                    child: Text('Drawing sound…',
-                        key: ValueKey('drawing-sound'),
-                        style: TextStyle(
-                            fontSize: 11, color: AppColors.textDim)),
-                  )
-                : const SizedBox.shrink(),
+            builder: (context, _) {
+              final pics = _s.pictures;
+              if (!pics.busy) return const SizedBox.shrink();
+              final total = pics.totalCount;
+              final at = math.min(total, pics.doneCount + 1);
+              // "Drawing sound… 1 of 3" with a ✕ that stops it: the sound
+              // pictures are a nicety, never something to wait for.
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                      total > 1
+                          ? 'Drawing sound… $at of $total'
+                          : 'Drawing sound…',
+                      key: const ValueKey('drawing-sound'),
+                      style: const TextStyle(
+                          fontSize: 11, color: AppColors.textDim)),
+                  Tooltip(
+                    message: 'Stop drawing the sound (the video works '
+                        'without it)',
+                    child: InkWell(
+                      key: const ValueKey('drawing-sound-stop'),
+                      onTap: pics.stop,
+                      child: const Padding(
+                        padding: EdgeInsets.all(3),
+                        child: Icon(Icons.close,
+                            size: 13,
+                            color: AppColors.textDim,
+                            semanticLabel: 'Stop drawing the sound'),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
         Positioned.fill(
@@ -1561,6 +1841,7 @@ class _ClipBlock extends StatelessWidget {
                         color: const Color(0xE6FFFFFF),
                         quietColor: const Color(0x8CFFFFFF),
                         fromBottom: true,
+                        quiet: clip.quiet,
                       ),
                     ),
                   ),
@@ -1785,6 +2066,7 @@ class _LaneBlock extends StatelessWidget {
     required this.onDragUpdate,
     required this.onDragEnd,
     this.onContext,
+    this.onTapAt,
     this.dimFrom,
     this.marks = const [],
     this.background,
@@ -1792,6 +2074,10 @@ class _LaneBlock extends StatelessWidget {
     this.tooltip,
   });
   final Color color;
+
+  /// Called after [onTap] with where in the block (x from its left edge)
+  /// the tap was (double-click selects a part there).
+  final ValueChanged<double>? onTapAt;
 
   /// Right-click (touch false) or long press (touch true): the item's
   /// context menu.
@@ -1843,6 +2129,7 @@ class _LaneBlock extends StatelessWidget {
   Widget _block(bool roomy) {
     return GestureDetector(
         onTap: onTap,
+        onTapUp: onTapAt == null ? null : (d) => onTapAt!(d.localPosition.dx),
         onSecondaryTapUp: onContext == null
             ? null
             : (d) => onContext!(d.globalPosition, false),
@@ -2064,6 +2351,57 @@ class _Handle extends StatelessWidget {
                 color: Colors.black87,
                 borderRadius: BorderRadius.circular(2),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A handle on an edge of the selected part.
+class _PartHandle extends StatelessWidget {
+  const _PartHandle({
+    required this.start,
+    required this.big,
+    required this.onStart,
+    required this.onUpdate,
+    required this.onEnd,
+  });
+  final bool start;
+
+  /// Phones: a tab wide enough for a thumb.
+  final bool big;
+  final VoidCallback onStart;
+  final ValueChanged<double> onUpdate;
+  final VoidCallback onEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = Radius.circular(big ? 8 : 4);
+    return Semantics(
+      label: start ? 'Start of the selected part' : 'End of the selected part',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeLeftRight,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          dragStartBehavior: DragStartBehavior.down,
+          onHorizontalDragStart: (_) => onStart(),
+          onHorizontalDragUpdate: (d) => onUpdate(d.delta.dx),
+          onHorizontalDragEnd: (_) => onEnd(),
+          onHorizontalDragCancel: onEnd,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.accent,
+              borderRadius: start
+                  ? BorderRadius.horizontal(left: radius)
+                  : BorderRadius.horizontal(right: radius),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              start ? Icons.chevron_left : Icons.chevron_right,
+              size: big ? 20 : 12,
+              color: Colors.black87,
             ),
           ),
         ),

@@ -94,8 +94,9 @@ media_kit (mpv) and exports use FFmpeg.
 
 Keyboard shortcuts (computer; Cmd instead of Ctrl on a Mac): Space
 play/pause, J / K / L backwards / pause / forwards (backwards jumps in small
-steps), S split at the playhead, I / O start / end the selected clip at the
-playhead, Delete or Backspace delete the selection, Ctrl+D duplicate,
+steps), S split at the playhead, I / O mark the start / end of a selected
+part of the timeline (Esc clears it), Q / W start / end the selected clip at
+the playhead (I / O until 1.16), Delete or Backspace delete the selection, Ctrl+D duplicate,
 Ctrl+Shift+C / Ctrl+Shift+V copy / paste clip settings, Ctrl+Z undo,
 Ctrl+Shift+Z or Ctrl+Y redo, Ctrl+Shift+H history, Ctrl+E export, + / -
 timeline zoom, Left/Right one frame of the clip shown (with Shift one

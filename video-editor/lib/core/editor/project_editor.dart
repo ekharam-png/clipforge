@@ -7,7 +7,12 @@ import '../model/project.dart';
 import 'edit_labels.dart';
 import 'sound_tracks.dart';
 import 'marker_follow.dart';
+import 'part.dart';
 import 'title_anchors.dart';
+
+export 'part.dart';
+
+part 'part_edits.dart';
 
 /// Holds a project and applies every edit, with undo/redo. Pure Dart (no
 /// Flutter), so that it can run in the app (wrapped by `EditorController`)
@@ -1112,8 +1117,9 @@ class ProjectEditor {
     return true;
   }
 
-  void _editTrack(String trackId, SoundTrack Function(SoundTrack t) change) =>
-      _edit((p) {
+  void _editTrack(String trackId, SoundTrack Function(SoundTrack t) change,
+          {String? hint}) =>
+      _edit(hint: hint, (p) {
         if (trackId == SoundTrack.videoId) {
           final next = change(p.videoSound);
           if (_sameJson(next.toJson(), p.videoSound.toJson())) return null;
@@ -1231,6 +1237,7 @@ class ProjectEditor {
         audioStreams: c.audioStreams,
         sourceClipId: c.id,
         linked: true,
+        quiet: c.quiet,
       );
       final prev = i > 0 ? clips[i - 1].id : null;
       final placed = mirrorClip(p, i, base,
@@ -1272,6 +1279,7 @@ class ProjectEditor {
                   voiceFocus: a.voiceFocus,
                   audioTrack: a.audioTrack,
                   audioChannel: a.audioChannel,
+                  quiet: a.quiet,
                 )),
               audio: [
                 for (final x in p.audio)

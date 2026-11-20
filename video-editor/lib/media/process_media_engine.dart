@@ -30,6 +30,7 @@ class ProcessMediaEngine
         SilenceJobEngine,
         SoundAlignEngine,
         SoundPeaksEngine,
+        CancellableSoundPeaksEngine,
         JumpCheckEngine {
   /// [ffmpegPath] / [ffprobePath]: executables to run. When null, a binary
   /// next to the application executable is preferred, then the PATH.
@@ -253,6 +254,17 @@ class ProcessMediaEngine
           {int audioTrack = 0, String? cacheDir}) =>
       soundPeaksWith(_ffmpeg, probe, path,
           audioTrack: audioTrack, cacheDir: cacheDir);
+
+  @override
+  Future<SoundPeaks?> soundPeaksCancellable(String path,
+          {int audioTrack = 0,
+          String? cacheDir,
+          required Future<void> cancel}) =>
+      soundPeaksWith(_ffmpeg, probe, path,
+          audioTrack: audioTrack,
+          cacheDir: cacheDir,
+          streaming: _ffmpegStreaming,
+          cancel: cancel);
 
   @override
   Future<List<double?>> jumpScores(

@@ -98,7 +98,8 @@ void main() {
       () {
     expect(kSuggestions.map((s) => s.id).toList(), [
       'voice-as-music', 'fit-music', 'lower-music', 'small-first-clip', //
-      'clip-shape', 'remove-silences', 'captions-from-speech', 'open-text',
+      'clip-shape', 'only-when-speaking', 'remove-silences', //
+      'captions-from-speech', 'open-text',
       'who-is-speaking',
     ]);
     final priorities = kSuggestions.map((s) => s.priority).toList();

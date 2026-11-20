@@ -142,7 +142,8 @@ void main() {
       // Shorts: another shape, and this video is longer than is safe.
       await tapKey(tester, 'export-dest-shorts');
       expect(tester.widget<Text>(key('export-shape-differs')).data,
-          'Your video is 1920 × 1080; this needs 9:16.');
+          // Both as shapes, in the same words (1.17).
+          'Your video is 16:9 wide; this needs 9:16 upright.');
       expect(find.text('Make a copy in this shape'), findsOneWidget);
       expect(find.text('Export as it is'), findsOneWidget);
       expect(find.textContaining('Crop and position'), findsOneWidget);

@@ -471,6 +471,7 @@ class PlaybackController extends ChangeNotifier {
     if (clip != null) d.shownClip = clip;
     if (d.loadedPath == path) return;
     d.loadedPath = path;
+    if (path != null) _everLoaded = true;
     if (_disposed) return;
     if (path != null && identical(d, _front) && currentClip?.path == path) {
       _held = true;
@@ -511,9 +512,35 @@ class PlaybackController extends ChangeNotifier {
       if (c.fadeInMs > 0 || c.fadeOutMs > 0) {
         g *= c.fadeGainAt((positionMs - _starts[i]).clamp(0, c.durationMs));
       }
+      // Silenced / lowered stretches of the clip's own sound (1.17): the
+      // same function the export's level expression is built from.
+      if (c.quiet.isNotEmpty) {
+        g *= quietGainAt(c.quiet,
+            c.sourceMsAt((positionMs - _starts[i]).clamp(0, c.durationMs)));
+      }
     }
     return g;
   }
+
+  /// False from opening the project until a video player has a file open:
+  /// the preview says "Loading the video…" instead of showing plain black
+  /// (1.17; a long file can take a while to open).
+  bool _everLoaded = false;
+
+  /// True when the clip under the playhead is a video the player is still
+  /// opening for the first time.
+  bool get loadingFirstFrame {
+    if (_everLoaded) return false;
+    final i = clipIndex;
+    if (i < 0 || i >= _project.clips.length) return false;
+    final c = _project.clips[i];
+    return _isPlayableVideo(c) && !isMissing(c.path);
+  }
+
+  /// "Only when speaking" (1.17): the stretches of a sound's FILE where
+  /// its microphone is turned down (media/speech_gate.dart), or null. Set
+  /// by the editor session; the export gets the same lists.
+  List<QuietRange>? Function(AudioClip a)? gateOf;
 
   /// Level of a video player playing [c]: silent while [c]'s processed
   /// sound plays on a sound player instead (see [processedSound]).
@@ -970,7 +997,8 @@ class PlaybackController extends ChangeNotifier {
   /// [audibleEndMs] is where the sound stops being heard on the timeline
   /// ([Project.audibleEndMs]: its own end, or the end of the video when it
   /// runs past that); the fade-out finishes there, as in the export.
-  static double audioGain(AudioClip a, int timeMs, {int? audibleEndMs}) {
+  static double audioGain(AudioClip a, int timeMs,
+      {int? audibleEndMs, List<QuietRange>? gate}) {
     final rel = timeMs - a.startMs;
     var duration = a.durationMs;
     if (audibleEndMs != null && audibleEndMs - a.startMs < duration) {
@@ -981,6 +1009,17 @@ class PlaybackController extends ChangeNotifier {
     if (a.fadeInMs > 0 && rel < a.fadeInMs) gain = rel / a.fadeInMs;
     if (a.fadeOutMs > 0 && rel > duration - a.fadeOutMs) {
       gain = math.min(gain, (duration - rel) / a.fadeOutMs);
+    }
+    // Silenced / lowered stretches, and the gate, in the file's own time.
+    if (a.quiet.isNotEmpty || (gate != null && gate.isNotEmpty)) {
+      var local = rel;
+      if (a.looped) {
+        final step = a.passMs - a.loopCrossfadeMs;
+        if (step > 0) local = rel % step;
+      }
+      final src = a.inMs + local * (a.speed <= 0 ? 1.0 : a.speed);
+      gain *= quietGainAt(a.quiet, src);
+      if (gate != null) gain *= quietGainAt(gate, src);
     }
     return a.volume * gain.clamp(0.0, 1.0);
   }
@@ -1156,7 +1195,8 @@ class PlaybackController extends ChangeNotifier {
     final placement = (path, a.startMs, a.inMs);
     int srcAt(int time) => a.inMs + ((time - a.startMs) * a.speed).round();
     final src = srcAt(t);
-    final volume = audioGain(a, t, audibleEndMs: _project.audibleEndMs(a)) *
+    final volume = audioGain(a, t,
+            audibleEndMs: _project.audibleEndMs(a), gate: gateOf?.call(a)) *
         _project.trackGainOf(a.trackId) *
         _project.fadeGainAt(t);
     if (!s.playing || reposition || s.placement != placement) {

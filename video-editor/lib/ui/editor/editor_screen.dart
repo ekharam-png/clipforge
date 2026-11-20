@@ -31,6 +31,8 @@ import '../widgets.dart';
 import '../app_settings.dart';
 import 'clip_actions.dart';
 import 'editor_actions.dart';
+import 'add_from_path.dart';
+import 'part_actions.dart';
 import 'suggestions.dart';
 import 'export_dialog.dart';
 import 'history_panel.dart';
@@ -267,6 +269,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       s.showText.addListener(_updateMenu);
       s.showWaves.addListener(_updateMenu);
       s.playheadClip.addListener(_updateMenu);
+      s.part.addListener(_updateMenu);
+      s.partRows.addListener(_updateMenu);
       s.pictures.addListener(_onPictures);
       s.transcripts.addListener(_updateMenu);
       unawaited(s.loadTranscripts());
@@ -585,6 +589,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         pasteClipSettings(context, s);
         return KeyEventResult.handled;
       }
+      // Ctrl/Cmd+V with the path of a file or folder on the clipboard:
+      // "Add from a folder path…" opens with it (computers).
+      if (key == LogicalKeyboardKey.keyV &&
+          !shift &&
+          s.files.canChooseSaveLocation) {
+        pastePathToAdd(context, s);
+        return KeyEventResult.handled;
+      }
       return KeyEventResult.ignored;
     }
     if (keys.isAltPressed) return KeyEventResult.ignored;
@@ -629,12 +641,29 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       if (playback.durationMs > 0 && !playback.playing) playback.toggle();
       return KeyEventResult.handled;
     }
+    // I / O: the selected part starts / ends at the playhead (1.17; as in
+    // most editors). Also while playing: marking along is the point.
     if (key == LogicalKeyboardKey.keyI || key == LogicalKeyboardKey.keyO) {
+      if (s.project.clips.isNotEmpty) {
+        key == LogicalKeyboardKey.keyI
+            ? s.markPartStart(playback.positionMs)
+            : s.markPartEnd(playback.positionMs);
+      }
+      return KeyEventResult.handled;
+    }
+    // Q / W: the clip starts / ends at the playhead (I / O until 1.16).
+    if ((key == LogicalKeyboardKey.keyQ || key == LogicalKeyboardKey.keyW) &&
+        !shift) {
       if (s.project.clips.isNotEmpty) {
         _stopReverse();
         playback.pause();
-        trimToPlayhead(context, s, start: key == LogicalKeyboardKey.keyI);
+        trimToPlayhead(context, s, start: key == LogicalKeyboardKey.keyQ);
       }
+      return KeyEventResult.handled;
+    }
+    // Esc: the selected part goes (nothing else uses Esc here).
+    if (key == LogicalKeyboardKey.escape && s.part.value != null) {
+      s.clearPart();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.home) {
@@ -827,12 +856,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       );
       if (!ready || !mounted) return;
     }
+    // "Only when speaking": the export turns the microphones down by the
+    // same lists as the preview; pictures the timeline has not drawn yet
+    // are read now (they are kept on disk).
+    final gates = await s.exportGates();
+    if (!mounted) return;
     await showExportDialog(
       context,
       project: s.project,
       engine: s.engine,
       files: s.files,
       jobs: s.jobs,
+      gates: gates,
       processedSound: () => s.sounds.readyFiles(s.project),
       onVideoSize: s.editor.setVideoSize,
       documents: s.documents,
@@ -1075,6 +1110,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                         ],
                       ),
                     ),
+                    PartBar(session: s, phone: false, entry: _partEntry),
                     timeline,
                   ],
                 );
@@ -1088,6 +1124,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                   TransportBar(
                       session: s, onAdd: () => showAddSheet(context, s)),
                   timeline,
+                  // A selected part: start, end, length, nudge, Actions.
+                  PartBar(session: s, phone: true, entry: _partEntry),
                   // Suggestions: one thin line just above the tool bar,
                   // which a swipe sends away.
                   if (suggestions != null)
@@ -1100,6 +1138,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         ),
     );
   }
+
+  /// An action of the part bar, from the one registry.
+  ActionEntry _partEntry(BuildContext context, Act a) =>
+      EditorActions(_session!).entry(this.context, a);
 
   Widget _textPanel(EditorSession s) => TextPanel(
         key: const ValueKey('text-window'),
@@ -1114,6 +1156,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     const items = <(Act, String)>[
       (Act.shapeAndSize, 'Shape and size'),
       (Act.fades, 'Fade in and out'),
+      (Act.selectPart, 'Select part'),
       (Act.publishingNotes, 'Publishing notes'),
       (Act.textWindow, 'Text'),
       (Act.history, 'History'),

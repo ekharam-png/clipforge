@@ -7,6 +7,7 @@ import '../theme.dart';
 import 'clip_panels.dart';
 import 'editor_actions.dart';
 import 'export_dialog.dart' show videoSizeLabel;
+import 'part_actions.dart';
 import 'session.dart';
 import 'tools.dart';
 
@@ -101,6 +102,7 @@ const List<Act> kAddActs = [
   Act.addVoice,
   Act.addTitle,
   Act.addCaption,
+  Act.importSubtitles,
   Act.addOverlay,
   Act.markMoment,
 ];
@@ -127,6 +129,7 @@ Future<void> showAddSheet(BuildContext context, EditorSession s) {
               Act.addMusic => 'Music or sound',
               Act.addVoice => 'Voice recording',
               Act.addCaption => 'Caption',
+              Act.importSubtitles => 'Subtitle file (.srt)',
               Act.addOverlay => 'Overlay (picture-in-picture)',
               _ => null,
             },
@@ -153,6 +156,19 @@ Future<void> showAddSheet(BuildContext context, EditorSession s) {
 /// computer's menus.
 List<(String heading, List<Act> acts)> moreGroups(EditorSession s) {
   final speech = s.speech != null;
+  // 1.17: select a part of the timeline (then its bar has the actions).
+  final talk = s.pictures.speakers.any((t) => t.stretches.isNotEmpty);
+  final part = (
+    'Part',
+    [
+      Act.selectPart,
+      if (s.selection.value != null) Act.partOfItem,
+      if (talk) Act.partTurn,
+      if (talk) Act.partPause,
+      if (s.project.markers.isNotEmpty) Act.partBetweenMarkers,
+      if (s.part.value != null) Act.clearPart,
+    ]
+  );
   if (s.selectedClip != null) {
     return [
       ('Clip', [
@@ -165,6 +181,7 @@ List<(String heading, List<Act> acts)> moreGroups(EditorSession s) {
         Act.moveLater,
         Act.shortFromHere,
       ]),
+      part,
       ('Edit', [Act.duplicate, Act.copySettings, Act.pasteSettings, Act.history]),
       ('Sound', [Act.separateSound, Act.putSoundBack, Act.lowerMusic]),
       ('Text', [Act.textWindow, if (speech) Act.captionsFromSpeech]),
@@ -178,8 +195,10 @@ List<(String heading, List<Act> acts)> moreGroups(EditorSession s) {
         Act.putSoundBack,
         Act.addSoundTrack,
         Act.lowerMusic,
+        Act.onlyWhenSpeaking,
         Act.copyCredits,
       ]),
+      part,
       ('Text', [Act.textWindow]),
       ('Edit', [Act.history]),
     ];
@@ -187,12 +206,14 @@ List<(String heading, List<Act> acts)> moreGroups(EditorSession s) {
   if (s.selectedTitle != null) {
     return [
       ('Text', [Act.textWindow, Act.findInText, Act.exportSubtitles]),
+      part,
       ('Edit', [Act.duplicate, Act.history]),
     ];
   }
   if (s.selectedOverlay != null) {
     return [
       ('Clip', [Act.crop, Act.rotateRight]),
+      part,
       ('Edit', [Act.history]),
     ];
   }
@@ -206,7 +227,13 @@ List<(String heading, List<Act> acts)> moreGroups(EditorSession s) {
       Act.shortFromHere,
       Act.goodMoments,
     ]),
-    ('Sound', [Act.addSoundTrack, Act.lowerMusic, Act.copyCredits]),
+    part,
+    ('Sound', [
+      Act.addSoundTrack,
+      Act.lowerMusic,
+      Act.onlyWhenSpeaking,
+      Act.copyCredits,
+    ]),
     ('Text', [
       Act.textWindow,
       Act.findInText,
@@ -226,6 +253,8 @@ String? _phoneLabel(Act a) => switch (a) {
       Act.crop => 'Crop and position',
       Act.textWindow => 'Text',
       Act.goodMoments => 'Shorts and good moments',
+      Act.selectPart => 'Select part',
+      Act.clearPart => 'Clear the part',
       _ => null,
     };
 
@@ -245,7 +274,7 @@ Key? _moreKey(Act a) => switch (a) {
 
 /// Phones: "More" - the rest of what can be done with the selection (or
 /// with the project when nothing is selected), grouped under headings that
-/// match the computer's menus: Clip, Sound, Text.
+/// match the computer's menus: Clip, Part, Edit, Sound, Text.
 Future<void> showMoreSheet(BuildContext context, EditorSession s) {
   return showToolSheet(
     context,
@@ -441,16 +470,31 @@ String shapeMenuLabel(CanvasAspect aspect) => switch (aspect) {
 class TimelineTarget {
   const TimelineTarget.item(ItemKind this.kind, String this.id)
       : markerId = null,
-        atMs = null;
+        atMs = null,
+        part = false;
   const TimelineTarget.marker(String this.markerId, int this.atMs)
       : kind = null,
-        id = null;
+        id = null,
+        part = false;
 
   /// An empty part of a track (or the ruler) at [atMs].
   const TimelineTarget.empty(int this.atMs)
       : kind = null,
         id = null,
-        markerId = null;
+        markerId = null,
+        part = false;
+
+  /// The selected part of the timeline (1.17): a right-click or long
+  /// press inside its highlight where no item is.
+  const TimelineTarget.part()
+      : kind = null,
+        id = null,
+        markerId = null,
+        atMs = null,
+        part = true;
+
+  /// True for [TimelineTarget.part].
+  final bool part;
 
   final ItemKind? kind;
   final String? id;
@@ -483,6 +527,7 @@ List<Act?> contextActs(TimelineTarget target, EditorSession s) {
         Act.moveEarlier,
         Act.moveLater,
         Act.shortFromHere,
+        Act.partOfItem,
         null,
         Act.delete,
       ];
@@ -495,6 +540,9 @@ List<Act?> contextActs(TimelineTarget target, EditorSession s) {
         Act.lowerMusic,
         Act.copyCredits,
         null,
+        Act.partOfItem,
+        if (s.pictures.isSpeech(s.selectedAudio ?? _noSound)) Act.partTurn,
+        null,
         Act.delete,
       ];
     case ItemKind.title:
@@ -502,6 +550,7 @@ List<Act?> contextActs(TimelineTarget target, EditorSession s) {
         Act.editItem,
         Act.duplicate,
         Act.textWindow,
+        Act.partOfItem,
         null,
         Act.delete,
       ];
@@ -510,12 +559,19 @@ List<Act?> contextActs(TimelineTarget target, EditorSession s) {
         Act.editItem,
         Act.crop,
         Act.rotateRight,
+        Act.partOfItem,
         null,
         Act.delete,
       ];
     case null:
+      if (target.part) return [...kPartActs, null, Act.clearPart];
       if (target.markerId != null) {
-        return [Act.shortFromHere, Act.shortsFromMarkers, Act.goodMoments];
+        return [
+          Act.shortFromHere,
+          Act.shortsFromMarkers,
+          Act.goodMoments,
+          Act.partBetweenMarkers,
+        ];
       }
       return [
         Act.addMedia,
@@ -528,9 +584,13 @@ List<Act?> contextActs(TimelineTarget target, EditorSession s) {
         null,
         Act.split,
         Act.shortFromHere,
+        Act.selectPart,
       ];
   }
 }
+
+const AudioClip _noSound = AudioClip(
+    id: '', path: '', sourceDurationMs: 0, startMs: 0, inMs: 0, outMs: 0);
 
 String _contextTitle(TimelineTarget t, EditorSession s) {
   switch (t.kind) {
@@ -548,6 +608,12 @@ String _contextTitle(TimelineTarget t, EditorSession s) {
     case ItemKind.overlay:
       return 'Overlay';
     case null:
+      if (t.part) {
+        final p = s.part.value;
+        return p == null
+            ? 'Selected part'
+            : 'Selected part · ${formatLength(p.lengthMs)}';
+      }
       return t.markerId != null
           ? 'Good moment at ${formatTime(t.atMs ?? 0)}'
           : 'At ${formatTime(t.atMs ?? 0)}';
@@ -575,7 +641,7 @@ Future<void> showTimelineContextMenu(
       case ItemKind.audio || ItemKind.title:
         s.select(kind, target.id!);
     }
-  } else {
+  } else if (!target.part) {
     s.clearSelection();
     final at = target.atMs;
     if (at != null) s.playback.seek(at);
@@ -635,6 +701,10 @@ Future<void> showTimelineContextMenu(
     position: RelativeRect.fromLTRB(position.dx, position.dy,
         size.width - position.dx, size.height - position.dy),
     color: AppColors.panelHigh,
+    // Never taller than the window: a long menu near the bottom edge is
+    // moved up to fit, and scrolls when even that is not enough.
+    constraints: BoxConstraints(
+        minWidth: 112, maxWidth: 420, maxHeight: size.height - 16),
     items: [
       for (final a in shown)
         if (a == null)

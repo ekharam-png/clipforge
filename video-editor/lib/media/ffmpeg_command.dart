@@ -951,14 +951,25 @@ FfmpegCommand buildExportCommand({
             'asplit=$np${pads('s')}');
         for (var k = 0; k < np; k++) {
           final r = run.ranges[k];
+          // Each piece's own quiet ranges (1.17), in its own time.
+          final piece = project.clips[placed[i + k].clipIndex];
+          final pieceIn = c.inMs + r.start * 1000 / run.gridFps;
+          final quiet = quietFilter([piece.quiet],
+              originMs: pieceIn,
+              fromMs: pieceIn,
+              toMs: c.inMs + r.end * 1000 / run.gridFps);
           chains.add('[a${i}s$k]atrim=start_sample=${r.start * perFrame}'
-              ':end_sample=${r.end * perFrame},asetpts=PTS-STARTPTS[a${i}c$k]');
+              ':end_sample=${r.end * perFrame},asetpts=PTS-STARTPTS'
+              '${quiet.isEmpty ? '' : ',${quiet.substring(0, quiet.length - 1)}'}'
+              '[a${i}c$k]');
         }
         chains.add('${pads('c')}concat=n=$np:v=0:a=1,asetpts=N/SR/TB'
             '${speed == 1 ? '' : ',${tempo}apad,asetpts=N/SR/TB'}$aEnd');
       } else {
+        final quiet = quietFilter([c.quiet],
+            originMs: c.inMs, fromMs: c.inMs, toMs: c.outMs);
         chains.add('${src}aresample=$kAudioSampleRate,$fmt,'
-            '$clean$tempo${vol}apad,asetpts=N/SR/TB$aEnd');
+            '$clean$quiet$tempo${vol}apad,asetpts=N/SR/TB$aEnd');
       }
     }
     if (pieces > 1) {
@@ -1059,6 +1070,7 @@ FfmpegCommand buildExportCommand({
     firstInput: inputCount,
     processedSound: processedSound,
     leaveOut: leaveOut,
+    gates: options.gates,
   );
   inputs.addAll(mix.inputs);
   inputCount += mix.inputCount;
@@ -1594,6 +1606,7 @@ extension on AudioClip {
   required int firstInput,
   Map<String, String> processedSound = const {},
   Set<SoundStage> leaveOut = const {},
+  Map<String, List<QuietRange>> gates = const {},
 }) {
   const fmt = 'aformat=sample_fmts=fltp:channel_layouts=stereo';
   final total = ffSeconds(totalMs);
@@ -1636,6 +1649,11 @@ extension on AudioClip {
     if (!processed) {
       sb.write(clipSoundFilters(a.soundClip, fmt, leaveOut: leaveOut));
     }
+    // Silenced / lowered stretches (1.17) and "Only when speaking": in
+    // the sound's own time, before speed, so they follow trims and speed.
+    sb.write(quietFilter(
+        [a.quiet, gates[loopBaseId(a.id)] ?? const <QuietRange>[]],
+        originMs: h.srcIn, fromMs: h.srcIn, toMs: h.srcIn + h.srcDur));
     for (final s in atempoStages(effectiveSpeed(a.soundClip))) {
       sb.write('atempo=${_num(s, 6)},');
     }

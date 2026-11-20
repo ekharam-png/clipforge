@@ -8,7 +8,20 @@ import 'dart:ui' show PointMode;
 
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/model/project.dart' show QuietRange, quietGainAt;
 import '../../media/sound_peaks.dart';
+
+/// How much of a bar is left where the sound is quiet: the factor of the
+/// quiet ranges ([levels]: the item's own and the gate's) at source time
+/// [sourceMs], never drawn lower than a stub, so "there is sound here,
+/// turned down" stays visible.
+double waveQuietFactor(List<List<QuietRange>> levels, num sourceMs) {
+  var g = 1.0;
+  for (final list in levels) {
+    if (list.isNotEmpty) g *= quietGainAt(list, sourceMs);
+  }
+  return g;
+}
 
 /// Distance between two bars, in pixels.
 const double kWaveStep = 2;
@@ -91,7 +104,17 @@ class WavePainter extends CustomPainter {
     this.stretches,
     this.passMs = 0,
     this.fromBottom = false,
+    this.quiet = const [],
+    this.gate,
   });
+
+  /// Silenced / lowered stretches of the sound (1.17), source time: the
+  /// bars are drawn as low as the sound is heard there, on a dark band.
+  final List<QuietRange> quiet;
+
+  /// The stretches "Only when speaking" turns down (source time); drawn
+  /// the same way, without the band.
+  final List<QuietRange>? gate;
 
   // The painted box starts at [fromX] of the block (only the part near
   // the view is in the tree).
@@ -143,6 +166,37 @@ class WavePainter extends CustomPainter {
         }
       }
     }
+    // Where the sound is silenced or lowered: how much of each bar is
+    // left, and a dark band behind the item's own quiet parts.
+    Float32List? factor;
+    final gates = gate ?? const <QuietRange>[];
+    if (this.quiet.isNotEmpty || gates.isNotEmpty) {
+      factor = Float32List(n);
+      final s = speed <= 0 || speed.isNaN ? 1.0 : speed;
+      final dark = Paint()..color = const Color(0x8C101114);
+      var start = -1;
+      for (var i = 0; i <= n; i++) {
+        var own = 1.0;
+        if (i < n) {
+          var t = (c.firstX + i * kWaveStep) / pxPerMs;
+          if (t < 0) t = 0;
+          if (passMs > 0) t = t % passMs;
+          final src = inMs + t * s + kWaveStep / pxPerMs * s / 2;
+          own = this.quiet.isEmpty ? 1.0 : quietGainAt(this.quiet, src);
+          factor[i] =
+              own * (gates.isEmpty ? 1.0 : quietGainAt(gates, src));
+        }
+        final on = i < n && own < 0.999;
+        if (on && start < 0) start = i;
+        if (!on && start >= 0) {
+          canvas.drawRect(
+              Rect.fromLTRB(c.firstX + start * kWaveStep, 0,
+                  c.firstX + i * kWaveStep, h),
+              dark);
+          start = -1;
+        }
+      }
+    }
     final loud = Float32List(n * 4), quiet = Float32List(n * 4);
     var nl = 0, nq = 0;
     final mid = h / 2;
@@ -151,7 +205,7 @@ class WavePainter extends CustomPainter {
       final v = c.heights[i];
       if (v <= 0) continue;
       final x = c.firstX + i * kWaveStep + 0.5;
-      var len = v * most;
+      var len = v * most * (factor == null ? 1.0 : factor[i]);
       if (len < 0.5) len = 0.5;
       final y0 = fromBottom ? h : mid - len;
       final y1 = fromBottom ? h - len : mid + len;
@@ -195,5 +249,7 @@ class WavePainter extends CustomPainter {
       old.quietColor != quietColor ||
       old.band != band ||
       old.passMs != passMs ||
-      old.fromBottom != fromBottom;
+      old.fromBottom != fromBottom ||
+      !identical(old.quiet, quiet) ||
+      !identical(old.gate, gate);
 }

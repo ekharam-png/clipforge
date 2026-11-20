@@ -43,6 +43,10 @@ Tap **Add media** and choose one or more videos or photos. They go in after the 
 
 On a phone, tap **Add** in the bar at the bottom and choose **Videos or photos**. On a computer the same is in the **Add** menu. The phone's own picker opens: choose from your gallery or your files.
 
+## Without the file window (computer)
+
+**Add** > **Add from a folder path…** adds media without the system's file window: type or paste the path of a file, or of a folder, press **Show files**, tick what you want and press **Add**. Videos and photos go on the main track, sound files are asked about as usual, subtitle files become captions. With a path copied, **Ctrl+V** on the timeline opens the same window with it. (In Explorer: Shift+right-click a file or folder, **Copy as path**.)
+
 ## Drag and drop (computer)
 
 You can drag videos, photos and music straight from a folder onto the ClipForge window.
@@ -664,8 +668,8 @@ Since 1.8 the editor also draws much less while playing (titles and the picture 
 === keyboard-shortcuts
 title: Keyboard shortcuts
 section: Computer
-keywords: keyboard, shortcuts, keys, hotkeys, space, play, pause, ctrl z, cmd z, undo, redo, delete key, arrow keys, frame by frame, home, end, j k l, jkl, shuttle, in point, out point, duplicate, ctrl d, copy settings, paste settings, zoom, f1, quit, export
-related: menus, undo-and-saving, split, timeline, snapping
+keywords: keyboard, shortcuts, keys, hotkeys, in and out, mark in, mark out, i o, q w, escape, space, play, pause, ctrl z, cmd z, undo, redo, delete key, arrow keys, frame by frame, home, end, j k l, jkl, shuttle, in point, out point, duplicate, ctrl d, copy settings, paste settings, zoom, f1, quit, export
+related: menus, undo-and-saving, split, timeline, snapping, select-a-part
 
 On a Mac use **Cmd** where this says Ctrl. Every shortcut is also in the menu bar at the top, next to its menu item (see **Menus**).
 
@@ -679,7 +683,9 @@ On a Mac use **Cmd** where this says Ctrl. Every shortcut is also in the menu ba
 
 ## Editing
 - **S**: split at the playhead.
-- **I** and **O**: the selected clip starts or ends at the playhead (the part before or after it is trimmed away).
+- **I** and **O**: the selected part of the timeline starts or ends at the playhead (see Select a part). **Esc** clears it.
+- **Q** and **W**: the selected clip starts or ends at the playhead (the part before or after it is trimmed away). Until version 1.16 these were I and O.
+- **Ctrl+V** with the path of a file or folder copied: opens **Add from a folder path…** with it.
 - **Delete** or **Backspace**: delete what is selected.
 - **Ctrl+D**: duplicate the selected clip or title.
 - **Ctrl+Shift+C** and **Ctrl+Shift+V**: copy and paste the settings of a clip.
@@ -689,6 +695,7 @@ On a Mac use **Cmd** where this says Ctrl. Every shortcut is also in the menu ba
 - **M**: mark a good moment at the playhead, also while playing (see Make a short).
 - **Ctrl+E**: export.
 - Hold **Alt** (Option on a Mac) while dragging on the timeline: no snapping for that drag.
+- **Shift** and drag on the time ruler: select a part. **Shift** and click: stretch the part to there.
 
 ## Everywhere
 - **F1** (Windows and Linux) or **Cmd+?** (Mac): this help.
@@ -781,7 +788,7 @@ In the Export window, **Make** chooses what you get:
 
 On a phone the finished sound file can be sent to another app with **Send to another app**.
 
-**Frames per second** (video only): **As clips** uses the frame rate the clips were filmed at; 30 suits most videos, 25 is the European TV rate, 24 looks like cinema, and 60 keeps fast sport movement smooth (the file gets bigger).
+**Frames per second** (video only): **Same as the clips** uses the frame rate the clips were filmed at; 30 suits most videos, 25 is the European TV rate, 24 looks like cinema, and 60 keeps fast sport movement smooth (the file gets bigger).
 
 === menus
 title: Menus: where everything is
@@ -793,15 +800,18 @@ On a computer the menu bar has every command of the editor. On a Mac it is at th
 
 - **File**: **New project**, **Open project file…**, **Rename project…**, **Publishing notes…**, **Back to projects**, **Export…**, **Export several…**, **Export subtitles (.srt)…**, **Settings…** and Quit (Windows: Exit; on a Mac, Quit is in the ClipForge menu).
 - **Edit**: **Undo**, **Redo**, **History**; **Duplicate**, **Copy settings**, **Paste settings**, **Delete**; **Find in the text…**.
-- **Add**: **Videos or photos…**, **Music or sound…**, **Voice recording…**, **Title**, **Caption…**, **Subtitle file (.srt)…**, **Overlay video or photo…**, **Good moment marker**.
+- **Add**: **Videos or photos…**, **Music or sound…**, **Voice recording…**, **Title**, **Caption…**, **Subtitle file (.srt)…**, **Overlay video or photo…**, **Add from a folder path…**, **Good moment marker**.
 - **Clip**: **Split**, **Start at playhead**, **End at playhead**, **Freeze frame**, **Remove silences…**, **Crop and position…**, **Rotate right**, **Move earlier**, **Move later**; **Make a short from here…**, **Make shorts from markers…**, **Good moments…**.
-- **Sound**: **Fit music to video**, **Line up voice with video**, **Separate sound…**, **Put sound back**, **Add sound track**, **Lower music under speech**, **Copy music credits**.
+- **Part**: ways to select a part of the timeline (**Select a part**, **Part starts at playhead**, **Part ends at playhead**, this clip's time, this speaker's turn, the pause here, between markers, **Clear the selected part**) and what to do with it (**Cut out**, **Delete and leave a gap**, **Silence**, **Lower volume…**, **Speed…**, **Clean up sound here**, **Make a short from the part…**, **Duplicate the part**, **Title over the part**). See Select a part.
+- **Sound**: **Fit music to video**, **Line up voice with video**, **Separate sound…**, **Put sound back**, **Add sound track**, **Lower music under speech**, **Only when speaking…**, **Copy music credits**.
 - **Text and speech**: **Text window**, and on a computer with speech to text: **Transcribe speech…**, **Captions from speech…**, **Remove filler words…**, **Automatic cuts…**.
 - **View**: **Zoom in**, **Zoom out**, **Snap to playhead and edges**, **Show sound waves**, Shape, Video size.
 - **Playback**: **Play/Pause**, **Play backwards**, **Pause**, **Play forwards**, **Go to start**, **Go to end**, **Previous frame**, **Next frame**, **Previous speech start**, **Next speech start**.
 - **Help**: this help, **Keyboard shortcuts**, **Show the tour**, **What's new**, **Connect to Claude…**, **Check for updates…**, **Send feedback…**, **Copy version info** and About ClipForge.
 
-The shortcut of each item is shown next to it. Every shortcut from earlier versions still works.
+The shortcut of each item is shown next to it; where two keys do the same, both are shown (Windows and Linux). One thing moved in version 1.17: **I** and **O** now mark the start and end of a selected part, as in most editors; trimming the clip to the playhead is **Q** and **W**. Every other shortcut from earlier versions still works.
+
+On the project list the editing items are grey and say "open a project first"; in a project **New project** and **Open project file…** say "go back to the projects first".
 
 ## Greyed-out items say why
 
@@ -813,7 +823,7 @@ Right-click a clip, a sound, a title or caption, an overlay, a marker or an empt
 
 ## On a phone
 
-There is no menu bar. With nothing selected the bar at the bottom has **Add**, **Text**, **Split** and **More**. With something selected it shows that item's most used tools and **More**, which lists the rest under the same names as the menus: Clip, Sound, Text. The three dots at the top of a project have **Shape and size**, **Fade in and out**, **Publishing notes**, **Text**, **History**, **Markers**, **Settings**, **Help** and **Send feedback**.
+There is no menu bar. With nothing selected the bar at the bottom has **Add**, **Text**, **Split** and **More**. With something selected it shows that item's most used tools and **More**, which lists the rest under the same names as the menus: Clip, Part, Edit, Sound, Text. The three dots at the top of a project have **Shape and size**, **Fade in and out**, **Select part**, **Publishing notes**, **Text**, **History**, **Markers**, **Settings**, **Help** and **Send feedback**.
 
 === settings
 title: Settings
@@ -862,6 +872,11 @@ What it can suggest:
 - Captions, and the Text window never opened: **Open Text**.
 - Talking and no captions (computer with speech to text): **Captions from speech…**.
 - The first voice track: **See who is speaking**.
+- Two microphones recorded together: **Only when speaking…**.
+
+A suggestion about a clip of another shape comes back for the next such clip after you used its button; the cross closes it for the project.
+
+The suggestions about talking (pauses in a long clip, music over speech, captions from speech) need the sound pictures: with **Show sound waves** switched off in Settings they are not made.
 
 The Export window has two more lines of this kind: a note when an upright video is longer than a short, and one line about the graphics card the first time you export. After an update the project list says "Updated to" the new version, with **What's new**.
 
@@ -1406,3 +1421,109 @@ While you watch, press M on a computer (or **Add** > **Good moment marker**; pho
 - **Title at the top**: a few words shown for the whole short. It starts as the first sentence; change it to something that makes people stop.
 
 Then **Open it** to check the picture (Crop and position keeps the person in shot) or **Stay here** and carry on. Export the short with Shorts / Reels / TikTok chosen under **Where is it going?**.
+
+=== select-a-part
+title: Select a part
+section: Editing
+keywords: select, selection, part, range, region, in point, out point, mark in, mark out, i, o, section, stretch, highlight, cut out a part, cough, remove a part, row, rows, tick box, tick, track, only this row, handles, nudge, between markers, speaker's turn, pause, sentence
+related: silence-a-part, slow-a-part, only-when-speaking, keyboard-shortcuts, text-window, make-a-short, snapping
+
+Select a part of the timeline, say which rows it is about, then do something with it: cut it out, silence it, slow it down. One part at a time. It is a selection, not a change: it is not saved with the project and Undo does not touch it.
+
+## Selecting on a computer
+- Drag along the thin strip right under the time ruler ("Drag here to select a part").
+- Or put the playhead at the start and press **I**, then at the end and press **O** (also while the video plays).
+- Or hold **Shift** and drag on the ruler. **Shift** and click anywhere on the ruler or the strip stretches the part to there.
+- Drag the handle on either edge to change it. Edges snap to cuts, to where speech starts and stops, to markers and to the playhead; hold **Alt** for no snapping.
+- **Esc**, or a click on an empty place of the timeline, clears it.
+
+The ruler itself still moves the playhead, as always.
+
+## Selecting on a phone
+Tap **More** (or the three dots at the top, or hold an empty place of the timeline) and choose **Select part**. Two handles appear on the timeline: drag them. The bar under the timeline shows the start, the end and the length, with arrows that move an edge by one frame or by 0.1 s (tap **Step** to change which).
+
+## Quick selections
+- Double-click a clip (or **Part** > **Select this clip's time**): exactly that clip. The same works for a sound, a title and an overlay.
+- Double-click where someone talks on a voice row: that speaker's turn (see See who is speaking).
+- **Select the pause here**: the quiet stretch under the playhead.
+- **Select between the markers here**: from the marker before the playhead to the one after it.
+- **Select from the start to the playhead** / **from the playhead to the end** (the same as pressing O, or I, with nothing selected).
+- In the Text window: select sentences, then **Select this part on the timeline**.
+
+## Which rows
+While a part is selected every row has a tick box at its left: the video, each sound track, the overlay row, titles and captions. Everything is ticked at first. Untick the rows you want left alone, or hold **Alt** and click a box for only that row (phone: **Actions**, then the list of rows and **Only this**). The choice is forgotten when the part is cleared.
+
+## What you can do with it
+The bar next to the timeline (phone: **Actions**) has the actions; they are also in the **Part** menu and on a right-click inside the selected part. Each is one step in **Undo** and History.
+
+- **Cut out**: removes that time from everything and closes the gap. It needs every row: if only some rows lost time, lips and voice would no longer match afterwards. It is listed under **Automatic cuts**, where **Put back** brings it back later.
+- **Delete and leave a gap**: removes the part from the ticked rows; nothing moves. For music, sound effects, overlays, titles and captions. The video row cannot have a gap, and a voice lined up with the video follows its clip: use **Silence** for those.
+- **Silence** and **Lower volume…**: see Silence or lower a part.
+- **Speed…**: see Slow down a part.
+- **Clean up sound here**: **Clean up sound** for this part only, on the ticked rows. The video and the sound are cut at the part's edges.
+- **Make a short from the part…**, **Duplicate the part**, **Title over the part**, **Good moment marker at its start** (under **More**).
+
+A button that cannot be used says why when you point at it, and while you point at an action the tick boxes show which rows it cannot change.
+
+=== silence-a-part
+title: Silence or lower a part
+section: Sound
+keywords: silence, mute a part, quiet, lower, volume, cough, sneeze, swear, bleep, remove a word, one microphone, one track, part, fade, click, quiet parts, put back, restore, duck by hand
+related: select-a-part, only-when-speaking, volume-and-mute, sound-tracks, voice-recorded-separately, clean-up-sound
+
+To take out a cough on one microphone, or a remark you do not want heard, without changing the length of the video:
+
+1. Select the part (see Select a part).
+2. Tick only the rows it is about, for example one speaker's voice.
+3. Press **Silence**. Or **Lower volume…** and choose how much: 6, 12 or 18 dB quieter, or any value with the slider.
+
+Nothing moves. The sound goes down and comes back over a blink (40 ms), so there is no click. Everything else plays on: the other voices, the music, the picture.
+
+- The timeline shows it: the sound waves are flat (or low) there, on a dark band.
+- It belongs to the sound, not to the place on the timeline: trim the clip, cut it, move it or change its speed and the quiet part stays on the same words.
+- It works on the video's own sound, on voices lined up with the video, on music and on overlays. Titles have no sound.
+
+## Putting the sound back
+Select the clip or the sound. Its sound settings list **Quiet parts** with their times: tap one to select it on the timeline, press **Remove** to give it its sound back. **Undo** works too.
+
+=== slow-a-part
+title: Slow down a part
+section: Editing
+keywords: slow motion, slow mo, slowmo, speed, faster, fast forward, speed up a part, speed ramp, part, replay, sport, half speed, time lapse, mute, music stays
+related: select-a-part, speed, silence-a-part, voice-recorded-separately
+
+To show a moment in slow motion (or to rush through a dull stretch):
+
+1. Select the part (see Select a part). The video row must be ticked.
+2. Press **Speed…** and choose 0.25×, 0.5×, 1.5× or 2×, or any speed with the slider. The window says how long the part will be afterwards.
+3. Press **Set speed**.
+
+The video is cut at both ends of the part and the piece in between plays at that speed. Everything after it moves, because the video got longer or shorter.
+
+- The clip's own sound and voices lined up with it follow by themselves, slower or faster with the picture.
+- **Mute this part's own sound** switches that sound off for the part. It is ticked by itself for speeds below 0.5×, where sound is rarely wanted; untick it to keep the sound.
+- Music and other sound keep their speed and their place. After the part they no longer sit where they did against the picture; move them if that matters.
+- Photos have no speed.
+
+To change it again, select the piece and use **Speed** (see Speed and slow motion).
+
+=== only-when-speaking
+title: Only when speaking
+section: Sound
+keywords: only when speaking, gate, noise gate, microphone bleed, bleed, crosstalk, other speaker, room noise, breathing, podcast, two microphones, zoom, voice tracks, mute when silent, room sound, room tone, automatic mute
+related: who-is-speaking, voice-recorded-separately, silence-a-part, sound-tracks, lower-music, select-a-part
+
+With one sound file per speaker, each microphone also picks up the other people, breathing, keys and the room. **Only when speaking** turns a microphone down while its own speaker is not talking.
+
+Switch it on per voice track: tap the track's name at the left of the timeline and switch on **Only when speaking**, or **Sound** > **Only when speaking…** for all voice tracks at once. It is off unless you switch it on.
+
+- **Between the turns**: what is left of the microphone while its speaker is silent. **A little room sound** (18 dB quieter) is the default, because complete silence between sentences sounds unnatural. **Silence** switches it off completely.
+- The microphone opens a moment before its speaker starts (80 ms) and stays open a moment after they stop (200 ms), so words are not clipped. Pauses shorter than about half a second stay open.
+- You hear it in the preview and it is in the export. The timeline shows the turned-down stretches as low sound waves.
+- Nothing is cut and nothing moves; switch it off and everything is as before.
+
+## Its limits, honestly
+It goes by loudness, not by words. It uses the same picture of the sound as See who is speaking: a microphone counts as "speaking" where it is clearly louder than its own quiet level, and where two microphones are loud at once the much louder one wins, so a voice leaking into another microphone is not taken for speech. A very quiet speaker, a laugh, a cough right at the microphone or two people talking over each other can be judged wrongly. Listen to a stretch before you export. For a single spot, **Silence** on a selected part is exact.
+
+It needs the sound pictures; they are made in the background for these tracks even when **Show sound waves** is off.
+

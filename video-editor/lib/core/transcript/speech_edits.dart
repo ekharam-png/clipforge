@@ -260,6 +260,24 @@ RestoreResult _restore(ProjectEditor e, AutoCut cut, String Function() newId) {
     if (lost.isNotEmpty) e.addTitles(lost);
     return RestoreResult.healed;
   }
+  // A part cut out at the END or the START of a clip (1.17 "Cut out"
+  // across a cut): the clip gets that end / start back.
+  if (cut.kind == 'part') {
+    for (final c in p.clips) {
+      if (c.path != cut.path || c.type != ClipType.video) continue;
+      if ((c.outMs - cut.startMs).abs() <= 2) {
+        e.trimClip(c.id, outMs: cut.endMs);
+        return RestoreResult.healed;
+      }
+    }
+    for (final c in p.clips) {
+      if (c.path != cut.path || c.type != ClipType.video) continue;
+      if ((c.inMs - cut.endMs).abs() <= 2) {
+        e.trimClip(c.id, inMs: cut.startMs);
+        return RestoreResult.healed;
+      }
+    }
+  }
   // Otherwise: the removed part as its own clip, after the last piece of
   // the file that ends at or before it (else before the first that starts
   // after it).
@@ -292,6 +310,30 @@ RestoreResult _restore(ProjectEditor e, AutoCut cut, String Function() newId) {
       : RestoreResult.failed;
 }
 
+/// [_restore], and for a cut of kind "part" (1.17 "Cut out", which also
+/// took the stretch out of music, other free sound and overlay items) the
+/// free items from the cut on move later again by what came back, and a
+/// sound the cut divided there is one piece again.
+RestoreResult _restoreAndShift(
+    ProjectEditor e, AutoCut cut, String Function() newId) {
+  final lengthBefore = e.project.durationMs;
+  final result = _restore(e, cut, newId);
+  if (result == RestoreResult.failed || cut.kind != 'part') return result;
+  final p = e.project;
+  final grown = p.durationMs - lengthBefore;
+  if (grown <= 0) return result;
+  for (var i = 0; i < p.clips.length; i++) {
+    final c = p.clips[i];
+    if (c.path != cut.path || c.type != ClipType.video) continue;
+    if (c.inMs > cut.startMs + 2 || c.outMs < cut.endMs - 2) continue;
+    final speed = c.speed <= 0 ? 1.0 : c.speed;
+    final at = p.clipStartMs(i) + ((cut.startMs - c.inMs) / speed).round();
+    e.unripplePart(at, grown);
+    break;
+  }
+  return result;
+}
+
 /// "Put back": undoes the automatic cut [cutId] - the two pieces around it
 /// become one clip again when nothing changed between them, otherwise the
 /// removed part comes back as a clip of its own - and takes it off the
@@ -302,7 +344,7 @@ RestoreResult restoreAutoCut(ProjectEditor e, String cutId,
   if (cut == null) return RestoreResult.unknown;
   var result = RestoreResult.failed;
   e.transaction(() {
-    result = _restore(e, cut, newId);
+    result = _restoreAndShift(e, cut, newId);
     if (result != RestoreResult.failed) {
       e.setAutoCuts([
         for (final c in e.project.autoCuts)
@@ -326,7 +368,7 @@ int restoreAllAutoCuts(ProjectEditor e,
   e.transaction(() {
     final done = <String>{};
     for (final cut in wanted) {
-      if (_restore(e, cut, newId) != RestoreResult.failed) {
+      if (_restoreAndShift(e, cut, newId) != RestoreResult.failed) {
         restored++;
         done.add(cut.id);
       }

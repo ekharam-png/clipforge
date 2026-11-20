@@ -2,62 +2,86 @@
 File > New project  [Cmd+N]
 File > Open project file…  [Cmd+O]
 File > ---
-File > Rename project…
-File > Publishing notes…
-File > Back to projects
+File > Rename project… (open a project first)
+File > Publishing notes… (open a project first)
+File > Back to projects (open a project first)
 File > ---
-File > Export…  [Cmd+E]
-File > Export several…
-File > Export subtitles (.srt)…
+File > Export… (open a project first)  [Cmd+E]
+File > Export several… (open a project first)
+File > Export subtitles (.srt)… (open a project first)
 File > ---
 File > Settings…  [Cmd+,]
-Edit > Undo  [Cmd+Z]
-Edit > Redo  [Cmd+Shift+Z]
-Edit > History  [Cmd+Shift+H]
+Edit > Undo (open a project first)  [Cmd+Z]
+Edit > Redo (open a project first)  [Cmd+Shift+Z]
+Edit > History (open a project first)  [Cmd+Shift+H]
 Edit > ---
-Edit > Duplicate  [Cmd+D]
-Edit > Copy settings  [Cmd+Shift+C]
-Edit > Paste settings  [Cmd+Shift+V]
-Edit > Delete  [Backspace]
+Edit > Duplicate (open a project first)  [Cmd+D]
+Edit > Copy settings (open a project first)  [Cmd+Shift+C]
+Edit > Paste settings (open a project first)  [Cmd+Shift+V]
+Edit > Delete (open a project first)  [Backspace]
 Edit > ---
-Edit > Find in the text…  [Cmd+F]
-Add > Videos or photos…
-Add > Music or sound…
-Add > Voice recording…
-Add > Title
-Add > Caption…
-Add > Subtitle file (.srt)…
-Add > Overlay video or photo…
-Add > Good moment marker  [M]
-Clip > Split  [S]
-Clip > Start at playhead  [I]
-Clip > End at playhead  [O]
-Clip > Freeze frame
-Clip > Remove silences…
-Clip > Crop and position…
-Clip > Rotate right
-Clip > Move earlier
-Clip > Move later
+Edit > Find in the text… (open a project first)  [Cmd+F]
+Add > Videos or photos… (open a project first)
+Add > Music or sound… (open a project first)
+Add > Voice recording… (open a project first)
+Add > Title (open a project first)
+Add > Caption… (open a project first)
+Add > Subtitle file (.srt)… (open a project first)
+Add > Overlay video or photo… (open a project first)
+Add > Add from a folder path… (open a project first)
+Add > Good moment marker (open a project first)  [M]
+Clip > Split (open a project first)  [S]
+Clip > Start at playhead (open a project first)  [Q]
+Clip > End at playhead (open a project first)  [W]
+Clip > Freeze frame (open a project first)
+Clip > Remove silences… (open a project first)
+Clip > Crop and position… (open a project first)
+Clip > Rotate right (open a project first)
+Clip > Move earlier (open a project first)
+Clip > Move later (open a project first)
 Clip > ---
-Clip > Make a short from here…
-Clip > Make shorts from markers…
-Clip > Good moments…
-Sound > Fit music to video
-Sound > Line up voice with video
-Sound > Separate sound…
-Sound > Put sound back
-Sound > Add sound track
-Sound > Lower music under speech
-Sound > Copy music credits
-Text and speech > Text window  [Cmd+Shift+T]
-Text and speech > Transcribe speech…
-Text and speech > Captions from speech…
-Text and speech > Remove filler words…
-Text and speech > Automatic cuts…
-View > Zoom in  [+]
-View > Zoom out  [-]
-View > Snap to playhead and edges
-View > Show sound waves
+Clip > Make a short from here… (open a project first)
+Clip > Make shorts from markers… (open a project first)
+Clip > Good moments… (open a project first)
+Part > Select a part (open a project first)
+Part > Part starts at playhead (open a project first)  [I]
+Part > Part ends at playhead (open a project first)  [O]
+Part > Select this clip's time (open a project first)
+Part > Select this speaker's turn (open a project first)
+Part > Select the pause here (open a project first)
+Part > Select between the markers here (open a project first)
+Part > Select from the start to the playhead (open a project first)
+Part > Select from the playhead to the end (open a project first)
+Part > Clear the selected part (open a project first)
+Part > ---
+Part > Cut out (open a project first)
+Part > Delete and leave a gap (open a project first)
+Part > Silence (open a project first)
+Part > Lower volume… (open a project first)
+Part > Speed… (open a project first)
+Part > Clean up sound here (open a project first)
+Part > ---
+Part > Make a short from the part… (open a project first)
+Part > Duplicate the part (open a project first)
+Part > Title over the part (open a project first)
+Part > Good moment marker at its start (open a project first)
+Sound > Fit music to video (open a project first)
+Sound > Line up voice with video (open a project first)
+Sound > Separate sound… (open a project first)
+Sound > Put sound back (open a project first)
+Sound > Add sound track (open a project first)
+Sound > Lower music under speech (open a project first)
+Sound > Only when speaking… (open a project first)
+Sound > Copy music credits (open a project first)
+Text and speech > Text window (open a project first)  [Cmd+Shift+T]
+Text and speech > Transcribe speech… (open a project first)
+Text and speech > Captions from speech… (open a project first)
+Text and speech > Remove filler words… (open a project first)
+Text and speech > Automatic cuts… (open a project first)
+View > Zoom in (open a project first)  [+]
+View > Zoom out (open a project first)  [-]
+View > Snap to playhead and edges (open a project first)
+View > Show sound waves (open a project first)
 View > ---
 View > Shape > Original (as the first clip)
 View > Shape > 9:16 upright
@@ -68,18 +92,18 @@ View > Video size > Same as the first clip
 View > Video size > 720p
 View > Video size > 1080p (Full HD)
 View > Video size > 4K
-Playback > Play/Pause  [Space]
-Playback > Play backwards  [J]
-Playback > Pause  [K]
-Playback > Play forwards  [L]
+Playback > Play/Pause (open a project first)  [Space]
+Playback > Play backwards (open a project first)  [J]
+Playback > Pause (open a project first)  [K]
+Playback > Play forwards (open a project first)  [L]
 Playback > ---
-Playback > Go to start  [Home]
-Playback > Go to end  [End]
-Playback > Previous frame  [Left]
-Playback > Next frame  [Right]
+Playback > Go to start (open a project first)  [Home]
+Playback > Go to end (open a project first)  [End]
+Playback > Previous frame (open a project first)  [Left]
+Playback > Next frame (open a project first)  [Right]
 Playback > ---
-Playback > Previous speech start
-Playback > Next speech start
+Playback > Previous speech start (open a project first)
+Playback > Next speech start (open a project first)
 Help > ClipForge Help  [Cmd+Shift+?]
 Help > Keyboard shortcuts
 Help > Show the tour
@@ -95,64 +119,88 @@ Help > About ClipForge
 File > New project  [Ctrl+N]
 File > Open project file…  [Ctrl+O]
 File > ---
-File > Rename project…
-File > Publishing notes…
-File > Back to projects
+File > Rename project… (open a project first)
+File > Publishing notes… (open a project first)
+File > Back to projects (open a project first)
 File > ---
-File > Export…  [Ctrl+E]
-File > Export several…
-File > Export subtitles (.srt)…
+File > Export… (open a project first)  [Ctrl+E]
+File > Export several… (open a project first)
+File > Export subtitles (.srt)… (open a project first)
 File > ---
 File > Settings…  [Ctrl+,]
 File > ---
 File > Exit  [Alt+F4]
-Edit > Undo  [Ctrl+Z]
-Edit > Redo  [Ctrl+Shift+Z]
-Edit > History  [Ctrl+Shift+H]
+Edit > Undo (open a project first)  [Ctrl+Z]
+Edit > Redo (open a project first)  [Ctrl+Shift+Z / Ctrl+Y]
+Edit > History (open a project first)  [Ctrl+Shift+H]
 Edit > ---
-Edit > Duplicate  [Ctrl+D]
-Edit > Copy settings  [Ctrl+Shift+C]
-Edit > Paste settings  [Ctrl+Shift+V]
-Edit > Delete  [Delete]
+Edit > Duplicate (open a project first)  [Ctrl+D]
+Edit > Copy settings (open a project first)  [Ctrl+Shift+C]
+Edit > Paste settings (open a project first)  [Ctrl+Shift+V]
+Edit > Delete (open a project first)  [Delete / Backspace]
 Edit > ---
-Edit > Find in the text…  [Ctrl+F]
-Add > Videos or photos…
-Add > Music or sound…
-Add > Voice recording…
-Add > Title
-Add > Caption…
-Add > Subtitle file (.srt)…
-Add > Overlay video or photo…
-Add > Good moment marker  [M]
-Clip > Split  [S]
-Clip > Start at playhead  [I]
-Clip > End at playhead  [O]
-Clip > Freeze frame
-Clip > Remove silences…
-Clip > Crop and position…
-Clip > Rotate right
-Clip > Move earlier
-Clip > Move later
+Edit > Find in the text… (open a project first)  [Ctrl+F]
+Add > Videos or photos… (open a project first)
+Add > Music or sound… (open a project first)
+Add > Voice recording… (open a project first)
+Add > Title (open a project first)
+Add > Caption… (open a project first)
+Add > Subtitle file (.srt)… (open a project first)
+Add > Overlay video or photo… (open a project first)
+Add > Add from a folder path… (open a project first)
+Add > Good moment marker (open a project first)  [M]
+Clip > Split (open a project first)  [S]
+Clip > Start at playhead (open a project first)  [Q]
+Clip > End at playhead (open a project first)  [W]
+Clip > Freeze frame (open a project first)
+Clip > Remove silences… (open a project first)
+Clip > Crop and position… (open a project first)
+Clip > Rotate right (open a project first)
+Clip > Move earlier (open a project first)
+Clip > Move later (open a project first)
 Clip > ---
-Clip > Make a short from here…
-Clip > Make shorts from markers…
-Clip > Good moments…
-Sound > Fit music to video
-Sound > Line up voice with video
-Sound > Separate sound…
-Sound > Put sound back
-Sound > Add sound track
-Sound > Lower music under speech
-Sound > Copy music credits
-Text and speech > Text window  [Ctrl+Shift+T]
-Text and speech > Transcribe speech…
-Text and speech > Captions from speech…
-Text and speech > Remove filler words…
-Text and speech > Automatic cuts…
-View > Zoom in  [+]
-View > Zoom out  [-]
-View > Snap to playhead and edges
-View > Show sound waves
+Clip > Make a short from here… (open a project first)
+Clip > Make shorts from markers… (open a project first)
+Clip > Good moments… (open a project first)
+Part > Select a part (open a project first)
+Part > Part starts at playhead (open a project first)  [I]
+Part > Part ends at playhead (open a project first)  [O]
+Part > Select this clip's time (open a project first)
+Part > Select this speaker's turn (open a project first)
+Part > Select the pause here (open a project first)
+Part > Select between the markers here (open a project first)
+Part > Select from the start to the playhead (open a project first)
+Part > Select from the playhead to the end (open a project first)
+Part > Clear the selected part (open a project first)
+Part > ---
+Part > Cut out (open a project first)
+Part > Delete and leave a gap (open a project first)
+Part > Silence (open a project first)
+Part > Lower volume… (open a project first)
+Part > Speed… (open a project first)
+Part > Clean up sound here (open a project first)
+Part > ---
+Part > Make a short from the part… (open a project first)
+Part > Duplicate the part (open a project first)
+Part > Title over the part (open a project first)
+Part > Good moment marker at its start (open a project first)
+Sound > Fit music to video (open a project first)
+Sound > Line up voice with video (open a project first)
+Sound > Separate sound… (open a project first)
+Sound > Put sound back (open a project first)
+Sound > Add sound track (open a project first)
+Sound > Lower music under speech (open a project first)
+Sound > Only when speaking… (open a project first)
+Sound > Copy music credits (open a project first)
+Text and speech > Text window (open a project first)  [Ctrl+Shift+T]
+Text and speech > Transcribe speech… (open a project first)
+Text and speech > Captions from speech… (open a project first)
+Text and speech > Remove filler words… (open a project first)
+Text and speech > Automatic cuts… (open a project first)
+View > Zoom in (open a project first)  [+]
+View > Zoom out (open a project first)  [-]
+View > Snap to playhead and edges (open a project first)
+View > Show sound waves (open a project first)
 View > ---
 View > Shape > Original (as the first clip)
 View > Shape > 9:16 upright
@@ -163,18 +211,18 @@ View > Video size > Same as the first clip
 View > Video size > 720p
 View > Video size > 1080p (Full HD)
 View > Video size > 4K
-Playback > Play/Pause  [Space]
-Playback > Play backwards  [J]
-Playback > Pause  [K]
-Playback > Play forwards  [L]
+Playback > Play/Pause (open a project first)  [Space]
+Playback > Play backwards (open a project first)  [J]
+Playback > Pause (open a project first)  [K]
+Playback > Play forwards (open a project first)  [L]
 Playback > ---
-Playback > Go to start  [Home]
-Playback > Go to end  [End]
-Playback > Previous frame  [Left]
-Playback > Next frame  [Right]
+Playback > Go to start (open a project first)  [Home]
+Playback > Go to end (open a project first)  [End]
+Playback > Previous frame (open a project first)  [Left]
+Playback > Next frame (open a project first)  [Right]
 Playback > ---
-Playback > Previous speech start  [Ctrl+Left]
-Playback > Next speech start  [Ctrl+Right]
+Playback > Previous speech start (open a project first)  [Ctrl+Left]
+Playback > Next speech start (open a project first)  [Ctrl+Right]
 Help > ClipForge Help  [F1]
 Help > Keyboard shortcuts
 Help > Show the tour
@@ -190,64 +238,88 @@ Help > About ClipForge
 File > New project  [Ctrl+N]
 File > Open project file…  [Ctrl+O]
 File > ---
-File > Rename project…
-File > Publishing notes…
-File > Back to projects
+File > Rename project… (open a project first)
+File > Publishing notes… (open a project first)
+File > Back to projects (open a project first)
 File > ---
-File > Export…  [Ctrl+E]
-File > Export several…
-File > Export subtitles (.srt)…
+File > Export… (open a project first)  [Ctrl+E]
+File > Export several… (open a project first)
+File > Export subtitles (.srt)… (open a project first)
 File > ---
 File > Settings…  [Ctrl+,]
 File > ---
 File > Quit  [Ctrl+Q]
-Edit > Undo  [Ctrl+Z]
-Edit > Redo  [Ctrl+Shift+Z]
-Edit > History  [Ctrl+Shift+H]
+Edit > Undo (open a project first)  [Ctrl+Z]
+Edit > Redo (open a project first)  [Ctrl+Shift+Z / Ctrl+Y]
+Edit > History (open a project first)  [Ctrl+Shift+H]
 Edit > ---
-Edit > Duplicate  [Ctrl+D]
-Edit > Copy settings  [Ctrl+Shift+C]
-Edit > Paste settings  [Ctrl+Shift+V]
-Edit > Delete  [Delete]
+Edit > Duplicate (open a project first)  [Ctrl+D]
+Edit > Copy settings (open a project first)  [Ctrl+Shift+C]
+Edit > Paste settings (open a project first)  [Ctrl+Shift+V]
+Edit > Delete (open a project first)  [Delete / Backspace]
 Edit > ---
-Edit > Find in the text…  [Ctrl+F]
-Add > Videos or photos…
-Add > Music or sound…
-Add > Voice recording…
-Add > Title
-Add > Caption…
-Add > Subtitle file (.srt)…
-Add > Overlay video or photo…
-Add > Good moment marker  [M]
-Clip > Split  [S]
-Clip > Start at playhead  [I]
-Clip > End at playhead  [O]
-Clip > Freeze frame
-Clip > Remove silences…
-Clip > Crop and position…
-Clip > Rotate right
-Clip > Move earlier
-Clip > Move later
+Edit > Find in the text… (open a project first)  [Ctrl+F]
+Add > Videos or photos… (open a project first)
+Add > Music or sound… (open a project first)
+Add > Voice recording… (open a project first)
+Add > Title (open a project first)
+Add > Caption… (open a project first)
+Add > Subtitle file (.srt)… (open a project first)
+Add > Overlay video or photo… (open a project first)
+Add > Add from a folder path… (open a project first)
+Add > Good moment marker (open a project first)  [M]
+Clip > Split (open a project first)  [S]
+Clip > Start at playhead (open a project first)  [Q]
+Clip > End at playhead (open a project first)  [W]
+Clip > Freeze frame (open a project first)
+Clip > Remove silences… (open a project first)
+Clip > Crop and position… (open a project first)
+Clip > Rotate right (open a project first)
+Clip > Move earlier (open a project first)
+Clip > Move later (open a project first)
 Clip > ---
-Clip > Make a short from here…
-Clip > Make shorts from markers…
-Clip > Good moments…
-Sound > Fit music to video
-Sound > Line up voice with video
-Sound > Separate sound…
-Sound > Put sound back
-Sound > Add sound track
-Sound > Lower music under speech
-Sound > Copy music credits
-Text and speech > Text window  [Ctrl+Shift+T]
-Text and speech > Transcribe speech…
-Text and speech > Captions from speech…
-Text and speech > Remove filler words…
-Text and speech > Automatic cuts…
-View > Zoom in  [+]
-View > Zoom out  [-]
-View > Snap to playhead and edges
-View > Show sound waves
+Clip > Make a short from here… (open a project first)
+Clip > Make shorts from markers… (open a project first)
+Clip > Good moments… (open a project first)
+Part > Select a part (open a project first)
+Part > Part starts at playhead (open a project first)  [I]
+Part > Part ends at playhead (open a project first)  [O]
+Part > Select this clip's time (open a project first)
+Part > Select this speaker's turn (open a project first)
+Part > Select the pause here (open a project first)
+Part > Select between the markers here (open a project first)
+Part > Select from the start to the playhead (open a project first)
+Part > Select from the playhead to the end (open a project first)
+Part > Clear the selected part (open a project first)
+Part > ---
+Part > Cut out (open a project first)
+Part > Delete and leave a gap (open a project first)
+Part > Silence (open a project first)
+Part > Lower volume… (open a project first)
+Part > Speed… (open a project first)
+Part > Clean up sound here (open a project first)
+Part > ---
+Part > Make a short from the part… (open a project first)
+Part > Duplicate the part (open a project first)
+Part > Title over the part (open a project first)
+Part > Good moment marker at its start (open a project first)
+Sound > Fit music to video (open a project first)
+Sound > Line up voice with video (open a project first)
+Sound > Separate sound… (open a project first)
+Sound > Put sound back (open a project first)
+Sound > Add sound track (open a project first)
+Sound > Lower music under speech (open a project first)
+Sound > Only when speaking… (open a project first)
+Sound > Copy music credits (open a project first)
+Text and speech > Text window (open a project first)  [Ctrl+Shift+T]
+Text and speech > Transcribe speech… (open a project first)
+Text and speech > Captions from speech… (open a project first)
+Text and speech > Remove filler words… (open a project first)
+Text and speech > Automatic cuts… (open a project first)
+View > Zoom in (open a project first)  [+]
+View > Zoom out (open a project first)  [-]
+View > Snap to playhead and edges (open a project first)
+View > Show sound waves (open a project first)
 View > ---
 View > Shape > Original (as the first clip)
 View > Shape > 9:16 upright
@@ -258,18 +330,18 @@ View > Video size > Same as the first clip
 View > Video size > 720p
 View > Video size > 1080p (Full HD)
 View > Video size > 4K
-Playback > Play/Pause  [Space]
-Playback > Play backwards  [J]
-Playback > Pause  [K]
-Playback > Play forwards  [L]
+Playback > Play/Pause (open a project first)  [Space]
+Playback > Play backwards (open a project first)  [J]
+Playback > Pause (open a project first)  [K]
+Playback > Play forwards (open a project first)  [L]
 Playback > ---
-Playback > Go to start  [Home]
-Playback > Go to end  [End]
-Playback > Previous frame  [Left]
-Playback > Next frame  [Right]
+Playback > Go to start (open a project first)  [Home]
+Playback > Go to end (open a project first)  [End]
+Playback > Previous frame (open a project first)  [Left]
+Playback > Next frame (open a project first)  [Right]
 Playback > ---
-Playback > Previous speech start  [Ctrl+Left]
-Playback > Next speech start  [Ctrl+Right]
+Playback > Previous speech start (open a project first)  [Ctrl+Left]
+Playback > Next speech start (open a project first)  [Ctrl+Right]
 Help > ClipForge Help  [F1]
 Help > Keyboard shortcuts
 Help > Show the tour

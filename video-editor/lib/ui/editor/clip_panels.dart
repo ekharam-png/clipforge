@@ -10,6 +10,7 @@ import '../format.dart';
 import '../help/help_screen.dart';
 import '../theme.dart';
 import 'clip_actions.dart';
+import 'part_actions.dart';
 import 'picture_tools.dart';
 import '../speech/speech_service.dart';
 import 'session.dart';
@@ -650,6 +651,20 @@ class SoundPanel extends StatelessWidget {
           onChanged: (v) => editor.setClipMuted(clip.id, v),
         ),
         SeparateSoundRow(session: session, clip: clip),
+        // Silenced / lowered stretches of this clip's own sound (1.17).
+        Builder(builder: (context) {
+          final i = session.project.clips.indexWhere((c) => c.id == clip.id);
+          if (i < 0) return const SizedBox.shrink();
+          return QuietPartsList(
+            session: session,
+            itemId: clip.id,
+            quiet: clip.quiet,
+            startMs: session.project.clipStartMs(i),
+            inMs: clip.inMs,
+            outMs: clip.outMs,
+            speed: clip.speed,
+          );
+        }),
         const SizedBox(height: 4),
         ..._sourceChoice(context, editor),
         SwitchListTile(

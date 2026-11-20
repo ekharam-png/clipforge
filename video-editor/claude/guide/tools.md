@@ -1,6 +1,6 @@
 # ClipForge tools
 
-All 70 tools of the `clipforge` MCP server (ClipForge 1.14). A test in the
+All 74 tools of the `clipforge` MCP server (ClipForge 1.17). A test in the
 ClipForge repository fails when a tool is missing from this file.
 
 General rules:
@@ -260,7 +260,7 @@ unless `download_pack` is true** — ask the owner first.
 | `find_in_transcript` | Where a word or phrase is said: times, clip, speaker, the words around it. | `phrase`, `prefix`, `limit` |
 | `captions_from_transcript` | Captions from the speech: 1–2 lines of about 32–42 characters, split at sentences and pauses, never overlapping; the project's caption look; Hebrew drawn right to left. | `dry_run`, `from_ms` / `to_ms`, `max_line_chars`, `max_lines`, `min_duration_ms`, `max_duration_ms`, `replace_existing`, `keep_filler_sounds`, title style arguments |
 | `remove_fillers` | Cuts "um", "uh", "э-э", "אה"… out, gently. **Dry run by default.** Reports found / cut / left because too close / left because the picture would jump, time saved, cuts per minute, the 5 riskiest cuts. | `strength` ("light" default, "normal", "strong"), `dry_run`, `include_word_fillers`, `fillers`, `language`, `allow_estimated_times`, `jump_check`; advanced: `min_cut_ms`, `min_distance_ms`, `max_cuts_per_minute`, `min_piece_ms`, `pad_ms` |
-| `list_auto_cuts` | The automatic cuts the project remembers (fillers, silences, and parts the owner cut out from the app's Text window, kind "text"): id, word, file and part removed, by whom, jump score, dissolve; totals. | `kind`, `sort` ("time", "risk"), `offset` / `limit` |
+| `list_auto_cuts` | The automatic cuts the project remembers (fillers, silences, parts the owner cut out from the app's Text window, kind "text", and parts cut out with `edit_part` or the app's "Cut out", kind "part"): id, word, file and part removed, by whom, jump score, dissolve; totals. | `kind`, `sort` ("time", "risk"), `offset` / `limit` |
 | `restore_cut` | Puts a cut back (the two pieces become one clip again), or all of them. | `cut_id` (an id or "all"), `kind`, `dry_run` |
 | `suggest_shorts` | CANDIDATE passages for shorts, for you to judge (the tool has no AI): whole sentences between pauses or speaker turns, 15-60 s, each with times, speaker, text and signals (starts with a question, figures, stands by itself, louder than usual). From the transcript, else the captions. Paged. | `min_seconds`, `max_seconds`, `source`, `from_ms` / `to_ms`, `loudness`, `offset` / `limit` |
 | `make_short` | A NEW project with only one part of this one's timeline: upright 9:16 by default, 1080p, captions from the speech. The original is untouched. Warns when it is longer than 60 s or starts / ends mid-sentence. | `from_ms`, `to_ms`, `name`, `shape`, `captions`, `caption_style` ("short": bigger, lower middle, outlined, 1-2 lines), `title` (at the top), `snap_to_speech` |
@@ -300,3 +300,27 @@ word; the FFmpeg filter times phrases only (word times are then
 estimated: fine for captions, reading and shorts; `remove_fillers` refuses
 to cut unless `allow_estimated_times`). The FFmpeg filter also usually
 leaves "um" out of the text.
+
+## A part of the timeline (1.17)
+
+One stretch of the timeline, `from_ms`..`to_ms`, and the ROWS it applies to:
+`"video"` (the main track and its own sound), `"overlay"`, `"titles"`, and
+sound tracks by `track_id` or name. Leave `rows` out for every row.
+
+| Tool | What it does | Arguments worth knowing |
+|---|---|---|
+| `edit_part` | ONE tool for every action on a part (one undo step each; clips are split at the edges where needed; titles, captions, markers and linked voices follow). `action`: **"cut_out"** removes the time from EVERYTHING and closes the gap (no `rows`; logged as an automatic cut of kind "part", `restore_cut` puts it back, music included). **"silence"** / **"lower"** make the part quiet on the rows, nothing moves, 40 ms fades (a cough on one microphone). **"delete"** removes it from the rows and leaves a gap (music, effects, overlays, titles; not the video row, not linked voices: silence those). **"speed"** slows down or speeds up the part (linked voices follow, music keeps its place). **"clean"** = Clean up sound for the part only. **"duplicate"** copies the part right after itself. The answer names the rows changed and, for rows left alone, why. | `action`, `from_ms`, `to_ms`, `rows`, `level_db` (lower; default -12), `speed` (0.25..4), `mute_own_sound` (speed; default true below 0.5), `dry_run` |
+| `list_quiet_parts` | Every silenced / lowered stretch: item, row, where on the timeline and in its file, the level; and which speech tracks have "Only when speaking" on. | |
+| `remove_quiet_part` | Gives an item its sound back (all its quiet parts, or between two source times). | `item_id`, `source_from_ms`, `source_to_ms`, `dry_run` |
+| `set_only_when_speaking` | A gate per speech track: the microphone is turned down while its own speaker is not talking (from the speech map, bleed left out; opens 80 ms early, holds 200 ms). Applied in the export and the app's preview; nothing is cut. Loudness-based: ask the owner to listen. | `track_id` (or "all"), `on`, `room_db` (default -18; -100 = silence), `dry_run` |
+
+Rules that are easy to get wrong:
+
+- A quiet part belongs to the SOUND (its file's time), not to the timeline:
+  it stays on the same words through later cuts, trims and speed changes.
+- `cut_out` with `rows` is refused on purpose: time removed from some rows
+  only would leave lips and voice out of step. Offer "silence" instead.
+- After "speed" the part is longer or shorter; the answer gives its new
+  times (`partNow`). Everything after it moved; music did not.
+- Use `get_speech_map` (or `get_transcript`) to find the times: a speaker's
+  turn, a pause, a sentence. Say times to the owner as m:ss.

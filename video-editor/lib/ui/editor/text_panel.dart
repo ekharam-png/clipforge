@@ -626,6 +626,17 @@ class TextPanelState extends State<TextPanel> {
         undo: n > 0);
   }
 
+  /// "Select this part on the timeline": the time of the selected lines
+  /// becomes the selected part (1.17); the playhead goes to its start.
+  void selectPartOnTimeline() {
+    final range = _selectedRange;
+    if (range == null) return;
+    _s.setPart(range.fromMs, range.toMs);
+    _s.playback.seek(range.fromMs);
+    // Phones: the Text window is a sheet over the timeline.
+    if (widget.sheet) widget.onClose?.call();
+  }
+
   /// "Make a short from this…": the selected lines as a new upright
   /// project. With one line selected (phones select one at a time) the
   /// dialog offers 30 / 45 / 60 s from there.
@@ -1261,6 +1272,16 @@ class TextPanelState extends State<TextPanel> {
               label: const Text('Cut this part out of the video…'),
             ),
           ],
+          // 1.17: these sentences as the selected part of the timeline
+          // (then: silence, lower, cut out, slow down - the part's bar).
+          if (range != null)
+            TextButton.icon(
+              key: const ValueKey('text-select-part'),
+              style: compact,
+              onPressed: selectPartOnTimeline,
+              icon: const Icon(Icons.select_all, size: 16),
+              label: const Text('Select this part on the timeline'),
+            ),
           // A short is a NEW project; this video is not changed.
           if (_doc.source != TextSource.titles && _s.store != null)
             TextButton.icon(

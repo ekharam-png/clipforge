@@ -345,7 +345,20 @@ class Clip {
     this.filter = LookFilter.none,
     this.warmth = 0,
     this.frameRate = 0,
+    this.quiet = const [],
   });
+
+  /// Stretches of the clip's own sound that are silenced or lowered
+  /// ("Silence" / "Lower volume" on a part, 1.17), in SOURCE time; see
+  /// [QuietRange]. Pieces cut from the clip keep the list, so nothing has
+  /// to be re-worked when a clip is split or trimmed.
+  final List<QuietRange> quiet;
+
+  /// [quiet] limited to the part of the file the clip uses.
+  List<QuietRange> get quietInUse => [
+        for (final r in quiet)
+          if (r.toMs > inMs && r.fromMs < outMs) r,
+      ];
 
   final String id;
   final ClipType type;
@@ -517,6 +530,7 @@ class Clip {
     double? warmth,
     double? frameRate,
     bool? hasAudio,
+    List<QuietRange>? quiet,
   }) =>
       Clip(
         id: id ?? this.id,
@@ -549,6 +563,7 @@ class Clip {
         filter: filter ?? this.filter,
         warmth: warmth ?? this.warmth,
         frameRate: frameRate ?? this.frameRate,
+        quiet: quiet ?? this.quiet,
       );
 
   Map<String, dynamic> toJson() => {
@@ -582,6 +597,7 @@ class Clip {
         'filter': filter.name,
         'warmth': warmth,
         'frameRate': frameRate,
+        if (quiet.isNotEmpty) 'quiet': [for (final r in quiet) r.toJson()],
       };
 
   factory Clip.fromJson(Map<String, dynamic> j) => Clip(
@@ -620,7 +636,128 @@ class Clip {
         filter: _enum(LookFilter.values, j['filter'], LookFilter.none),
         warmth: (j['warmth'] as num?)?.toDouble() ?? 0,
         frameRate: (j['frameRate'] as num?)?.toDouble() ?? 0,
+        quiet: QuietRange.listFromJson(j['quiet']),
       );
+}
+
+/// Fade at each edge of a [QuietRange], in ms of the SOURCE file, so that
+/// switching the sound down and up again never clicks. A range shorter
+/// than two fades uses half its length for each.
+const int kQuietFadeMs = 40;
+
+/// The level "Only when speaking" leaves between a speaker's turns by
+/// default (-18 dB: a little room sound instead of dead silence).
+const double kGateDefaultLevel = 0.126;
+
+/// A stretch of a sound that is silenced or lowered ("Silence" / "Lower
+/// volume" on a selected part, 1.17). Times are positions in the SOURCE
+/// file, so the range stays on the same sound through trims, cuts, splits
+/// and speed changes; what lies outside an item's trim simply has no
+/// effect. [level] is a linear factor: 0 = silence, 0.5 = about -6 dB.
+///
+/// The export (media/clip_audio.dart `quietFilter`), the preview
+/// (PlaybackController) and the waveform all read the level from
+/// [quietGainAt], so they agree.
+class QuietRange {
+  const QuietRange(this.fromMs, this.toMs, [this.level = 0]);
+  final int fromMs;
+  final int toMs;
+  final double level;
+
+  int get lengthMs => toMs - fromMs;
+
+  /// The fade used at each edge.
+  int get fadeMs {
+    final half = lengthMs ~/ 2;
+    return half < kQuietFadeMs ? (half < 0 ? 0 : half) : kQuietFadeMs;
+  }
+
+  /// The factor at [sourceMs]: 1 outside, [level] inside, a straight line
+  /// over [fadeMs] just inside each edge.
+  double gainAt(num sourceMs) {
+    if (sourceMs <= fromMs || sourceMs >= toMs) return 1;
+    final f = fadeMs;
+    if (f <= 0) return level;
+    final a = sourceMs - fromMs;
+    final b = toMs - sourceMs;
+    final x = a < b ? a : b;
+    if (x >= f) return level;
+    return 1 - (1 - level) * (x / f);
+  }
+
+  Map<String, dynamic> toJson() =>
+      {'fromMs': fromMs, 'toMs': toMs, 'level': level};
+
+  static QuietRange? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final from = (j['fromMs'] as num?)?.toInt();
+    final to = (j['toMs'] as num?)?.toInt();
+    if (from == null || to == null || to <= from) return null;
+    final level = ((j['level'] as num?)?.toDouble() ?? 0).clamp(0.0, 1.0);
+    return QuietRange(from, to, level.toDouble());
+  }
+
+  static List<QuietRange> listFromJson(Object? j) => [
+        if (j is List)
+          for (final e in j) ?QuietRange.fromJson(e),
+      ];
+
+  @override
+  bool operator ==(Object other) =>
+      other is QuietRange &&
+      other.fromMs == fromMs &&
+      other.toMs == toMs &&
+      other.level == level;
+
+  @override
+  int get hashCode => Object.hash(fromMs, toMs, level);
+
+  @override
+  String toString() => 'QuietRange($fromMs..$toMs, $level)';
+}
+
+/// The factor [ranges] give at [sourceMs] (the lowest of them; 1 when none
+/// applies).
+double quietGainAt(List<QuietRange> ranges, num sourceMs) {
+  var g = 1.0;
+  for (final r in ranges) {
+    final x = r.gainAt(sourceMs);
+    if (x < g) g = x;
+  }
+  return g;
+}
+
+/// [ranges] with [added] laid over them: where they overlap, [added]
+/// wins (the older range is cut back or split); ranges that touch and have
+/// the same level become one. Sorted by start. An [added] with level 1 (or
+/// more) just clears that stretch ("Remove").
+List<QuietRange> addQuietRange(List<QuietRange> ranges, QuietRange added) {
+  final out = <QuietRange>[];
+  for (final r in ranges) {
+    if (r.toMs <= added.fromMs || r.fromMs >= added.toMs) {
+      out.add(r);
+      continue;
+    }
+    if (r.fromMs < added.fromMs) {
+      out.add(QuietRange(r.fromMs, added.fromMs, r.level));
+    }
+    if (r.toMs > added.toMs) out.add(QuietRange(added.toMs, r.toMs, r.level));
+  }
+  if (added.level < 1 && added.toMs > added.fromMs) out.add(added);
+  out.sort((a, b) => a.fromMs.compareTo(b.fromMs));
+  final merged = <QuietRange>[];
+  for (final r in out) {
+    if (r.lengthMs <= 0) continue;
+    if (merged.isNotEmpty &&
+        merged.last.toMs == r.fromMs &&
+        merged.last.level == r.level) {
+      merged[merged.length - 1] =
+          QuietRange(merged.last.fromMs, r.toMs, r.level);
+    } else {
+      merged.add(r);
+    }
+  }
+  return List.unmodifiable(merged);
 }
 
 /// Gain (0..1) at [rel] ms into something [duration] ms long that fades in
@@ -656,7 +793,20 @@ class SoundTrack {
     this.solo = false,
     this.duck = false,
     this.speech = false,
+    this.gate = false,
+    this.gateLevel = kGateDefaultLevel,
   });
+
+  /// "Only when speaking" (1.17): this microphone is turned down to
+  /// [gateLevel] while its speaker is not talking (worked out from the
+  /// sound picture of 1.13, see media/speech_gate.dart). Nothing is stored
+  /// per stretch: the quiet stretches are computed for the preview and the
+  /// export from the same function.
+  final bool gate;
+
+  /// What is left between the turns: a linear factor, 0 = silence;
+  /// default [kGateDefaultLevel] (-18 dB).
+  final double gateLevel;
 
   /// Id of [Project.videoSound].
   static const String videoId = 'video';
@@ -691,6 +841,8 @@ class SoundTrack {
     bool? solo,
     bool? duck,
     bool? speech,
+    bool? gate,
+    double? gateLevel,
   }) =>
       SoundTrack(
         id: id,
@@ -700,6 +852,8 @@ class SoundTrack {
         solo: solo ?? this.solo,
         duck: duck ?? this.duck,
         speech: speech ?? this.speech,
+        gate: gate ?? this.gate,
+        gateLevel: gateLevel ?? this.gateLevel,
       );
 
   Map<String, dynamic> toJson() => {
@@ -710,6 +864,8 @@ class SoundTrack {
         'solo': solo,
         'duck': duck,
         'speech': speech,
+        if (gate) 'gate': true,
+        if (gate || gateLevel != kGateDefaultLevel) 'gateLevel': gateLevel,
       };
 
   factory SoundTrack.fromJson(Map<String, dynamic> j,
@@ -722,6 +878,10 @@ class SoundTrack {
         solo: j['solo'] as bool? ?? false,
         duck: j['duck'] as bool? ?? false,
         speech: j['speech'] as bool? ?? false,
+        gate: j['gate'] as bool? ?? false,
+        gateLevel: ((j['gateLevel'] as num?)?.toDouble() ?? kGateDefaultLevel)
+            .clamp(0.0, 1.0)
+            .toDouble(),
       );
 
   SoundTrack _withId(String newId) => SoundTrack(
@@ -732,6 +892,8 @@ class SoundTrack {
         solo: solo,
         duck: duck,
         speech: speech,
+        gate: gate,
+        gateLevel: gateLevel,
       );
 
   @override
@@ -769,11 +931,22 @@ class AudioClip {
     this.syncOffsetMs,
     this.loopMs = 0,
     this.credit,
+    this.quiet = const [],
   });
 
   final String id;
   final String path;
   final int sourceDurationMs;
+
+  /// Silenced or lowered stretches, in SOURCE time (see [QuietRange] and
+  /// [Clip.quiet]).
+  final List<QuietRange> quiet;
+
+  /// [quiet] limited to the part of the file this sound uses.
+  List<QuietRange> get quietInUse => [
+        for (final r in quiet)
+          if (r.toMs > inMs && r.fromMs < outMs) r,
+      ];
 
   /// "Loop" (1.8): when > 0 the trimmed range ([inMs]..[outMs]) plays over
   /// and over for this long on the timeline (its [durationMs]); each
@@ -842,6 +1015,7 @@ class AudioClip {
         linked: linked,
         syncOffsetMs: syncOffsetMs,
         credit: credit,
+        quiet: quiet,
       ));
       if (last) break;
     }
@@ -936,6 +1110,7 @@ class AudioClip {
         audioTrack: audioTrack,
         audioChannel: audioChannel,
         audioStreams: audioStreams,
+        quiet: quiet,
       );
 
   AudioClip copyWith({
@@ -961,6 +1136,7 @@ class AudioClip {
     int? loopMs,
     MusicCredit? credit,
     bool clearCredit = false,
+    List<QuietRange>? quiet,
   }) =>
       AudioClip(
         id: id ?? this.id,
@@ -985,6 +1161,7 @@ class AudioClip {
         syncOffsetMs: clearSourceClip ? null : syncOffsetMs ?? this.syncOffsetMs,
         loopMs: loopMs ?? this.loopMs,
         credit: clearCredit ? null : credit ?? this.credit,
+        quiet: quiet ?? this.quiet,
       );
 
   Map<String, dynamic> toJson() => {
@@ -1017,6 +1194,7 @@ class AudioClip {
         if (syncOffsetMs != null && sourceClipId != null) 'voiceLinked': linked,
         if (loopMs > 0) 'loopMs': loopMs,
         if (credit != null) 'credit': credit!.toJson(),
+        if (quiet.isNotEmpty) 'quiet': [for (final r in quiet) r.toJson()],
       };
 
   factory AudioClip.fromJson(Map<String, dynamic> j) => AudioClip(
@@ -1051,6 +1229,7 @@ class AudioClip {
         credit: j['credit'] is Map
             ? MusicCredit.fromJson((j['credit'] as Map).cast<String, dynamic>())
             : null,
+        quiet: QuietRange.listFromJson(j['quiet']),
       );
 }
 
@@ -1492,6 +1671,7 @@ class OverlayClip {
         audioTrack: clip.audioTrack,
         audioChannel: clip.audioChannel,
         audioStreams: clip.audioStreams,
+        quiet: clip.quiet,
       );
 
   /// True when its sound is heard at all.

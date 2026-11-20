@@ -185,16 +185,18 @@ Future<void> _offerToOpen(
         TextButton(
             key: const ValueKey('short-stay'),
             onPressed: () => Navigator.of(d).pop(false),
-            child: Text(one ? 'Stay here' : 'OK')),
-        if (one && s.openProject != null)
+            child: const Text('Stay here')),
+        // Several: the first can be opened right away too (1.17; it used
+        // to end with only OK).
+        if (s.openProject != null)
           FilledButton(
               key: const ValueKey('short-open'),
               onPressed: () => Navigator.of(d).pop(true),
-              child: const Text('Open it')),
+              child: Text(one ? 'Open it' : 'Open the first')),
       ],
     ),
   );
-  if (open == true && one) await s.openProject?.call(made.single.id);
+  if (open == true) await s.openProject?.call(made.first.id);
 }
 
 class _MakeShortDialog extends StatefulWidget {

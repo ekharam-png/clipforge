@@ -11,6 +11,7 @@ import '../format.dart';
 import '../help/help_screen.dart';
 import '../theme.dart';
 import 'clip_panels.dart';
+import 'part_actions.dart';
 import 'session.dart';
 
 // Crop and position (main-track clips and overlay items) and the settings
@@ -764,6 +765,15 @@ class OverlaySoundPanel extends StatelessWidget {
             title: const Text('Mute overlay sound'),
             value: c.muted,
             onChanged: (v) => set(o.copyWith(clip: c.copyWith(muted: v))),
+          ),
+          QuietPartsList(
+            session: session,
+            itemId: o.id,
+            quiet: c.quiet,
+            startMs: o.startMs,
+            inMs: c.inMs,
+            outMs: c.outMs,
+            speed: c.speed,
           ),
         ] else if (video)
           const Padding(

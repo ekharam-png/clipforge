@@ -70,6 +70,7 @@ void main() {
       'split', 'remove', 'move', 'import', 'export', 'update', 'separate',
       'reattach', 'copy', 'apply', 'freeze', 'fit', 'relink', 'cancel', 'align',
       'find', 'captions', 'make', 'restore', 'self', 'replace', 'suggest',
+      'edit',
     };
     final verbFirst = {
       for (final t in toolNames)

@@ -434,13 +434,17 @@ void main() {
       final menus = buildAppMenus(null);
       expect([for (final m in menus) m.label],
           [
-        'ClipForge', 'File', 'Edit', 'Add', 'Clip', 'Sound', //
+        'ClipForge', 'File', 'Edit', 'Add', 'Clip', 'Part', 'Sound', //
         'Text and speech', 'View', 'Playback', 'Window', 'Help',
       ]);
+      // Off, and each says why (1.17).
       for (final label in [
-        'Undo', 'Redo', 'Delete', 'Play/Pause', 'New project',
-        'Open project file…', 'Back to projects', 'Export…',
+        'Undo', 'Redo', 'Delete', 'Play/Pause', 'Back to projects', 'Export…',
       ]) {
+        expect(item(menus, '$label (open a project first)').onSelected, isNull,
+            reason: label);
+      }
+      for (final label in ['New project', 'Open project file…']) {
         expect(item(menus, label).onSelected, isNull, reason: label);
       }
     });

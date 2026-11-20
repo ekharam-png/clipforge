@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../core/editor/sound_tracks.dart';
 import '../../core/model/project.dart';
 import '../../media/sound_align.dart' show SoundRole, guessSoundRole;
+import '../../media/speech_gate.dart' show couldUseGate;
 import '../app_settings.dart';
 import '../format.dart';
 import '../help/help_screen.dart';
@@ -14,6 +15,7 @@ import 'clip_actions.dart';
 import 'editor_actions.dart';
 import 'import_actions.dart' show hasCaptions;
 import 'music_actions.dart';
+import 'part_actions.dart' show showOnlyWhenSpeaking;
 import 'session.dart';
 import 'speech_actions.dart';
 import 'voice_actions.dart' show lineUpVoice;
@@ -34,7 +36,7 @@ import 'voice_actions.dart' show lineUpVoice;
 //
 // To add a suggestion: add one [Suggestion] to [kSuggestions] (an id, a
 // priority, when it applies, what it says, its button), and a test in
-// test/ui/suggestions_test.dart. Nothing else needs to know about it.
+// test/ui/v115_suggestions_test.dart. Nothing else needs to know about it.
 // A trigger must be cheap: it looks at the project and at what is already
 // worked out (the sound pictures, the transcripts) and never starts an
 // analysis.
@@ -90,7 +92,13 @@ class Suggestion {
     required this.buttons,
     this.scope = SuggestionScope.oncePerProject,
     this.icon = Icons.lightbulb_outline,
+    this.repeats = false,
   });
+
+  /// Using a button does not close it for the project: it comes back
+  /// while [when] still holds (the next clip of another shape). Only the
+  /// ✕ and "Don't show again" send it away.
+  final bool repeats;
 
   /// Never changes: the settings remember it.
   final String id;
@@ -155,6 +163,13 @@ bool smallFirstClip(Project p) {
   return math.min(c.width, c.height) < 700;
 }
 
+/// The clips a button of the clip-shape suggestion was used on, per open
+/// editor.
+final Expando<Set<String>> _shapeHandled = Expando('shape handled');
+
+void _shapeDone(EditorSession s, String clipId) =>
+    (_shapeHandled[s] ??= <String>{}).add(clipId);
+
 /// A clip whose shape is not the video's and which still sits between
 /// bars (the selected one first).
 Clip? clipOfOtherShape(EditorSession s) {
@@ -162,8 +177,12 @@ Clip? clipOfOtherShape(EditorSession s) {
   if (p.clips.isEmpty) return null;
   final canvas = p.canvasSize;
   final want = canvas.width / canvas.height;
+  final handled = _shapeHandled[s] ?? const <String>{};
   bool differs(Clip c) {
     if (c.width <= 0 || c.height <= 0) return false;
+    // A clip a button was already used on is not offered again (Crop…
+    // leaves it as it is until the user moves the frame).
+    if (handled.contains(c.id)) return false;
     if (c.fit != FitMode.fit || !c.framing.isDefault) return false;
     final turned = c.framing.rotation % 180 != 0;
     final a = turned ? c.height / c.width : c.width / c.height;
@@ -315,6 +334,8 @@ final List<Suggestion> kSuggestions = [
     id: 'clip-shape',
     priority: 50,
     icon: Icons.aspect_ratio,
+    // 1.17: one button fixes ONE clip; the next such clip is offered too.
+    repeats: true,
     when: (c) => clipOfOtherShape(c.session) != null,
     message: (c) => 'A clip has another shape than the video, so it gets '
         'bars.',
@@ -327,14 +348,29 @@ final List<Suggestion> kSuggestions = [
           final clip = clipOfOtherShape(c.session);
           if (clip == null) return;
           _select(c.session, ItemKind.clip, clip.id);
+          _shapeDone(c.session, clip.id);
           c.session.editor.setClipFit(clip.id, fit);
         }),
       SuggestionButton('Crop…', (context, c) {
         final clip = clipOfOtherShape(c.session);
         if (clip == null) return;
         _select(c.session, ItemKind.clip, clip.id);
+        _shapeDone(c.session, clip.id);
         openCrop(context, c.session);
       }),
+    ],
+  ),
+  Suggestion(
+    id: 'only-when-speaking',
+    priority: 45,
+    icon: Icons.mic_none,
+    // 1.17: two microphones, each also hearing the other speaker.
+    when: (c) => couldUseGate(c.project),
+    message: (c) => 'Two microphones: each one also picks up the other '
+        'speaker and the room.',
+    buttons: (c) => [
+      SuggestionButton('Only when speaking…',
+          (context, c) => showOnlyWhenSpeaking(context, c.session)),
     ],
   ),
   Suggestion(
@@ -546,7 +582,14 @@ class SuggestionController extends ChangeNotifier {
     if (s == null || where == null || !where.mounted) return;
     final c = context;
     if (s.id == 'open-text') _textOpened = true;
-    _close(s);
+    if (s.repeats) {
+      // Away for now; back a moment later if it still applies.
+      _current = null;
+      notifyListeners();
+      _schedule();
+    } else {
+      _close(s);
+    }
     button.run(where, c);
   }
 

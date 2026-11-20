@@ -53,6 +53,7 @@ import 'transcribe_jobs.dart';
 part 'tools_publish.dart';
 part 'tools_selftest.dart';
 part 'tools_speech.dart';
+part 'tools_part.dart';
 part 'tools_text.dart';
 
 const String kServerName = 'clipforge';
@@ -1420,6 +1421,7 @@ class ClipForgeTools {
     'transcribe', 'get_transcribe_status', 'cancel_transcribe',
     'get_transcript', 'find_in_transcript', 'list_auto_cuts',
     'get_guide', 'self_test', 'get_captions', 'get_speech_map',
+    'list_quiet_parts',
   };
 
   /// Tools that change many clips at once and so take `dry_run`.
@@ -2694,6 +2696,7 @@ class ClipForgeTools {
     ),
     ..._speechToolDefs,
     ..._textToolDefs,
+    ..._partToolDefs,
     ..._publishToolDefs,
     ..._selfToolDefs,
   ];

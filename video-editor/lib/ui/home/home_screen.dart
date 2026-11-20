@@ -169,13 +169,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (mounted) setState(() => _updatedTo = current);
       }
       if (!_updatedKnown.isCompleted) _updatedKnown.complete();
-      if (await prefs.flag(kWhatMovedSeenFlag)) return;
-      await prefs.setFlag(kWhatMovedSeenFlag);
-      if (!existingUser || !olderThan115(previous) || olderThan115(current)) {
+      // 1.17: I and O changed their meaning. Said once to people who come
+      // from 1.15 / 1.16 on a computer; from older versions the bigger
+      // "What moved" below has the same line.
+      final keysSeen = await prefs.flag(kKeysMovedSeenFlag);
+      if (!keysSeen) await prefs.setFlag(kKeysMovedSeenFlag);
+      final movedSeen = await prefs.flag(kWhatMovedSeenFlag);
+      if (!movedSeen) await prefs.setFlag(kWhatMovedSeenFlag);
+      if (!existingUser || !mounted || _tour.active) return;
+      if (!movedSeen && olderThan115(previous) && !olderThan115(current)) {
+        await showWhatMoved(context);
         return;
       }
-      if (!mounted || _tour.active) return;
-      await showWhatMoved(context);
+      if (!keysSeen &&
+          previous != null &&
+          olderThanMinor(previous, 17) &&
+          !olderThanMinor(current, 17) &&
+          MediaQuery.sizeOf(context).width >= 700) {
+        await showKeysMoved(context);
+      }
     } catch (_) {
       // Notes are never in the way of using the app.
     } finally {

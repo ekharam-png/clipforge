@@ -273,6 +273,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(s.cropTarget.value, 'o1');
       expect(find.byKey(const ValueKey('crop-frame')), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const ValueKey('crop-shape-square')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('crop-shape-square')));
       await tester.pumpAndSettle();
       final crop = now(tester).overlays.single.clip.framing.crop;
