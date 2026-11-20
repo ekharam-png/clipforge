@@ -18,20 +18,13 @@ export function Downloads() {
           <span className="tl-label">
             Windows <span className="tl-mine">this device</span>
           </span>
-          <div className="lane two" style={{ "--c": "var(--c-video)" } as React.CSSProperties}>
+          <div className="lane" style={{ "--c": "var(--c-video)" } as React.CSSProperties}>
             <a className="clip" href={DOWNLOADS.windowsInstaller}>
               <span className="top-line">
                 <span>ClipForge-Setup.exe</span>
                 <span>Windows 10 and 11</span>
               </span>
-              <span className="act">Installer (recommended)</span>
-            </a>
-            <a className="clip alt" href={DOWNLOADS.windowsZip}>
-              <span className="top-line">
-                <span>ClipForge-windows.zip</span>
-                <span>no install</span>
-              </span>
-              <span className="act">Zip</span>
+              <span className="act">Download for Windows</span>
             </a>
           </div>
         </div>
@@ -65,8 +58,7 @@ export function Downloads() {
         </div>
       </div>
       <p className="small">
-        Very old Android phone? If the app does not install, use the{" "}
-        <a href={DOWNLOADS.androidOld}>version for old 32-bit phones</a>. All files and past versions:{" "}
+        Past versions are on the{" "}
         <a href={RELEASES_URL}>releases page</a>. After downloading, the <a href="/install">install steps</a> take a
         minute.
       </p>

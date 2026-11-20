@@ -36,7 +36,7 @@ export default function Install() {
                   Download the installer
                 </a>
               </p>
-              <h4>With the installer (recommended)</h4>
+              <h4>With the installer</h4>
               <ol>
                 <li>
                   Open the downloaded <b>ClipForge-Setup.exe</b>.
@@ -49,25 +49,6 @@ export default function Install() {
                 </li>
                 <li>
                   Open the <b>Start menu</b> and choose <b>ClipForge</b>.
-                </li>
-              </ol>
-              <h4>Or with the zip (nothing is installed)</h4>
-              <ol>
-                <li>
-                  Right-click the downloaded <a href={DOWNLOADS.windowsZip}>ClipForge-windows.zip</a> and choose{" "}
-                  <b>Extract All</b>.
-                </li>
-                <li>
-                  Inside is a folder called <b>ClipForge</b>. Move it to where you want to keep it, for example
-                  Documents.
-                </li>
-                <li>
-                  Keep the folder named <b>ClipForge</b>, with no version number: ClipForge updates itself inside this
-                  folder.
-                </li>
-                <li>
-                  Open the folder and double-click <b>clipforge.exe</b>. If you see &quot;Windows protected your
-                  PC&quot;, click <b>More info</b>, then <b>Run anyway</b>.
                 </li>
               </ol>
               <p className="hint">
@@ -142,10 +123,6 @@ export default function Install() {
                 </li>
               </ol>
               <p className="hint">New versions install over the old one and keep your projects.</p>
-              <p className="hint">
-                Very old phone? If the app does not install, use the{" "}
-                <a href={DOWNLOADS.androidOld}>version for old 32-bit phones</a>.
-              </p>
             </div>
           </div>
         </section>

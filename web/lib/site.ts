@@ -10,10 +10,8 @@ const asset = (name: string) => `${REPO_URL}/releases/latest/download/${name}`;
 
 export const DOWNLOADS = {
   windowsInstaller: asset("ClipForge-Setup.exe"),
-  windowsZip: asset("ClipForge-windows.zip"),
   mac: asset("ClipForge-macos.zip"),
   android: asset("ClipForge-android.apk"),
-  androidOld: asset("ClipForge-android-old-32bit-phones.apk"),
   readmeWindows: asset("ClipForge-readme-windows.html"),
   readmeMac: asset("ClipForge-readme-macos.html"),
   claudeWindows: asset("ClipForge-claude-windows.mcpb"),
