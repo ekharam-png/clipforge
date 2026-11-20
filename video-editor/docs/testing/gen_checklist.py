@@ -27,9 +27,13 @@
 # "MEDIA FOLDER: <owner fills in>" near the top of the instructions;
 # --media-folder "C:\\path" writes the owner's folder into that line (for
 # the copy the owner hands to the tester; the pages in the repository keep
-# the placeholder):
+# the placeholder). Round 7-mac = round 7 for a Mac (derived from round 7:
+# Cmd for Ctrl, the macOS menu bar, POSIX paths; a new first group with the
+# install from ClipForge-macos.zip, Gatekeeper, the in-app update on a Mac
+# and Connect to Claude; see "round 7, Mac" below):
 #
 #   python3 gen_checklist.py ClipForge-Test-Round-7.html       --round 7       --build "..."
+#   python3 gen_checklist.py ClipForge-Test-Round-7-Mac.html   --round 7-mac   --build "..."
 #   python3 gen_checklist.py ClipForge-Test-Round-7-Phone.html --round 7-phone --build "..."
 #   python3 gen_checklist.py ClipForge-Test-Round-6.html       --round 6       --build "..."
 #   python3 gen_checklist.py ClipForge-Test-Round-6-Phone.html --round 6-phone --build "..."
@@ -42,7 +46,7 @@
 # ClipForge-<version>-build<n>-...). The tester pastes what the app itself
 # says (Help > About ClipForge > Copy version info) into "Version shown in
 # the app", so a mismatch is visible at once.
-import argparse, json, html, sys
+import argparse, json, html, re, sys
 
 # ---------------------------------------------------------------- round 3 (1.4.0)
 # Steps: (id, title, expected, tag). tag: "", "Mac", "Windows" or "listen".
@@ -2006,6 +2010,229 @@ RULES
 # Device and Note boxes). The key is also the browser-storage key and part of
 # the name of the downloaded results file. Old rounds stay so their pages can
 # be regenerated.
+# ---------------------------------------------------------------- round 7, Mac (1.17.0)
+# The macOS round for 1.17.0 (build 136): round 7 adapted for a Mac (an
+# Apple-silicon MacBook Air), run by a computer-use agent on the Mac itself.
+# It is DERIVED from STEPS_7 / INSTR_7, so a step is written once:
+#   * every round 7 step goes through _mac_text (Cmd for Ctrl, Option for
+#     Alt, Cmd+? for F1, Quit in the ClipForge menu, Finder, QuickTime
+#     Player, forward slashes);
+#   * MAC_STEP changes single steps: "sub" = (old, new) pairs applied to the
+#     converted text (each old text must be there, so a change in round 7
+#     is noticed here), "do_add" / "exp_add" = a sentence added at the end,
+#     "title" / "do" / "exp" = a whole new text;
+#   * group A is new (MAC_A): the first install from ClipForge-macos.zip,
+#     Gatekeeper, the first start, the in-app update (never run on a real
+#     Mac), and the Connect to Claude page (round 7's group T, moved here).
+#     The other groups keep their order and are lettered again.
+# Checked against the source: lib/ui/app_menu.dart (buildMenuTree /
+# buildAppMenus, test/ui/menu_tree_snapshot.txt: Cmd on macOS, Settings… in
+# File, About in the ClipForge menu and in Help, Quit in the ClipForge
+# menu, Help = Cmd+Shift+?, a tick is " ✓" after the label),
+# lib/ui/editor/editor_screen.dart (_onKey takes Ctrl or Cmd),
+# lib/core/update/update_install.dart + assets/update/clipforge-update.sh +
+# lib/ui/update/update_controller.dart (ditto, <app>.update-new / -old,
+# markers next to the bundle, plan B into ~/Downloads, the state folder in
+# Application Support/<bundle id>), lib/core/claude/connect.dart and
+# helper_install.dart (the Mac paths), lib/media/transcribe/* (which speech
+# programs are looked for, and where), tool/ci/make_readme_html.py and the
+# "Zip the app" step of the workflow (what the zip holds).
+_MAC_TEXT = [
+ (r"Alt\+F4", "Cmd+Q"),
+ (r"File > Exit", "ClipForge > Quit ClipForge"),
+ (r"\bExit, start again", "Quit (ClipForge > Quit ClipForge), start again"),
+ (r"Ctrl\+", "Cmd+"),
+ (r"\bCtrl shortcuts", "Cmd shortcuts"),
+ (r"\bAlt\b", "Option"),
+ (r"\bF1\b", "Cmd+?"),
+ (r"press Delete\b", "press the Delete key (the one above Return)"),
+ (r"\bExplorer\b", "Finder"),
+ (r"\bMedia Player\b", "QuickTime Player"),
+ (r"right-click > Properties > Details > Frame width / height", "in Finder click the file and press Cmd+I: \"More Info\" shows the dimensions"),
+ (r"right-click > Properties > Details > Frame rate", "open the file in QuickTime Player and press Cmd+I: the Movie Inspector shows the frames per second (FPS)"),
+ (r"clipforge-test-output\\", "clipforge-test-output/"),
+ (r"\bon this PC\b", "on this Mac"),
+]
+
+def _mac_text(t):
+    for a, b in _MAC_TEXT:
+        t = re.sub(a, lambda m, b=b: b, t)
+    return t
+
+_MAC_SUPPORT = "~/Library/Application Support"
+_MAC_STATE = _MAC_SUPPORT + "/com.ekcut.clipforge/update-state"
+
+MAC_STEP = {
+ "up-before": dict(
+   title="Before the update: which version is on this Mac",
+   sub=[("Start ClipForge from the Windows Start menu.", "Only in case (2) of the first step: an OLDER ClipForge is in Applications. Otherwise set Not tested for this step and the next two and say why. Start ClipForge from Applications."),
+        ("On a PC that still has 1.15 or 1.16:", "On a Mac with a version older than 1.17.0:"),
+        ("(ask the owner: in-app update or the installer)", "(ask the owner)")],
+   do_add="Then choose Help > Copy version info, paste it into the note and look for a line starting with \"Folder:\".",
+   exp_add="The \"Folder:\" line (if this older version has one) should be /Applications/ClipForge.app. If it has \"/AppTranslocation/\" in it, macOS runs this copy from a temporary place and ClipForge cannot replace it where it is: say so, and expect the other ending described in the next step."),
+ "up-run": dict(
+   title="The in-app update to 1.17.0 (never run on a real Mac before)",
+   sub=[("Do nothing while ClipForge closes and opens again (up to a minute).", "Do nothing while ClipForge closes and opens again (up to a minute; meanwhile only look at the Applications folder in Finder, if it is open, for new items next to ClipForge)."),
+        ("ask the owner to install 1.17.0 with ClipForge-Setup.exe so that the round can go on.", "ask the owner whether you may install 1.17.0 from ClipForge-macos.zip (the steps \"Move ClipForge into Applications\" and \"The first open\") so that the round can go on.")],
+   exp_add="This is the first run on a real Mac: write down EXACTLY what happens, in order, with the times. Per the code the app unpacks the download next to itself, closes, a small script moves the old ClipForge aside, moves the new one in and opens it. Three other endings are possible. (a) A message \"The new ClipForge is in your Downloads folder (Finder shows it). Close ClipForge, drag the new one into Applications, choose Replace, then open it.\" with OK: ClipForge could not change its own place (it runs from a temporary place, or the folder that holds it cannot be changed) and put the new app into Downloads > \"ClipForge 1.17.0\"; copy the message, set Partial, ask the owner, then do what it says. (b) After the restart macOS shows its \"cannot be opened\" warning again: copy it, set Partial and go on as in the step \"The first open\" (ask the owner first). (c) ClipForge does not come back within two minutes: look into Applications, write down what is there, start ClipForge by hand and set FAIL for the restart."),
+ "st-version": dict(
+   sub=[("(it ends in AppData\\Local\\Programs\\ClipForge, not in a name ending in \".update-new\")", "(on a Mac: /Applications/ClipForge.app; not a name ending in \".update-new\" or \".update-old\", and without \"/AppTranslocation/\" in it)")],
+   do_add="On the Mac About is in two places: open ClipForge > About ClipForge in the menu bar too.",
+   exp_add="Both About items open the same window. The system line names macOS."),
+ "st-notes": dict(
+   do_add="After a fresh install from the zip (no update) neither is expected: set Not tested and write \"fresh install\", or write down what did appear."),
+ "st-projects": dict(
+   do_add="On a Mac that never had ClipForge the list is empty: set Not tested and say so."),
+ "cl-page": dict(
+   sub=[("(it ends in ClipForge\\claude, under the user's app data)", "(per the code " + _MAC_SUPPORT + "/ClipForge/claude)")],
+   exp_add="How ClipForge looks on a Mac: Claude Desktop is found by its settings folder " + _MAC_SUPPORT + "/Claude (\"Claude Desktop not found\" when that folder is not there); Claude Code by the program \"claude\" on the PATH or in ~/.local/bin, ~/.claude/local, ~/.claude/bin, /usr/local/bin, /opt/homebrew/bin or ~/.npm-global/bin (\"Claude Code not found\" otherwise). Ask the owner which of the two are on this Mac and write down whether the lights agree with the answer."),
+ "cl-connect": dict(
+   sub=[("ends with the helper's path in the ClipForge\\claude folder", "ends with the helper's path (…/ClipForge/claude/clipforge-mcp)")],
+   exp_add="On a Mac, Connect for Claude Desktop changes only the clipforge entry in " + _MAC_SUPPORT + "/Claude/claude_desktop_config.json and, when that file was there before, first saves a copy next to it (claude_desktop_config.backup-<date>-<time>.json): open that folder (Finder > Go > Go to Folder…) and write down whether the entry and the backup are there. Connect for Claude Code runs \"claude mcp add --scope user clipforge -- <the helper>\". If macOS asks a question at that moment, copy its words and ask the owner before you answer."),
+ "key-timeline": dict(
+   sub=[("Home, End, Cmd+Right", "Home, End (a MacBook has no such keys: Fn+Left and Fn+Right), Cmd+Right")],
+   exp_add="On the Mac the menu bar shows Cmd+Z, Cmd+Shift+Z, Cmd+Shift+H, Cmd+Shift+T, Cmd+F, Cmd+E and Cmd+? next to their items; Cmd+Y and Cmd+Left / Cmd+Right are done by the editor itself and are not shown in the menu. (Ctrl instead of Cmd also works for the editor's own keys; that is not a fault.)"),
+ "key-comma": dict(
+   do="On the project list, click an empty place and press Cmd+comma; close Settings. In a project press Cmd+comma; close. Ask the owner whether a second keyboard layout is switched on (for example Russian or Hebrew): if yes, switch to it (the input menu at the right of the menu bar, or the Globe / Fn key), press Cmd and the key that is the comma on the English layout, close Settings and switch back.",
+   exp="Settings opens each time, also when nothing on the page has the keyboard. On the Mac this key belongs to the menu item File > Settings… (Cmd+,), so macOS decides what happens with another layout: write down exactly what happened there (the fix made in 1.17 for Windows, where it did not open with such a layout, is for Ctrl+comma only). Without a second layout set Partial and say so."),
+ "sm-addpath": dict(
+   sub=[("(the media folder plus \\nothing-here)", "(the media folder plus /nothing-here)"),
+        ("In Finder, hold Shift, right-click file B and choose Copy as path;", "In Finder, right-click file B, hold Option and choose Copy \"…\" as Pathname;"),
+        ("(in Finder: Shift+right-click > Copy as path)", "(it names both ways: in Explorer Shift+right-click > Copy as path; in Finder Option+right-click > Copy as Pathname)")],
+   exp_add="Paths on the Mac are POSIX paths (/Users/…/Movies/…, forward slashes); a path that starts with file:// works too."),
+ "sm-menus-1": dict(
+   do="There are ten ClipForge menus in the menu bar at the top of the screen: File, Edit, Add, Clip, Part, Sound, Text and speech, View, Playback, Help (macOS adds the ClipForge menu at the left and Window before Help). Open File, Edit, Add and Clip and compare every item and shortcut with Expected. (macOS draws the keys as symbols: ⌘ is Cmd, ⇧ is Shift, ⌫ is Delete.)",
+   exp="File: New project (Cmd+N), Open project file… (Cmd+O) | Rename project…, Publishing notes…, Back to projects | Export… (Cmd+E), Export several…, Export subtitles (.srt)… | Settings… (Cmd+,). There is no Exit or Quit in File: Quit ClipForge (Cmd+Q) is in the ClipForge menu. Edit: Undo (Cmd+Z), Redo (Cmd+Shift+Z), History (Cmd+Shift+H) | Duplicate (Cmd+D), Copy settings (Cmd+Shift+C), Paste settings (Cmd+Shift+V), Delete (the Delete key, ⌫) | Find in the text… (Cmd+F). Add: Videos or photos…, Music or sound…, Voice recording…, Title, Caption…, Subtitle file (.srt)…, Overlay video or photo…, Add from a folder path…, Good moment marker (M). Clip: Split (S), Start at playhead (Q), End at playhead (W), Freeze frame, Remove silences…, Crop and position…, Rotate right, Move earlier, Move later | Make a short from here…, Make shorts from markers…, Good moments…. In an open project New project and Open project file… are grey with \"(go back to the projects first)\". Whether macOS shows and obeys the single-letter keys (S, Q, W, M) in its menus was never checked on a real Mac: write down what you see. Write down every difference."),
+ "sm-menus-2": dict(
+   sub=[("View: Zoom in (+), Zoom out (-), Snap to playhead and edges, Show sound waves |", "View: Zoom in (+), Zoom out (-), Snap to playhead and edges, Show sound waves (a switched-on item has a ✓ after its name) |"),
+        ("Go to start (Home), Go to end (End)", "Go to start (Home, drawn as an arrow to the top left), Go to end (End, an arrow to the bottom right)"),
+        ("Previous speech start (Cmd+Left), Next speech start (Cmd+Right)", "Previous speech start, Next speech start (no key is shown on the Mac; Cmd+Left and Cmd+Right still do it)"),
+        ("ClipForge Help (Cmd+?)", "ClipForge Help (Cmd+?, drawn as ⇧⌘? or ⌘?)")],
+   exp_add="Also on the Mac: the ClipForge menu (About ClipForge | Services | Hide ClipForge, Hide Others, Show All | Quit ClipForge) and the Window menu (Minimize, Zoom | a full-screen item); macOS may add items of its own to Edit, View, Window and Help (for example a search box in Help): name them, they are not faults."),
+ "pr-quit": dict(
+   exp_add="(Cmd+Q is ClipForge > Quit ClipForge. Also try the red button at the top left of the window once, after another small change: write down whether ClipForge quits or only the window closes, and that the change was saved.)"),
+ "pb-finish": dict(
+   sub=[("Show in folder opens Finder on the folder.", "Show in folder opens a Finder window with the file selected in its folder.")]),
+ "ex-gpu": dict(
+   exp_add="On an Apple chip the graphics-card choice reads \"Graphics card — VideoToolbox (Mac)\"."),
+ "hp-pages": dict(
+   sub=[("with J / K / L, M, Cmd+D and the rest", "with J / K / L, M, Ctrl+D and the rest (the list is written with Ctrl and says at its top \"On a Mac use Cmd where this says Ctrl\"; it names Cmd+? for help, Cmd+comma for Settings, Cmd+Q to quit and Option for dragging without snapping)")]),
+ "so-waves": dict(
+   sub=[("(\"Previous speech start (Cmd+Left)\", \"Next speech start (Cmd+Right)\")", "(their tooltips read \"Previous speech start (Ctrl+Left)\" and \"Next speech start (Ctrl+Right)\" on the Mac too: the code has one text for every system; write down what you see)")],
+   exp_add="On a Mac press Cmd+Right and Cmd+Left: Ctrl with an arrow key usually belongs to macOS (it switches desktops)."),
+ "sp-open": dict(
+   title="Transcribe speech…: what this Mac has, or a plain explanation",
+   exp_add="What ClipForge needs on a Mac (it brings no speech program of its own): one of whisper-ctranslate2, faster-whisper, whisper-cli or whisper-cpp (whisper.cpp), whisper, or an ffmpeg of version 8 or newer whose filter list has \"whisper\". It looks on the PATH and in /opt/homebrew/bin, /usr/local/bin, /opt/local/bin, /usr/bin, ~/.local/bin and ~/bin (so Homebrew programs are found). When none is there, the box ends for the Mac with \"On a Mac the simplest is Terminal: brew install whisper-cpp (or an FFmpeg 8 build that includes the whisper filter), then restart ClipForge.\" Do NOT install anything and do not open Terminal on your own: tell the owner what the box says. Only if the owner agrees and installs it (or tells you to), restart ClipForge and go on with this group; write down what was installed."),
+ "sp-run": dict(
+   exp_add="On a Mac with whisper.cpp ClipForge first reads the sound with an ffmpeg from the same places (\"Reading the sound…\"). If there is no ffmpeg on the Mac it stops with \"Reading the sound needs FFmpeg, which was not found on this computer.\": copy it, set Partial with \"whisper.cpp without ffmpeg\", tell the owner, and set the rest of the group to Not tested unless the owner installs ffmpeg."),
+}
+
+# Group A of the Mac round: tuples are new steps, plain ids are round 7 steps.
+MAC_A = ("A. Install, update and Claude on this Mac (all of it new on a real Mac)", [
+  ("mac-before", "Before anything: this Mac, and what is on it",
+   "Choose Apple menu > About This Mac and write the model, the chip and the macOS version into \"Device\" at the top of this page. Open Finder > Applications and look for ClipForge. If it is there, start it (if macOS refuses to open it, do the step \"The first open\" below first), read the small grey line at the bottom of the project list and write the version down. Ask the owner where ClipForge-macos.zip of 1.17.0 is (usually the Downloads folder). If it is not on the Mac, ask the owner to get it from the ClipForge download page; do not download it yourself.",
+   "You know which case this is, and wrote it into the note. Case (1), no ClipForge on this Mac: do the install steps and set the three update steps to Not tested with \"fresh install\". Case (2), an OLDER ClipForge is in Applications: do the zip step, set \"Move ClipForge into Applications\" and \"The first open\" to Not tested with \"kept the old version to test the update\", then do the update steps. Case (3), 1.17.0 (build 136) is already there: ask the owner how it got there, write that down, and set what cannot be done to Not tested. The Mac has an Apple chip (M1 or newer); on an Intel Mac say so in the Summary (the Claude helper is for Apple chips only).", ""),
+  ("mac-zip", "Unzip ClipForge-macos.zip: what is in it",
+   "In Finder double-click ClipForge-macos.zip (the zip itself stays). Open the folder that appears and write down every item in it. Double-click \"Read me first\" (it opens in the browser) and read it to the end. Double-click \"Connect Claude to ClipForge\" and read its start. Close both tabs.",
+   "Three items side by side: ClipForge (the app), \"Read me first.html\" and \"Connect Claude to ClipForge.html\". There is no separate Claude program or \"ClipForge-Claude\" folder (the Claude helper is inside the app) and no \"Release notes.txt\". \"Read me first\" is written for the Mac: Install on Mac (unzip; drag ClipForge into Applications; macOS 15 or newer: open it once, close the message, then System Settings > Privacy & Security > Open Anyway; older macOS: right-click > Open, then Open), First steps, Where your projects are (Documents > ClipForge), Updates, Use it with Claude (with \"On a Mac this needs an Apple chip (M1 or newer).\") and \"What is new in 1.17.0\". Write down every sentence that does not fit a Mac or this version (a word about Windows, a wrong menu, a wrong key).", ""),
+  ("mac-install", "Move ClipForge into Applications",
+   "Only in case (1) of the first step, or when the owner says that the ClipForge in Applications may be replaced. Drag ClipForge from the unzipped folder into Applications. If Finder asks whether to replace a ClipForge that is there, or asks for a password, stop and ask the owner. Do not start ClipForge from the unzipped folder.",
+   "ClipForge is in Applications, once. (Why not from the unzipped folder: macOS runs a downloaded app that was never moved from a hidden temporary place, and ClipForge then cannot update itself where it is.)", ""),
+  ("mac-gatekeeper", "The first open: the macOS warning",
+   "Double-click ClipForge in Applications. macOS is expected to refuse: copy the exact words of the message into the note and close it (never choose Move to Trash). Then ASK THE OWNER: \"macOS blocks ClipForge because it is not signed by an Apple-registered developer. May I allow it under System Settings > Privacy & Security > Open Anyway?\" Only after a yes. On macOS 15 or newer: open System Settings > Privacy & Security, scroll down to the line about ClipForge, click Open Anyway and confirm (the owner types the password or uses Touch ID if asked). On older macOS: right-click ClipForge in Applications, choose Open, then Open again. Change nothing else in System Settings.",
+   "A message that ClipForge cannot be opened (for example \"Apple could not verify…\", \"…cannot be opened because it is from an unidentified developer\" or \"…is damaged\": write which). After Open Anyway (or right-click > Open) ClipForge starts and shows the project list, and from then on it opens with a normal double-click, without a question. This is what the read-me and the help article \"Mac: \"ClipForge can't be opened\"\" say: write down any difference. If the message says \"damaged\" and offers only Move to Trash, set FAIL and ask the owner. If the owner says no, set Not tested: the round cannot go on.", ""),
+  ("mac-first-start", "The first start: questions from macOS, and the menu bar",
+   "Watch the first minute after ClipForge opened. If macOS asks anything (for example \"ClipForge would like to access files in your Documents folder\"; later the same for Downloads, Desktop or a removable disk when test files are there), copy the words and ask the owner before you answer. If a tour starts, go through it. Then look at the menu bar at the top of the SCREEN: open the ClipForge menu and the Window menu and read them. Press Cmd+comma and close Settings.",
+   "ClipForge keeps the projects in Documents > ClipForge, so one question about the Documents folder is normal. No question about the microphone, the camera or recording the screen is expected from ClipForge (it does not record): write down any that comes. The window has no menu bar of its own; at the top of the screen are ClipForge, File, Edit, Add, Clip, Part, Sound, Text and speech, View, Playback, Window, Help. The ClipForge menu has About ClipForge, Hide ClipForge, Hide Others, Show All and Quit ClipForge (Cmd+Q); Settings… is in the File menu (Cmd+,), not in the ClipForge menu. Cmd+comma opens Settings.", ""),
+  "up-before",
+  "up-run",
+  ("mac-update-after", "After the update: nothing left behind, and the update log",
+   "Only after an in-app update (otherwise set Not tested). In Finder open Applications and read every name that starts with ClipForge (press Cmd+Shift+. once to show hidden files, and once more afterwards to hide them again). Then choose Go > Go to Folder… in Finder, paste " + _MAC_STATE + " and press Return; write down the files there. In ClipForge choose Help > Copy version info and paste it into the note. Delete nothing.",
+   "Applications holds exactly one ClipForge. Per the code the update makes these next to it, for a short time only: \"ClipForge.app.update-unpack\" and \"ClipForge.app.update-new\" (the new version), \"ClipForge.app.update-new.marker\", \"ClipForge.app.update-old\" (the old version stepping aside) and \"ClipForge.app.update-old.marker\"; the update or the next start of ClipForge removes them. Any of them still there after ClipForge was started twice is a finding: write the exact names. The update log is the file update-log.txt in " + _MAC_STATE + " (the pasted text names it in a line \"Update log: …\": if that is another place, write it down); a file update-result.json may be beside it for a moment. The pasted lines show the steps of the app and of the script, such as \"script(sh): started token=…\", \"the app (pid …) has closed\", \"result: updated\" and \"done\". The projects in Documents > ClipForge are as before.", ""),
+  "st-version",
+  "st-notes",
+  "st-projects",
+  "cl-page",
+  "cl-test",
+  "cl-connect",
+])
+
+_MAC_GROUP_TITLE = {
+ "B. The long file (the freeze reported on this PC)": "B. The long file (it made an earlier version stop answering on the owner's Windows PC)",
+}
+
+def _mac_steps():
+    by_id = {st[0]: st for _, items in STEPS_7 for st in items}
+    used = set()
+    def conv(sid):
+        _, title, do, exp, tag = by_id[sid]
+        title, do, exp = _mac_text(title), _mac_text(do), _mac_text(exp)
+        o = MAC_STEP.get(sid, {})
+        used.add(sid)
+        for old, new in o.get("sub", []):
+            assert (old in do) + (old in exp) == 1, "round 7-mac, %s: this text is not in the step (once): %s" % (sid, old)
+            do, exp = do.replace(old, new), exp.replace(old, new)
+        title, do, exp = o.get("title", title), o.get("do", do), o.get("exp", exp)
+        if "do_add" in o: do += " " + o["do_add"]
+        if "exp_add" in o: exp += " " + o["exp_add"]
+        return (sid, title, do, exp, tag)
+    first = [conv(s) if isinstance(s, str) else s for s in MAC_A[1]]
+    moved = {s for s in MAC_A[1] if isinstance(s, str)}
+    groups = [(MAC_A[0], first)]
+    for name, items in STEPS_7:
+        rest = [conv(st[0]) for st in items if st[0] not in moved]
+        if rest:
+            groups.append((_MAC_GROUP_TITLE.get(name, _mac_text(name)), rest))
+    assert used == set(by_id), "round 7-mac must carry every round 7 step"
+    assert set(MAC_STEP) <= used, "MAC_STEP names a step round 7 does not have"
+    # Letter the groups again (round 7's group T moved into group A).
+    return [("%s. %s" % (chr(65 + i), name.split(". ", 1)[1]), items)
+            for i, (name, items) in enumerate(groups)]
+
+STEPS_7M = _mac_steps()
+
+def _between(text, start, end):
+    """The part of [text] from [start] up to [end] (both must be there)."""
+    a = text.index(start)
+    return text[a:text.index(end, a)]
+
+def _mac_instr():
+    files = _between(INSTR_7, "- Test files are in the MEDIA FOLDER", "- The easiest way to add files")
+    tip = _between(INSTR_7, "- A thin line with a tip", "IF CLIPFORGE STOPS ANSWERING")
+    stops = _between(INSTR_7, "IF CLIPFORGE STOPS ANSWERING", "RULES\n")
+    rules = INSTR_7[INSTR_7.index("RULES\n"):]
+    for old, new in [
+        ("close it (Task Manager if needed) and start it again.", "close it (Apple menu > Force Quit… if needed; tell the owner) and start it again. If macOS then shows \"ClipForge quit unexpectedly\", click Report…, copy the text into the Crash box and close that window without sending."),
+    ]:
+        assert old in stops
+        stops = stops.replace(old, new)
+    for old, new in [
+        ("Ask the owner before you press Update, Send (feedback), Connect or Replace with this version.", "Ask the owner before you press Update, Send (feedback), Connect or Replace with this version, before you answer ANY question macOS asks (permissions, \"cannot be opened\", a password, Touch ID) and before you change anything in System Settings."),
+        ("Do not install programs.", "Do not install programs (not with Homebrew either) unless the owner agrees; without a speech program the speech group is Not tested with that reason."),
+        ("(ClipForge-Test-Round-7-results-….html)", "(ClipForge-Test-Round-7-mac-results-….html)"),
+    ]:
+        assert old in rules
+        rules = rules.replace(old, new)
+    return """You are testing ClipForge 1.17.0 (build 136), a video editor, on the owner's Mac (a MacBook Air with an Apple chip). You work on the Mac itself; this checklist page is open in a browser on the Mac. Problems are expected; your job is to find them and write them down precisely. This version has not been through a full test on a real Mac, and its in-app update has never run on one: write down exactly what you see, also when it works. This round goes through EVERY feature, with the new and risky things first: the install (or the in-app update) and the Claude connection on the Mac, a long video that made an earlier version stop answering on the owner's Windows PC, everything version 1.17 changed, then all the rest. It has __NSTEPS__ numbered steps in __NGROUPS__ groups (A to %(last)s). It is the Windows round 7 adapted for macOS. The Claude tools have their own document (Claude control test 6).
+
+MEDIA FOLDER: <owner fills in>
+
+HOW THE MAC DIFFERS FROM WINDOWS (read this once)
+- The menus are in the menu bar at the top of the SCREEN, not in the window: ClipForge, File, Edit, Add, Clip, Part, Sound, Text and speech, View, Playback, Window, Help. Settings… is in the File menu (Cmd+comma). About ClipForge is in the ClipForge menu and in Help. Quit is ClipForge > Quit ClipForge (Cmd+Q). A switched-on menu item has a ✓ after its name; a greyed item says why in brackets in its name.
+- Keys: Cmd where Windows has Ctrl (Cmd+Z, Cmd+Shift+Z, Cmd+E, Cmd+D, Cmd+F, Cmd+Shift+H, Cmd+Shift+T, Cmd+comma); Option where Windows has Alt; Help is Cmd+? (that is Cmd+Shift+/), not F1; the Delete key above Return deletes; a MacBook has no Home and End keys (Fn+Left and Fn+Right). Single letters (S, Q, W, I, O, M, J, K, L), Space, Esc, + and - are the same. If a key of a step does nothing, use the menu item, set Partial and write down which key.
+- "Right-click" is a click with two fingers on the trackpad (a secondary click).
+- File windows are the ones of macOS: in an open or save window press Cmd+Shift+G, paste a path and press Return to go there. Paths are written with forward slashes, for example /Users/name/Movies/ClipForge-test/video.mp4. To copy the path of a file in Finder: right-click the file, hold Option and choose Copy "…" as Pathname.
+- macOS asks before an app may read some folders (Documents, Downloads, Desktop, removable disks) and before it opens an app it cannot verify. NEVER answer such a question and never change anything in System Settings without asking the owner first; copy the exact words of the question into the note. ClipForge does not record sound or pictures, so it should never ask for the microphone, the camera or screen recording. (What your own tool needs to see and control the Mac is the owner's business and not a finding.)
+
+BEFORE YOU START
+- Fill in "Device" (for example "MacBook Air M3, macOS 15.6") and "Tester".
+- Do group A first: it installs or updates the app. Then fill in "Version shown in the app" (Help > About ClipForge > Copy version info, paste). If it does not match the build named at the top of this page (a red warning appears), tell the owner and say so in the Summary.
+%(files)s- The easiest way to add files without the macOS file window: Add > Add from a folder path…, paste the path (for example /Users/name/Movies/ClipForge-test), tick the files.
+- Do the groups in order: later steps build on the projects made earlier ("Round 7 long", "Round 7 test", "Round 7 two voices", "Round 7 basics"). If time runs out: groups A (install, update, Claude) and B (the long file: does it freeze, and Copy version info with the performance log) matter most, then C to H (everything 1.17 changed), then S (export) and P (speech to text). Say in the Summary where you stopped.
+%(tip)s%(stops)s%(rules)s""" % dict(last=chr(64 + len(STEPS_7M)), files=files, tip=tip, stops=stops, rules=rules)
+
+INSTR_7M = _mac_instr()
+
 ROUNDS = {
  "3": dict(steps=STEPS_3, instr=INSTR_3,
          opts=["", "Works", "Problem", "Partial", "Not tested", "Needs a person"], result="Status",
@@ -2031,6 +2258,12 @@ ROUNDS = {
          device="e.g. Windows 11 laptop, RTX 4070",
          note="What happened? Copy texts and numbers the step asks for; Owner: for what the owner saw or heard",
          crash="If the app closed by itself, froze or stopped answering: the time, the step, what was on screen. Then paste Help > Copy version info here (it carries the performance log)."),
+ "7-mac": dict(steps=STEPS_7M, instr=INSTR_7M, numbered=True, title="ClipForge test round 7: Mac",
+         opts=["", "PASS", "FAIL", "Partial", "Not tested", "Needs the owner"], result="Result",
+         tags={"listen": "ask the owner to listen", "watch": "ask the owner to watch"},
+         device="e.g. MacBook Air M3, macOS 15.6",
+         note="What happened? Copy texts and numbers the step asks for; Owner: for what the owner saw or heard",
+         crash="If the app closed by itself, froze or stopped answering: the time, the step, what was on screen. Then paste Help > Copy version info here (it carries the performance log), and the text of the Report… button if macOS said that ClipForge quit unexpectedly."),
  "7-phone": dict(steps=STEPS_7P, instr=INSTR_7P, numbered=True, title="ClipForge test round 7: Android phone",
          opts=["", "PASS", "FAIL", "Partial", "Not tested", "Needs the owner"], result="Result",
          tags={"listen": "ask the owner to listen", "watch": "ask the owner to watch"},
@@ -2056,7 +2289,7 @@ ap = argparse.ArgumentParser(description="Generate a ClipForge test checklist.")
 ap.add_argument("output", help="the HTML file to write")
 ap.add_argument("--build", required=True, help='the build to test, e.g. "ClipForge 1.4.0 (build 21) · 16 Nov 2026, 07:20 UTC · 877e482"')
 ap.add_argument("--round", default=DEFAULT_ROUND, choices=sorted(ROUNDS), help="test round (default: %s); picks the steps, title and browser storage" % DEFAULT_ROUND)
-ap.add_argument("--media-folder", default="", help='rounds 7 and 7-phone: the folder with the test files, written into the line "MEDIA FOLDER: ..." of the instructions (default: the placeholder stays)')
+ap.add_argument("--media-folder", default="", help='rounds 7, 7-mac and 7-phone: the folder with the test files, written into the line "MEDIA FOLDER: ..." of the instructions (default: the placeholder stays)')
 args = ap.parse_args()
 R = ROUNDS[args.round]
 MEDIA_LINE = "MEDIA FOLDER: <owner fills in>"
