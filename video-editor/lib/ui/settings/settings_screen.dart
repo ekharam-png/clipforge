@@ -2,10 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/links.dart' show kAppName;
 import '../about.dart';
 import '../app_settings.dart';
 import '../claude/claude_helper.dart';
 import '../claude/connect_claude.dart';
+import '../feedback/feedback_screen.dart';
 import '../help/help_screen.dart';
 import '../help/whats_new.dart' show kWhatsNewId;
 import '../theme.dart';
@@ -311,9 +313,14 @@ class _SettingsBodyState extends ConsumerState<SettingsBody> {
                 child: const Text("What's new"),
               ),
               OutlinedButton(
+                key: const ValueKey('settings-send-feedback'),
+                onPressed: () => openFeedback(context),
+                child: const Text('Send feedback'),
+              ),
+              OutlinedButton(
                 key: const ValueKey('settings-licences'),
                 onPressed: () => showLicensePage(
-                    context: context, applicationName: 'ClipForge'),
+                    context: context, applicationName: kAppName),
                 child: const Text('Licences'),
               ),
             ],

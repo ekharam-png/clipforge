@@ -2,7 +2,12 @@
 
 Read this first in a new session. It records what was built, why, how it fits
 together, how to build and test it, and what is still open. Last updated
-19 November 2026 (1.15.0: finding things - the menus by task, ONE Settings
+20 November 2026 (1.16.0: Send feedback from inside the app, ONE source
+for the outside addresses - `tool/ci/links.json`, which also travels in
+latest.json so installed apps follow a move of the site - the website in
+`web/`, the old Pages page as a signpost, and `docs/RENAMING.md`; see
+"Feedback, one source for addresses, rename readiness (1.16.0)". Before
+that 1.15.0: finding things - the menus by task, ONE Settings
 page, suggestions, the phone layout, the timeline's context menu, one truth
 for "Lower music under speech", and three downloads instead of six; see
 "Finding things (1.15.0)" and "Three downloads (1.15.0)". Before that
@@ -23,7 +28,9 @@ as a real app on **Android, Windows and macOS** (iPhone later). Used for short
 family videos, podcast clips and sport clips, up to about 5–7 minutes. Possibly
 shared with a few friends later.
 
-"ClipForge" is a working name.
+"ClipForge" is a working name; the owner may change it ("too many
+ClipForge out there"). `docs/RENAMING.md` says what a rename touches and
+what must not change.
 
 ## Where things are
 
@@ -31,7 +38,11 @@ shared with a few friends later.
   branch `main`. Versions are published as GitHub Releases (push a tag
   `v<version>`, or run the build workflow by hand on `main` with "publish"
   ticked: the release then creates the tag) and
-  the download page lives in `site/` (GitHub Pages).
+  the website lives in `web/` (Next.js on Vercel, see `web/README.md`;
+  its address is in `video-editor/tool/ci/links.json` and nowhere else).
+  `site/` (GitHub Pages, the download page until 1.15) is a signpost to
+  the website that still offers the three downloads: versions before 1.16
+  open it.
 - CI: `.github/workflows/video-editor-build.yml` (repo root).
 - User docs: `video-editor/README.md` (install steps, features, Claude control).
 
@@ -89,7 +100,12 @@ shared with a few friends later.
   `lib/ui/editor/publishing_panel.dart`, `shorts_actions.dart`,
   `lib/mcp/tools_publish.dart`, `lib/core/claude/connect.dart` +
   `lib/ui/claude/claude_connect.dart`, `lib/mcp/heartbeat.dart`.
-- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1888 tests (1.15.0; 1827 at 1.14.1, 1796 at 1.14.0, 1690 at 1.13.0, 1611 at 1.12.0, 1516 at 1.11.0).
+- 1.16: `lib/core/links.dart` (the outside addresses + `kAppName`),
+  `lib/ui/links.dart` (the ones in use, remembered from latest.json),
+  `lib/core/feedback/feedback.dart` (payload, the one request, limits),
+  `lib/ui/feedback/feedback_screen.dart`, `tool/ci/links.json` +
+  `links.py`, `docs/RENAMING.md`.
+- `test/core`, `test/media`, `test/ui`, `test/mcp` — 1931 tests (1.16.0; 1888 at 1.15.0, 1827 at 1.14.1, 1796 at 1.14.0, 1690 at 1.13.0, 1611 at 1.12.0, 1516 at 1.11.0).
   `integration_test/real_app_test.dart` — drives the real app on Linux.
 
 ## What was built, and why
@@ -2263,6 +2279,182 @@ so neither class could show.
   remove list with non-ASCII paths in the cmd script (CI uses ASCII
   there); the 15 s wait on a slow PC with a scanner.
 
+## Feedback, one source for addresses, rename readiness (1.16.0, 20 Nov 2026)
+
+Owner: the website goes live on Vercel (deployed from the owner's own
+session), the app should be able to send feedback to it, and "the name
+may change later, so nothing may hard-code the site address in many
+places".
+
+### One source for outside addresses
+
+- **`tool/ci/links.json`** is THE file: `site`, and under `links` the
+  pages `download` (`/install`), `feedback_api` (`/api/feedback`),
+  `feedback_page`, `help`, `privacy` (a value starting with `/` is a page
+  of `site`), plus `claude_page`, `repository`, `old_pages` (the GitHub
+  Pages address) and `feedback_api_hosts` (extra hosts feedback may go
+  to; empty). `tool/ci/links.py` reads and checks it.
+- **Readers**: `make_latest_json.py` (writes `links` into latest.json;
+  `--links <file>`, `--no-links`; a links.json the app would refuse stops
+  the release), `make_readme_html.py` (download page, help online,
+  source), `web/scripts/build-content.mjs` (-> `web/content/generated/links.json`
+  -> `web/lib/site.ts`), and the tests.
+- **The app's built-in copy**: `lib/core/links.dart` (`AppLinks.builtIn`,
+  `kRepositoryUrl`, `kReleasesUrl`, `kLatestJsonUrl`, `kFeedbackApiHosts`,
+  and `kAppName`). `kLatestJsonUrl` / `kDownloadPageUrl` left
+  `update_info.dart`. `test/core/links_test.dart` fails when the copy
+  differs from links.json, and when the site's host or the old Pages host
+  is written in any other file under `lib/`, `tool/`, `bin/`, `assets/`
+  or `../web/` (`web/tests/links.test.ts` checks `web/` again from its
+  side). To move the site: edit links.json, copy into links.dart.
+- **Without a new build**: `UpdateInfo.links` (raw text map from
+  latest.json; null in files before 1.16, which parse as before).
+  `UpdateController.check` hands it to `LinksController.remember`
+  (`lib/ui/links.dart`, `linksProvider`), which keeps
+  `{"v": <app version>, "links": {...}}` in settings.json (`linksSeen`)
+  and uses `AppLinks.builtIn.withOverrides(...)`. A latest.json without
+  `links` changes nothing. A newer app version ignores what an older one
+  remembered (its built-in addresses are at least as new) until its first
+  check.
+- **Checks** (`checkedLink`, `withOverrides`): text, <= 200 characters,
+  https (http only with `allowHttp`, used by tests and the e2e), a host
+  with a dot, no user name, no spaces or control characters; bad values
+  are ignored one by one. `feedback_api` is taken only when its host is
+  the (new) site's own host or in `kFeedbackApiHosts`; otherwise the
+  built-in feedback address stays. The latest.json address itself cannot
+  be changed this way.
+- **Users of the source in the app**: "Open the download page" and the
+  release-notes fallback (`UpdateController`), About ClipForge ("Website"
+  row, `openOutsidePage`), Send feedback (API, page), `get_status`
+  (`site`, the built-in one: the helper does not read the app's
+  settings). Help and Connect to Claude show no outside address (checked:
+  none in `lib/ui/help`, `lib/ui/claude`). Third-party addresses
+  (Openverse, upload pages, the speech models, brew.sh) are not ours and
+  stay where they are.
+
+### Send feedback
+
+- **Core** (`lib/core/feedback/feedback.dart`, pure Dart):
+  `buildFeedbackPayload` -> schema v1 exactly as `web/lib/feedback.ts`
+  takes it: `{v:1, kind, message, email?, app:{version, build?, os},
+  source:"app"}`. No `device`, no `locale`, nothing else, ever. `os` is
+  `DeviceDetails.system` cut to 60 characters (the website refuses
+  longer). `sendFeedback(api, payload)`: ONE POST, 15 s for all of it
+  (`kFeedbackTimeout`), no redirect followed, never throws, never retries
+  -> `FeedbackOutcome` kind `sent` / `offline` (no connection, no answer
+  in time) / `refused` (4xx: the website's own `error` words are shown) /
+  `failed` (5xx, or a 200 that is not `{"ok":true}`).
+  `feedbackPageUri` (the website's form with `source=app&kind=&version=&os=`;
+  the message and address are deliberately NOT put into the address),
+  `feedbackRecentSends` / `feedbackLimitNote` (5 per 10 minutes),
+  `FeedbackDraft`.
+- **Page** (`lib/ui/feedback/feedback_screen.dart`): `openFeedback(context,
+  {updateFailed, problem})`; a dialog from 700 px, a page below. Kind
+  chips (**Problem** / **Idea** / **Praise** / **Question**), message,
+  optional e-mail, the box **What is sent** (every row is rendered from
+  the payload map itself; keys `feedback-sent-kind/-message/-email/
+  -version/-system`, and the sentence `feedback-never-included`),
+  **Send**. Sent -> "Sent. Thank you!". Not sent -> the plain message
+  (`feedback-problem`), **Open the feedback page in the browser**
+  (`feedback-open-page`), **Copy my message** (`feedback-copy`).
+  `feedbackSenderProvider` is the seam for tests.
+- **Draft**: `feedbackDraft` in settings.json (kind, message, e-mail),
+  written 400 ms after a change and on closing, removed when sent or
+  emptied. **Local limit**: `feedbackSent` (times in ms); only requests
+  the website answered count, so trying again while offline is free.
+- **Update log lines**: only with `updateFailed` and when a log exists:
+  the tick box **Include the last update log lines** (off), the last 12
+  lines (`kFeedbackLogLines`) are appended to the message under "Last
+  lines of the update log:" and therefore shown in the box first; older
+  lines drop out when the message would pass 5000 characters. They can
+  name the install folder (the box says so).
+- **Entry points**: Help > **Send feedback…** (`HelpMenuActions.sendFeedback`,
+  menu id `send-feedback`), the phone's three dots on the project list
+  (`home-more-feedback`) and the editor's project menu
+  (`project-menu-feedback`), About ClipForge (`about-send-feedback`),
+  the Help footer, Settings > About, the Update window's failed state
+  (`update-send-feedback`) and "The update was not installed"
+  (`update-failed-feedback`).
+- **Claude**: no feedback tool, on purpose (Claude must not send e-mail
+  on its own); a test fails if `lib/mcp` ever uses the sender.
+- **Privacy words**: help article `send-feedback`, the Privacy part of
+  `updates` (the four cases in which the app goes online), the website's
+  privacy page.
+
+### Website (`web/`) and the old Pages page (`site/`)
+
+- `web/lib/site.ts` takes every address from links.json (`LINKS`,
+  `REPO_URL`, `OLD_PAGES_URL`, `CLAUDE_SETUP_URL`); `siteUrl()` is the
+  `site` of links.json on the production deployment.
+- `/feedback?source=app` shows a "From the app" note
+  (`components/FeedbackForm.tsx`).
+- **The shared fixture** `test/core/fixtures/feedback_payloads.json`:
+  `test/core/feedback_test.dart` checks the app builds exactly each
+  `payload` (same keys, same order), `web/tests/app-feedback.test.ts`
+  posts each to the real handler and checks the mail. Change the schema
+  on both sides, then the fixture.
+- Found and fixed on the way: the site linked to release files that no
+  release has since 1.15 (`ClipForge-readme-*.html`, the `.mcpb`s, the
+  skill zip). They are gone, and `release_assets.py --check-links` now
+  scans `web/` too.
+- `site/index.html`: "ClipForge has a new home", a button to the site,
+  the three downloads, no automatic redirect. `site/claude-setup.html` is
+  unchanged. `tool/ci/links_test.py` ties the signpost to links.json.
+  The read-me generator's install steps are now compared with
+  `web/app/install/page.tsx` (which got the two sentences it lacked).
+
+### Rename readiness
+
+`docs/RENAMING.md`: what must not change (Android package id and signing
+key, the installer's AppId, `clipforge.exe`, the release file names, the
+helper's name and the MCP server name `clipforge`, Windows `ProductName`
+because the app-support folder hangs on it), what to keep or migrate
+(Documents/ClipForge), what a rename changes (display names per platform,
+strings, links.json, GitHub, Vercel) and the order of work. `kAppName`
+exists and feeds the window title, the About title and the licence page;
+the ~390 literals in `lib/` were NOT replaced (inside sentences that tests
+compare; not mechanical) and are listed there by folder.
+
+### Tests (new in 1.16)
+
+`test/core/links_test.dart`, `test/core/feedback_test.dart` (fixture; a
+real local HTTP server: sent, 400 with words, 429, 404, 502, 500, a 200
+that is not ok, a redirect, no answer in time, nothing listening),
+`test/ui/feedback_ui_test.dart` (computer and phone, the box, the draft,
+not-sent with both ways out, the limit, the update-log tick box, the
+addresses from an update check, what is remembered),
+`tool/ci/links_test.py`, `web/tests/app-feedback.test.ts`,
+`web/tests/links.test.ts`. `Fakes` got `feedbackPosts` / `feedbackAnswer`.
+The Linux e2e gained step 0b: the update check hands the app a local
+"website" (as a latest.json would), Help > Send feedback… posts one real
+message to it.
+
+Do not use `tester.runAsync` around `UpdateController.check` or anything
+that awaits `LinksController.ready()` in a widget test: its future was
+made in the fake-time zone and the test hangs. Call it and
+`pumpAndSettle`.
+
+### Not built / not verified (1.16)
+
+- **Nothing was tried against the real website**: the build container
+  cannot reach it. The feedback API is exercised through its handler in
+  `web/tests` and through a local server from the app. First thing to
+  check after the deployment: Send feedback from a real 1.16 app, and
+  the pages named in links.json (`/install`, `/feedback`, `/help`,
+  `/privacy`).
+- Until the website's `RESEND_API_KEY` / `FEEDBACK_TO` / `FEEDBACK_FROM`
+  are set, the API answers 503 and the app shows its words ("Feedback is
+  not set up on this site yet...") with the two other ways.
+- Posts from the app are not asked for Turnstile (as designed in
+  `web/lib/feedback.ts`); the rate limits on both sides are best effort.
+- Not on real devices: the page on a phone with the keyboard open, the
+  browser opening on Android (`clipforge/update` channel `openUrl`,
+  unchanged code).
+- The root `README.md` still links to the Pages address (the signpost).
+  Change it to the website once the deployment is confirmed.
+- The helper's `get_status` shows the built-in site address, not one
+  remembered from a later latest.json.
+
 ## Finding things (1.15.0, 19 Nov 2026)
 
 Owner (non-technical, compares to CapCut) approved a reorganisation after a
@@ -2312,7 +2504,7 @@ Playback        Play/Pause (Space) · Play backwards (J) · Pause (K) ·
                 on Windows / Linux only)
 Help            ClipForge Help (F1 / Cmd+?) · Keyboard shortcuts · Show the tour ·
                 What's new | Connect to Claude… · Check for updates… |
-                Copy version info · About ClipForge
+                Send feedback… (1.16) · Copy version info · About ClipForge
 ```
 
 Where the items the owner did not list went: **Publishing notes…** and
@@ -2936,12 +3128,15 @@ tester, and must say exactly which build they ran).
    latest.json with the files' sizes and SHA-256. After changing
    `claude/guide/*.md` run `dart run tool/gen_guide.dart`. Keep the
    fixed-name assets and the latest.json fields: old apps read them.
+   Since 1.16 latest.json also carries `links` from `tool/ci/links.json`:
+   when the site moves, edit that file (and `lib/core/links.dart`) and
+   release while the old address still answers.
 5. The run's artifacts now also include the Claude Desktop extension
    (`…-claude-windows.mcpb`, `…-claude-macos.mcpb`) and
    `ClipForge-<version>-claude-skill.zip`; the owner's guide is
    `docs/claude-setup.html`.
 
-History so far: 1.14.1 "Read me first.html" in the Windows and Mac downloads (instead of Release notes.txt), Windows update by replacing the folder's contents (the rename never happened on a real PC), helper must report in, cmd fallback, update-log.txt, tidy-up, Inno Setup installer; 1.14 publishing kit (destinations, export several, publishing notes, chapters, share / upload pages), shorts in the app, good-moment markers, suggest_shorts / export_kit for Claude, Connect to Claude buttons, update leftovers and apply-at-start; 1.13 Text window, sound waves, who is speaking; 1.12 self-update (banner, Windows / Mac swap, Android installer), Claude helper installed by the app + hand-over, Connect to Claude page, get_guide, self_test, Windows jobs survive Claude Code, old -> new answers, media table; 1.11 speech to text on computers (transcribe, captions from speech, gentle filler removal with put back, Transcript column, shorts for Claude, right-to-left text), unique project names, app lock fix; 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
+History so far: 1.16 Send feedback (page, what-is-sent box, draft, local limit, update-log tick box), one source for outside addresses (links.json, in latest.json, remembered by the app), the website and the Pages signpost, RENAMING.md; 1.15 menus by task, one Settings page, suggestions, the phone layout, context menu, three downloads; 1.14.1 "Read me first.html" in the Windows and Mac downloads (instead of Release notes.txt), Windows update by replacing the folder's contents (the rename never happened on a real PC), helper must report in, cmd fallback, update-log.txt, tidy-up, Inno Setup installer; 1.14 publishing kit (destinations, export several, publishing notes, chapters, share / upload pages), shorts in the app, good-moment markers, suggest_shorts / export_kit for Claude, Connect to Claude buttons, update leftovers and apply-at-start; 1.13 Text window, sound waves, who is speaking; 1.12 self-update (banner, Windows / Mac swap, Android installer), Claude helper installed by the app + hand-over, Connect to Claude page, get_guide, self_test, Windows jobs survive Claude Code, old -> new answers, media table; 1.11 speech to text on computers (transcribe, captions from speech, gentle filler removal with put back, Transcript column, shorts for Claude, right-to-left text), unique project names, app lock fix; 1.10 voice recorded separately (asked on add, lined up by sound, linked, nudge, add_voice / align_audio); 1.9 Claude control from the owner's test (export jobs, short answers, open-in-app lock, dry runs, warnings); 1.8 Android media copies (missing-file fix), gallery search, fixed signing key, phone speed, fit/loop music, free music search, feature log; 1.7 fades, filters, text styles, snapping, duplicate / copy settings, sound-only export, frame rate, menus and keyboard; 1.6 crop and position, overlay track (picture-in-picture); 1.5 sound tracks, separate sound, adaptive silences, video size; 1.0 basic editor; 1.1 round-2 features; 1.2 review fixes +
 Claude control; 1.3 Voice focus, quit crash fix, drag and drop, graphics
 card; 1.4 help and tour, Windows menu bar, instant sound, History, long
 videos, version numbers.
@@ -3072,9 +3267,11 @@ building** until they report results. Read the checklist marks first.
 export PATH=/opt/sdk/flutter/bin:$PATH ANDROID_HOME=/opt/sdk/android
 cd video-editor
 flutter analyze
-flutter test                                   # all tests (1888)
+flutter test                                   # all tests (1931)
 flutter build apk --release --split-per-abi --target-platform android-arm64
 python3 tool/ci/release_assets_test.py && python3 tool/ci/release_assets.py --check-links
+python3 tool/ci/links_test.py && python3 tool/ci/make_readme_html_test.py
+(cd ../web && npm ci && npm test && npm run build)   # the website; needs Node 22.18+
 dart run bin/build_mcp.dart -o build/clipforge-mcp
 # real app on Linux:
 E2E_OUT=/tmp/e2e E2E_NULL_AO=1 LIBGL_ALWAYS_SOFTWARE=1 \

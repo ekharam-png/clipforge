@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../core/build_info.dart';
 import '../about.dart';
+import '../feedback/feedback_screen.dart';
 import '../theme.dart';
 import 'help_content.dart';
 import 'help_search.dart';
@@ -434,6 +435,11 @@ class _VersionFooter extends StatelessWidget {
               icon: const Icon(Icons.copy, size: 18,
                   semanticLabel: 'Copy version info'),
               onPressed: () => copyVersionInfo(context),
+            ),
+            TextButton(
+              key: const ValueKey('help-send-feedback'),
+              onPressed: () => openFeedback(context),
+              child: const Text('Send feedback'),
             ),
             TextButton(
               onPressed: () => showAboutClipForge(context),

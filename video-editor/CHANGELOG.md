@@ -4,6 +4,22 @@ Newest first. The version you have is in Help > About ClipForge (and at the
 bottom of the project list). This file is also the "What's new" page in the
 app's Help.
 
+## 1.16.0 – 20 November 2026
+
+You can now write to the maker of ClipForge from inside the app, and ClipForge has a website.
+
+- **Send feedback…** in the Help menu (on a phone: the three dots on the project list and in a project, **Send feedback**). Also in About ClipForge, at the bottom of Help and in Settings.
+  - Choose **Problem**, **Idea**, **Praise** or **Question**, write your message, and add your e-mail address if you would like an answer.
+  - A box on the page, "What is sent", shows exactly what goes: your message, your e-mail address if you gave one, the version and build of ClipForge, and the name and version of your system. Nothing about your projects, file names, videos, photos or music is ever included.
+  - Nothing is sent until you press **Send**. ClipForge never sends by itself and never tries again in the background.
+  - Without an internet connection ClipForge says so and offers **Open the feedback page in the browser** and **Copy my message**. What you wrote stays on the page, also if you close it, until it has been sent.
+  - At most 5 messages in 10 minutes from one device.
+- When an update did not work, the message has **Send feedback** too. There you can tick **Include the last update log lines**: it is off, and the lines are shown before they are sent.
+- ClipForge has a website with the downloads, install steps, a walk-through, the help and a feedback form. **Open the download page** opens it, and About ClipForge shows its address. The old download page stays as a signpost with the three downloads.
+- If the website ever moves, ClipForge learns the new address with the update check, without a new version being needed.
+- The help says in one place when the app goes online: the update check, free music search when you use it, language-pack downloads when you click, and feedback when you press **Send**. New help article: "Send feedback".
+- Claude cannot send feedback for you: there is no such tool, on purpose.
+
 ## 1.15.0 – 19 November 2026
 
 This version is about finding things. Nothing was removed, no editing tool was added, and every keyboard shortcut works as before. The first time it starts, a short note lists what moved.

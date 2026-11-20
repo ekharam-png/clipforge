@@ -142,6 +142,7 @@ void main() {
     expect(of('Help'), [
       'ClipForge Help', 'Keyboard shortcuts', 'Show the tour', //
       "What's new", 'Connect to Claude…', 'Check for updates…',
+      'Send feedback…',
       'Copy version info', 'About ClipForge',
     ]);
   });

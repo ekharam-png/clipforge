@@ -288,6 +288,33 @@ finish), it offers to **tidy up**: it moves itself into a folder called
 `ClipForge` and removes the older ClipForge folders next to it.
 Builds made on your own computer do not check by themselves.
 
+## Send feedback, and when the app goes online
+
+**Help > Send feedback…** (phones: the three dots on the project list and in
+a project; also in About ClipForge, at the bottom of Help, in Settings and
+on the message of an update that did not work) opens one page: **Problem**,
+**Idea**, **Praise** or **Question**, a message, and an e-mail address if
+you want an answer. The box "What is sent" shows exactly what goes: the
+message, the address if given, the app's version and build, the system's
+name and version. Nothing about projects, file names or media is ever
+included. One request when you press **Send**, no second try, nothing in
+the background; offline, the page offers **Open the feedback page in the
+browser** and **Copy my message**, and what you wrote is kept until it has
+been sent. At most 5 messages in 10 minutes from one device. After an
+update that did not work, a tick box (off) can add the last lines of the
+update log, shown first. Claude has no tool for this.
+
+The app goes online only for: the update check (and the download when you
+press **Update**), free music search when you use it, language-pack
+downloads for speech to text when you click **Download**, and feedback
+when you press **Send**.
+
+The addresses the app uses (website, download page, feedback) are in one
+place, `tool/ci/links.json`, with a built-in copy in `lib/core/links.dart`;
+every release writes them into `latest.json`, so an installed app follows
+a move of the website without a new version. `docs/RENAMING.md` says what
+a change of the product's name would touch, and what must not change.
+
 ## Which version do I have?
 
 Every build carries one line that says exactly what it is, for example

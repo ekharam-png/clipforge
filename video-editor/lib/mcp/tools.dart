@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../core/build_info.dart';
+import '../core/links.dart';
 import '../core/editor/edit_labels.dart' show describeEdit, publishingChange;
 import '../core/editor/project_editor.dart';
 import '../core/model/picture_layout.dart';
@@ -2763,6 +2764,8 @@ class ClipForgeTools {
       'version': kServerVersion,
       // The same version line as the app's Help > About ClipForge.
       'build': BuildInfo.current.toJson(),
+      // Where ClipForge lives on the internet (lib/core/links.dart).
+      'site': AppLinks.builtIn.site,
       'executable': exe,
       'command': self,
       'helper': helper,

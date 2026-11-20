@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../video-editor/assets/help/help_en.md ../video-editor/CHANGELOG.md ../video-editor/docs/FEATURES.md ../video-editor/docs/screenshots"
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../video-editor/assets/help/help_en.md ../video-editor/CHANGELOG.md ../video-editor/docs/FEATURES.md ../video-editor/docs/screenshots ../video-editor/tool/ci/links.json"
 }

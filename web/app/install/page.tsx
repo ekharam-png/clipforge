@@ -11,8 +11,9 @@ export const metadata: Metadata = {
 
 const css = (c: string) => ({ "--c": `var(--c-${c})` }) as React.CSSProperties;
 
-// The install steps are the same sentences as the app's "Read me first" guide
-// (video-editor/tool/ci/make_readme_html.py) and site/index.html.
+// The install steps for Windows and Mac are the same sentences as the app's
+// "Read me first" guide (video-editor/tool/ci/make_readme_html.py); its test
+// (make_readme_html_test.py) reads this file and fails when they differ.
 export default function Install() {
   return (
     <>
@@ -48,16 +49,16 @@ export default function Install() {
                   Click through the installer. It needs no administrator password and puts ClipForge in the Start menu.
                 </li>
                 <li>
+                  On the last page, leave <b>Show the read-me</b> ticked if you would like the short guide. It is
+                  installed with ClipForge and is also in the Start menu, as &quot;ClipForge read me&quot;.
+                </li>
+                <li>
                   Open the <b>Start menu</b> and choose <b>ClipForge</b>.
                 </li>
               </ol>
               <p className="hint">
                 Do not start ClipForge from a folder whose name ends in <b>.update-new</b>: that is a download waiting
                 to be put in place.
-              </p>
-              <p className="hint">
-                <a href={DOWNLOADS.readmeWindows}>Full guide for Windows</a> (a small page to download and open; the
-                same page is inside the download as &quot;Read me first&quot;).
               </p>
             </div>
 
@@ -72,8 +73,8 @@ export default function Install() {
               </p>
               <ol>
                 <li>
-                  Double-click the downloaded <b>ClipForge-macos.zip</b> to unzip it. A folder appears with ClipForge
-                  in it.
+                  Double-click the downloaded <b>ClipForge-macos.zip</b> to unzip it. A folder appears with{" "}
+                  <b>ClipForge</b> and the short guide <b>Read me first</b> in it (these same steps, to keep).
                 </li>
                 <li>
                   Drag <b>ClipForge</b> into your <b>Applications</b> folder.
@@ -91,10 +92,6 @@ export default function Install() {
                 This is needed once, because ClipForge is not signed by Apple. After that it opens like any other app.
               </p>
               <p className="hint">Needs macOS 12 or newer.</p>
-              <p className="hint">
-                <a href={DOWNLOADS.readmeMac}>Full guide for Mac</a> (a small page to download and open; the same page
-                is inside the download as &quot;Read me first&quot;).
-              </p>
             </div>
 
             <div className="card osbox" data-os="android" style={css("title")}>

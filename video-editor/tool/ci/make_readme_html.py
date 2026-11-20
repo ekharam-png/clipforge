@@ -13,7 +13,8 @@
 #
 # The words are written once, here (PLATFORMS and the SECTION_* texts). The
 # install steps are the same sentences as on the download page
-# (site/index.html); tool/ci/make_readme_html_test.py fails when the two
+# (the website's install page, web/app/install/page.tsx, since 1.16; the old
+# GitHub Pages page is a signpost now); tool/ci/make_readme_html_test.py fails when the two
 # drift apart. "What is new" is the version's section of CHANGELOG.md, put
 # through the small Markdown converter below (headings, lists, bold, inline
 # code, links; everything else is escaped), followed by the three sections
@@ -24,13 +25,20 @@
 import argparse
 import datetime
 import html
+import os
 import re
 import sys
 
-DOWNLOAD_PAGE = "https://ekharam-png.github.io/clipforge/"
-HELP_ONLINE = "https://github.com/ekharam-png/clipforge/blob/main/video-editor/assets/help/help_en.md"
-LICENCE = "https://github.com/ekharam-png/clipforge/blob/main/LICENSE"
-SOURCE = "https://github.com/ekharam-png/clipforge"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import links as links_file  # noqa: E402
+
+# The outside addresses come from tool/ci/links.json (1.16), like the
+# app's and the website's.
+_LINKS = links_file.load()
+DOWNLOAD_PAGE = _LINKS["full"]["download"]
+HELP_ONLINE = _LINKS["full"]["help"]
+SOURCE = _LINKS["repository"]
+LICENCE = SOURCE + "/blob/main/LICENSE"
 
 # The file should stay a quick read and a small download.
 MAX_BYTES = 40 * 1024
@@ -42,7 +50,8 @@ LEDE = ("A free, simple video editor for family videos, podcast clips and sport 
 SMARTSCREEN = ('If you see "Windows protected your PC", click <b>More info</b>, '
                "then <b>Run anyway</b>.")
 
-# Install steps: small HTML (only <b>), the same sentences as site/index.html.
+# Install steps: small HTML (only <b>), the same sentences as the website's
+# install page (web/app/install/page.tsx).
 PLATFORMS = {
     "windows": {
         "system": "Windows",

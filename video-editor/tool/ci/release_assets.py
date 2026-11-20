@@ -11,6 +11,9 @@
 #       link on the site, in the app (lib/, assets/) and in the docs must
 #       name a file in the list. Run in the "check" job.
 #
+# site/index.html is the old GitHub Pages page: since 1.16 a signpost to the
+# website that still offers the three downloads (apps before 1.16 open it).
+#
 # What people see - three downloads, one per kind of device:
 #   ClipForge-Setup.exe     Windows (the guide is installed with it)
 #   ClipForge-macos.zip     Mac (the guide sits beside the app in the zip)
@@ -39,6 +42,10 @@ REPO = os.path.normpath(os.path.join(EDITOR, ".."))
 # Where links to release files may be written.
 SCANNED = [
     (REPO, "site"),
+    (REPO, "web/app"),
+    (REPO, "web/components"),
+    (REPO, "web/lib"),
+    (REPO, "web/README.md"),
     (EDITOR, "lib"),
     (EDITOR, "assets"),
     (EDITOR, "README.md"),
@@ -48,7 +55,8 @@ SCANNED = [
     (EDITOR, "windows/installer"),
     (REPO, "README.md"),
 ]
-TEXT = (".html", ".md", ".dart", ".txt", ".json", ".iss", ".py", ".yaml", ".yml", ".ps1", ".sh")
+TEXT = (".html", ".md", ".dart", ".txt", ".json", ".iss", ".py", ".yaml", ".yml", ".ps1", ".sh",
+        ".ts", ".tsx", ".mjs")
 
 
 def check_dir(folder):

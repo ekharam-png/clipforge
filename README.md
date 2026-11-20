@@ -80,9 +80,12 @@ real screenshots, features, examples, the help with a search, what's new,
 and a feedback form that sends one e-mail and stores nothing. It builds its
 Help, What's new and Features pages from the app's own files, so it does
 not drift from the app. See [`web/README.md`](web/README.md) for how it
-works and [`web/SETUP.md`](web/SETUP.md) for putting it online. Until it
-is live, the download page in [`site/`](site/) (GitHub Pages) stays the
-place to get ClipForge.
+works and [`web/SETUP.md`](web/SETUP.md) for putting it online. Its
+address is kept in one file,
+[`video-editor/tool/ci/links.json`](video-editor/tool/ci/links.json), which
+the app, its release tools and the site all read. The old download page in
+[`site/`](site/) (GitHub Pages) is a signpost to the website that still
+offers the three downloads, because older versions of the app open it.
 
 ## For developers
 

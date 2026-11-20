@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../core/links.dart' show kAppName;
 import 'about.dart';
 import 'app_menu.dart';
 import 'claude/claude_helper.dart';
 import 'claude/connect_claude.dart';
+import 'feedback/feedback_screen.dart';
 import 'help/help_screen.dart';
 import 'help/tour.dart';
 import 'help/whats_new.dart' show kWhatsNewId;
@@ -32,7 +34,7 @@ class ClipForgeApp extends ConsumerWidget {
     }
 
     return MaterialApp(
-      title: 'ClipForge',
+      title: kAppName,
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       navigatorKey: appNavigatorKey,
@@ -60,6 +62,9 @@ class ClipForgeApp extends ConsumerWidget {
           }),
           copyVersionInfo: () => withNavigator((c) {
             copyVersionInfo(c);
+          }),
+          sendFeedback: () => withNavigator((c) {
+            openFeedback(c);
           }),
           showWhatsNew: () => withNavigator((c) {
             openHelp(c, articleId: kWhatsNewId);

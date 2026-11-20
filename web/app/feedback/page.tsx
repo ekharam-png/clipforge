@@ -26,8 +26,9 @@ export default function Feedback() {
           </noscript>
           <FeedbackForm />
           <p className="small" style={{ marginTop: 26, maxWidth: "42em" }}>
-            Reporting a problem? In the app, <b>Help</b> &gt; <b>Copy version info</b> copies exactly which build you
-            have; paste it into the message. What happens to a message is on the <Link href="/privacy">privacy page</Link>
+            You can also write from inside the app: <b>Help</b> &gt; <b>Send feedback…</b> (on a phone: the three
+            dots). Reporting a problem from here? In the app, <b>Help</b> &gt; <b>Copy version info</b> copies exactly
+            which build you have; paste it into the message. What happens to a message is on the <Link href="/privacy">privacy page</Link>
             . If you use GitHub, you can also <a href={ISSUES_URL}>open an issue</a> there (that is public).
           </p>
         </section>

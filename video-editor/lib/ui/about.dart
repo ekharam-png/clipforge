@@ -7,8 +7,11 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/build_info.dart';
 import '../core/update/update_log.dart';
+import '../core/links.dart';
+import 'feedback/feedback_screen.dart';
 import 'help/help_screen.dart';
 import 'help/whats_new.dart';
+import 'links.dart';
 import 'theme.dart';
 import 'update/update_controller.dart' show updatePlatformProvider;
 
@@ -94,6 +97,21 @@ Future<void> copyVersionInfo(BuildContext context) async {
         content: Text('Version info copied. Paste it into your message.')));
 }
 
+/// Opens [url] in the browser; says its address when that does not work.
+Future<void> openOutsidePage(BuildContext context, String url) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    await ProviderScope.containerOf(context)
+        .read(updatePlatformProvider)
+        .openUrl(url);
+  } catch (_) {
+    messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+          content: Text('The page could not be opened. Its address is: $url')));
+  }
+}
+
 /// The About ClipForge box: version, build time (in this computer's time
 /// zone and in UTC), commit, Copy version info and What's new.
 Future<void> showAboutClipForge(BuildContext context) {
@@ -109,6 +127,7 @@ class AboutClipForgeDialog extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final info = ref.watch(buildInfoProvider);
+    final links = ref.watch(linksProvider)..ready();
     final text = Theme.of(context).textTheme;
     const dim = TextStyle(color: AppColors.textDim);
     Widget row(String label, String value) => Padding(
@@ -124,7 +143,7 @@ class AboutClipForgeDialog extends ConsumerWidget {
     final time = info.buildTime;
     return AlertDialog(
       key: const ValueKey('about-dialog'),
-      title: const Text('About ClipForge'),
+      title: const Text('About $kAppName'),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440),
         child: SingleChildScrollView(
@@ -145,6 +164,32 @@ class AboutClipForgeDialog extends ConsumerWidget {
                       : '${formatBuildTime(time, utc: false)}\n'
                           '${formatBuildTime(time)}'),
               row('Commit', info.commit ?? 'unknown'),
+              const SizedBox(height: 6),
+              // The website (the address comes from lib/core/links.dart,
+              // or from the newest release when the site has moved).
+              ListenableBuilder(
+                listenable: links,
+                builder: (context, _) => Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(width: 92, child: Text('Website', style: dim)),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: InkWell(
+                          key: const ValueKey('about-website'),
+                          onTap: () => openOutsidePage(context, links.current.site),
+                          child: Text(links.current.siteLabel,
+                              style: const TextStyle(
+                                  color: AppColors.accent,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: AppColors.accent)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 14),
               Text(
                   'When you report a problem, tap Copy version info and '
@@ -155,7 +200,17 @@ class AboutClipForgeDialog extends ConsumerWidget {
           ),
         ),
       ),
+      actionsOverflowButtonSpacing: 4,
       actions: [
+        TextButton(
+          key: const ValueKey('about-send-feedback'),
+          onPressed: () {
+            final navigator = Navigator.of(context);
+            navigator.pop();
+            openFeedback(navigator.context);
+          },
+          child: const Text('Send feedback'),
+        ),
         TextButton(
           onPressed: () {
             final navigator = Navigator.of(context);

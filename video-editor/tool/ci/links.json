@@ -1,0 +1,15 @@
+{
+  "about": "THE one place for ClipForge's outside addresses. A value that starts with / is a page of 'site'. Readers: tool/ci/make_latest_json.py (writes them into latest.json, so installed apps follow without a new build), tool/ci/make_readme_html.py, web/scripts/build-content.mjs (the website) and test/core/links_test.dart (the app's built-in copy in lib/core/links.dart must be equal). See docs/RENAMING.md.",
+  "site": "https://clipforge-ek.vercel.app",
+  "links": {
+    "download": "/install",
+    "feedback_api": "/api/feedback",
+    "feedback_page": "/feedback",
+    "help": "/help",
+    "privacy": "/privacy"
+  },
+  "claude_page": "/claude",
+  "feedback_api_hosts": [],
+  "repository": "https://github.com/ekharam-png/clipforge",
+  "old_pages": "https://ekharam-png.github.io/clipforge/"
+}

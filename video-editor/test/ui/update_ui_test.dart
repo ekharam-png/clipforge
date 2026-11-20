@@ -2,6 +2,7 @@
 // (phone and desktop), the Update window, "Check for updates" in the Help
 // menu and on phones, and the switch for the automatic check.
 
+import 'package:clipforge/core/links.dart';
 import 'package:clipforge/core/build_info.dart';
 import 'package:clipforge/core/update/update_download.dart';
 import 'package:clipforge/core/update/update_info.dart';
@@ -179,7 +180,7 @@ void main() {
       await fakes.screenshot(tester, 'update_dialog_page_$label');
       await tester.tap(find.text('Open the download page'));
       await tester.pumpAndSettle();
-      expect(fakes.updatePlatform.opened, [kDownloadPageUrl]);
+      expect(fakes.updatePlatform.opened, [AppLinks.builtIn.download]);
       expect(find.text('Update to version 1.12.0'), findsNothing);
     });
   }

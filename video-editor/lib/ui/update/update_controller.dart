@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/build_info.dart';
+import '../../core/links.dart';
 import '../../core/update/update_download.dart';
 import '../../core/update/update_info.dart';
 import '../../core/update/tidy_up.dart';
@@ -16,6 +17,7 @@ import '../../core/update/update_install.dart';
 import '../../core/update/update_log.dart';
 import '../about.dart';
 import '../app_prefs.dart';
+import '../links.dart';
 
 // Updates from inside the app (1.12). The rules are in lib/core/update;
 // this file is what the app does with them on each system:
@@ -235,6 +237,7 @@ class UpdateController extends ChangeNotifier {
     required this.build,
     required this.fetch,
     required this.download,
+    this.links,
     DateTime Function()? now,
     SwapStarter? swap,
   })  : _now = now ?? DateTime.now,
@@ -276,6 +279,10 @@ class UpdateController extends ChangeNotifier {
   final BuildInfo build;
   final UpdateFetcher fetch;
   final UpdateDownloader download;
+
+  /// The outside addresses in use; what a latest.json says about them is
+  /// handed to it. Null (some tests): the built-in ones.
+  final LinksController? links;
   final DateTime Function() _now;
 
   /// The newer version on offer (the banner shows while this is set).
@@ -642,6 +649,10 @@ class UpdateController extends ChangeNotifier {
       try {
         await prefs.setText(kUpdateLastCheckText, _now().toUtc().toIso8601String());
       } catch (_) {}
+      // The site may have moved: the release says where it is now.
+      try {
+        await links?.remember(info.links);
+      } catch (_) {}
       int? skipped;
       try {
         skipped = int.tryParse(await prefs.text(kUpdateSkipBuildText) ?? '');
@@ -686,11 +697,14 @@ class UpdateController extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<String?> openDownloadPage() => _open(kDownloadPageUrl);
+  Future<String> _downloadPage() async =>
+      (await links?.ready() ?? AppLinks.builtIn).download;
+
+  Future<String?> openDownloadPage() async => _open(await _downloadPage());
 
   /// "What's new": the release notes of the version on offer.
-  Future<String?> openNotes() =>
-      _open(available?.notesUrl ?? kDownloadPageUrl);
+  Future<String?> openNotes() async =>
+      _open(available?.notesUrl ?? await _downloadPage());
 
   Future<String?> _open(String url) async {
     try {
@@ -850,6 +864,7 @@ final updateControllerProvider = Provider<UpdateController>((ref) {
     build: ref.watch(buildInfoProvider),
     fetch: ref.watch(updateFetcherProvider),
     download: ref.watch(updateDownloaderProvider),
+    links: ref.watch(linksProvider),
   );
   ref.onDispose(c.dispose);
   return c;

@@ -7,6 +7,9 @@
 //   content/generated/features.json    the feature log (from FEATURES.md)
 //   content/generated/shots.json       size and alt text of every screenshot used
 //   content/generated/version.json     the current version
+//   content/generated/links.json       the outside addresses, from
+//                                      ../video-editor/tool/ci/links.json (the ONE
+//                                      place they are written; the app reads the same)
 //   public/help-index.json             the search index for the Help page
 //   public/shots/*.png                 ONLY the screenshots named in content/shots.json
 //
@@ -25,7 +28,6 @@ const APP = resolve(WEB, "..", "video-editor");
 const GENERATED = join(WEB, "content", "generated");
 const SHOTS_OUT = join(WEB, "public", "shots");
 const SHOTS_IN = join(APP, "docs", "screenshots");
-const REPO = "ekharam-png/clipforge";
 const MAX_LOCAL_VIDEO = 5 * 1024 * 1024;
 
 function fail(message) {
@@ -48,6 +50,29 @@ function pngSize(path) {
   if (b.length < 24 || b.toString("ascii", 1, 4) !== "PNG") fail(path + " is not a PNG file.");
   return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
 }
+
+// --- The outside addresses ---------------------------------------------------
+// One file for the app, its release tools and this site: change the site's
+// address or the product's home there and nowhere else.
+
+const linksFile = JSON.parse(read(join(APP, "tool", "ci", "links.json")));
+const site = String(linksFile.site || "").replace(/\/+$/, "");
+if (!/^https:\/\/[^/\s]+$/.test(site)) fail("links.json: 'site' must be an https address without a path.");
+const full = (value) => (String(value).startsWith("/") ? site + value : String(value));
+const links = { site };
+for (const [name, value] of Object.entries(linksFile.links || {})) links[name] = full(value);
+for (const name of ["download", "feedback_api", "feedback_page", "help", "privacy"])
+  if (!/^https:\/\//.test(links[name] || "")) fail("links.json: '" + name + "' is missing or not an https address.");
+if (!/^https:\/\/github\.com\/[^/\s]+\/[^/\s]+$/.test(linksFile.repository || ""))
+  fail("links.json: 'repository' must be the project's address on GitHub.");
+const REPO = linksFile.repository.replace("https://github.com/", "");
+writeJson(join(GENERATED, "links.json"), {
+  links,
+  claudePage: full(linksFile.claude_page || "/claude"),
+  repository: linksFile.repository,
+  repo: REPO,
+  oldPages: String(linksFile.old_pages || "").replace(/\/+$/, "") + "/",
+});
 
 // --- Help, What's new, Features --------------------------------------------
 

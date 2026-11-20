@@ -29,7 +29,7 @@ export default function Privacy() {
           <p>
             <b>The only thing the app does by itself over the internet is the update check.</b> At most once a day it
             reads one small file from the project&rsquo;s release page on GitHub to see whether a newer version is out.
-            Nothing about you or your videos is sent with it. You can switch it off in the Help menu.
+            Nothing about you or your videos is sent with it. You can switch it off in Settings.
           </p>
           <p>The app goes online in these other cases, and only when you ask it to:</p>
           <ul>
@@ -43,6 +43,10 @@ export default function Privacy() {
             <li>
               <b>Language packs for voice to text</b> (computer): downloaded only when you press Download. The
               transcribing itself happens on your computer.
+            </li>
+            <li>
+              <b>Send feedback:</b> when you press Send in the app&rsquo;s own feedback page, your message goes to this
+              site (see Feedback below). The page shows exactly what is sent before you press it.
             </li>
             <li>
               <b>Upload pages:</b> after an export, a link can open YouTube&rsquo;s or another site&rsquo;s own upload
@@ -63,6 +67,13 @@ export default function Privacy() {
             A message is sent only when you press <b>Send</b>, and it contains exactly what the form shows: the kind of
             message, your text, and the e-mail address, version and system if you filled them in. Nothing is added
             behind your back: no location, no list of your files, nothing from your videos.
+          </p>
+          <p>
+            <b>Send feedback</b> in the app works the same way. Its page has a box, &quot;What is sent&quot;, with
+            exactly that: the kind, your text, your e-mail address if you gave one, the app&rsquo;s version and build,
+            and the name and version of your system. Nothing about projects, file names or media is ever included. If
+            an update did not work, you can tick a box to add the last lines of the update log; they are shown first
+            and are off unless you tick it. The app never sends by itself and does not try again in the background.
           </p>
           <p>
             The message goes as one e-mail to the person who makes ClipForge, through an e-mail delivery service

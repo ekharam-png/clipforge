@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHead } from "@/components/Chrome";
 import { Shot } from "@/components/Shot";
-import { DOWNLOADS } from "@/lib/site";
+import { CLAUDE_SETUP_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Editing with Claude",
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 const css = (c: string) => ({ "--c": `var(--c-${c})` }) as React.CSSProperties;
 // The full, longer setup page that also travels with the downloads.
-const FULL_SETUP = "https://ekharam-png.github.io/clipforge/claude-setup.html";
+const FULL_SETUP = CLAUDE_SETUP_URL;
 
 const ASK = [
   "Clean up the podcast: remove the pauses, add captions, and make three short clips.",
@@ -206,9 +206,8 @@ export default function Claude() {
             Desktop, one line for Claude Code), what to do if you connected before version 1.12, and more fixes. In the
             help: <Link href="/help/connect-claude">Connect Claude</Link>,{" "}
             <Link href="/help/claude-self-test">Check that Claude works</Link>,{" "}
-            <Link href="/help/claude-control">Claude control</Link>. The files, if you prefer to download them: the
-            Claude Desktop extension for <a href={DOWNLOADS.claudeWindows}>Windows</a> or{" "}
-            <a href={DOWNLOADS.claudeMac}>Mac</a>, and the optional <a href={DOWNLOADS.claudeSkill}>ClipForge skill</a>.
+            <Link href="/help/claude-control">Claude control</Link>. There is nothing extra to download: what Claude
+            needs is inside ClipForge.
           </p>
         </section>
       </div>

@@ -193,17 +193,22 @@ again if the form stops working.
 Tell the owner, and write into the hand-over to the developer session:
 
 - **The site's address** (the `vercel.app` one, and the custom domain if
-  there is one).
-- **The feedback address for the app:** `<site>/api/feedback`. The app can
-  get a "Send feedback…" item that posts JSON there (the format is in
-  `web/README.md`, "Feedback") or opens
-  `<site>/feedback?version=<version>&os=<Windows|Mac|Android>`, which
-  fills those two boxes in.
+  there is one). It must be the `site` in
+  `video-editor/tool/ci/links.json`: that one file is where the app (from
+  1.16), its release tools and this site read the address from. If the
+  real address differs, that file (and its copy in
+  `video-editor/lib/core/links.dart`) has to change before the next
+  release of the app; see `web/README.md`, "Addresses".
+- **Feedback from the app:** from 1.16 the app's own **Send feedback**
+  page posts to `<site>/api/feedback` and, when that fails, opens
+  `<site>/feedback?source=app&kind=…&version=…&os=…`. Until the three
+  feedback variables of step 3 are set, the app shows this site's answer
+  ("Feedback is not set up on this site yet") and offers the form. Try it
+  once from a real app after the deployment.
 - Which sender is in use (Resend's test sender, or a verified domain).
-- That the download-page links can now move: the steps for turning the old
-  GitHub Pages page into a signpost are in `web/README.md`, "The old
-  download page". That is a change to `site/` and later to the app, to be
-  done by the developer session, not in this setup.
+- The old GitHub Pages page (`site/`) is already a signpost to this site
+  (`web/README.md`, "The old download page"); it needs the site to be
+  live, so say when it is.
 - Anything that did not match this guide.
 
 Finally check `git status` in the repository: it must show no new files

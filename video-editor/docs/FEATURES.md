@@ -8,7 +8,8 @@ every release: a test fails when CHANGELOG.md has a version this file does
 not mention.
 
 Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
-1.8.0, 1.9.0, 1.10.0, 1.11.0, 1.12.0, 1.13.0, 1.14.0, 1.14.1, 1.15.0.
+1.8.0, 1.9.0, 1.10.0, 1.11.0, 1.12.0, 1.13.0, 1.14.0, 1.14.1, 1.15.0,
+1.16.0.
 
 ## Projects
 
@@ -31,6 +32,18 @@ Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
 | Find file: Search the gallery (Android) | 1.8.0 | Looks for a missing file by its name on the phone and copies it in. |
 | Clean-up never deletes what is in use | 1.8.0 | Files the open project or its undo history still needs are always kept. |
 | "Open in the app" mark | 1.9.0 | An open project is marked, so Claude does not change it at the same time; leftovers of a crash are ignored and cleaned up. |
+
+## Feedback and the website (1.16.0)
+
+| Feature | Since | What it does |
+|---|---|---|
+| Send feedback | 1.16.0 | Help > Send feedback… (phones: the three dots); also in About, Help, Settings. Problem, Idea, Praise or Question, a message, and an e-mail address if you want an answer. |
+| "What is sent" box | 1.16.0 | Shows exactly what goes before you press Send: the message, the address if given, the app's version and build, the system's name and version. Never projects, file names or media. |
+| Sent only when you press Send | 1.16.0 | One request, no second try, nothing in the background. Offline: a plain message, Open the feedback page in the browser, Copy my message. |
+| Draft kept | 1.16.0 | What you wrote stays, also after closing the page, until it has been sent. |
+| Feedback after an update that did not work | 1.16.0 | The message has Send feedback; a tick box (off) adds the last update log lines, shown first. |
+| The ClipForge website | 1.16.0 | Downloads, install steps, walk-through, help, feedback form. Open the download page opens it; About shows its address; the old download page is a signpost. |
+| Addresses that can move | 1.16.0 | The website's address travels with the update check, so a move needs no new version of the app. Feedback is only ever sent to the website's own address. |
 
 ## Finding things (1.15.0)
 

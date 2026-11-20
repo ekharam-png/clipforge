@@ -51,9 +51,17 @@
 # version is in the release title and inside the files), no 32-bit Android
 # APK (not built any more), no separate read-me, .mcpb or skill files. The
 # release job fails unless its folder holds exactly that list, and the
-# check job fails when the download page (site/index.html) does not offer
-# exactly the three downloads or when the site, the app or the docs link to
-# a release file that is not in the list.
+# check job fails when the old download page (site/index.html, since 1.16 a
+# signpost to the website) does not offer exactly the three downloads or
+# when the site, the website, the app or the docs link to a release file
+# that is not in the list.
+#
+# Outside addresses (1.16): tool/ci/links.json is THE place for the
+# website's address and its pages. The release job writes them into
+# latest.json ("links") so that installed apps follow a move of the site;
+# tool/ci/links_test.py and test/core/links_test.dart (part of flutter
+# test) fail when the app's built-in copy, the Pages signpost or the
+# website disagree with it, or when the address is written anywhere else.
 #
 # Version numbers (lib/core/build_info.dart): the version comes from
 # pubspec.yaml, the build number is this workflow's run number, and the
@@ -158,7 +166,8 @@ jobs:
       - run: flutter test
       # "Read me first.html" for the downloads: the script's own test (the
       # steps per system, nothing fetched from the internet, Markdown from
-      # CHANGELOG.md escaped, the same install steps as site/index.html),
+      # CHANGELOG.md escaped, the same install steps as the website's
+      # install page, web/app/install/page.tsx),
       # and the real page for this version, written once as a check.
       - name: Test the read-me generator
         run: |
@@ -176,6 +185,10 @@ jobs:
         run: |
           python3 tool/ci/release_assets_test.py
           python3 tool/ci/release_assets.py --check-links
+      # tool/ci/links.json: complete, what the app would accept, written
+      # into latest.json, and what the Pages signpost and the read-me use.
+      - name: Check the outside addresses (links.json)
+        run: python3 tool/ci/links_test.py
       # Compile smoke test of the Claude control server (test/mcp/e2e_test.dart
       # above already drives a full editing session through it): the
       # single-file executable must build and answer the MCP handshake.
@@ -841,6 +854,8 @@ jobs:
             want="$(sha256sum "$out/$file" | cut -d' ' -f1)"
             grep -q "\"sha256\":\"$want\"" "$out/latest.json" || { echo "::error::latest.json does not carry the SHA-256 of $file"; exit 1; }
           done
+          # (1.16) The outside addresses travel with it (tool/ci/links.json).
+          grep -q '"links":{"site":"https://' "$out/latest.json" || { echo "::error::latest.json carries no links"; exit 1; }
           if grep -q "android32\|32bit" "$out/latest.json"; then
             echo "::error::latest.json still names a 32-bit Android file"; exit 1
           fi

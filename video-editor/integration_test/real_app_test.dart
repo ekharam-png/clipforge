@@ -30,6 +30,7 @@ import 'package:clipforge/core/update/update_info.dart';
 import 'package:clipforge/ui/about.dart';
 import 'package:clipforge/ui/app.dart';
 import 'package:clipforge/ui/claude/claude_helper.dart';
+import 'package:clipforge/ui/links.dart';
 import 'package:clipforge/ui/update/update_controller.dart';
 import 'package:clipforge/ui/app_prefs.dart';
 import 'package:clipforge/ui/app_settings.dart';
@@ -258,6 +259,25 @@ void main() {
       }
     }
 
+    // 1.16 feedback: a local "website". The update check tells the app
+    // (as a latest.json would) that the site and its feedback address are
+    // there; step 0b sends a real message to it.
+    final feedbackPosts = <String>[];
+    final feedbackSite = (await tester
+        .runAsync(() => HttpServer.bind(InternetAddress.loopbackIPv4, 0)))!;
+    feedbackSite.listen((request) async {
+      final body = await utf8.decoder.bind(request).join();
+      feedbackPosts.add('${request.method} ${request.uri.path} $body');
+      request.response
+        ..statusCode = 200
+        ..headers.contentType = ContentType.json
+        ..write('{"ok":true}');
+      await request.response.close();
+    });
+    addTearDown(() => feedbackSite.close(force: true));
+    final localSite = 'http://127.0.0.1:${feedbackSite.port}';
+    final e2ePrefs = MemoryAppPrefs.settled('1.11.0');
+
     // App -----------------------------------------------------------------
     await tester.pumpWidget(ProviderScope(
       overrides: [
@@ -269,7 +289,12 @@ void main() {
         // The first-launch tour question counts as answered.
         // No "What moved" note, and suggestions off until step 4b turns
         // them on (their line would move what the other steps aim at).
-        appPrefsProvider.overrideWithValue(MemoryAppPrefs.settled('1.11.0')),
+        appPrefsProvider.overrideWithValue(e2ePrefs),
+        // http is allowed for the local "website" of this run only.
+        linksProvider.overrideWith((ref) => LinksController(
+            prefs: e2ePrefs,
+            build: ref.watch(buildInfoProvider),
+            allowHttp: true)),
         // Processed clip sound goes to the run's folder, not the user's.
         processedSoundCacheProvider.overrideWithValue(FileProcessedSoundCache(
             () async => p.join(out.path, 'media'))),
@@ -283,10 +308,15 @@ void main() {
         // (142) exists; the check itself is not sent to the internet.
         buildInfoProvider.overrideWithValue(
             const BuildInfo(version: '1.11.0', buildNumber: '139', channel: 'ci')),
-        updateFetcherProvider.overrideWithValue(() async => const UpdateInfo(
-            version: '1.12.0',
-            build: 142,
-            notesUrl: 'https://example.org/releases/tag/v1.12.0')),
+        updateFetcherProvider.overrideWithValue(() async => UpdateInfo(
+                version: '1.12.0',
+                build: 142,
+                notesUrl: 'https://example.org/releases/tag/v1.12.0',
+                links: {
+                  'site': localSite,
+                  'feedback_api': '$localSite/api/feedback',
+                  'feedback_page': '$localSite/feedback',
+                })),
         // 1.12 Claude helper: the real service; its per-user folder is in
         // the run's folder. It installs the helper only when this build
         // carries the extension file (assets/claude/README.txt).
@@ -331,6 +361,51 @@ void main() {
     } else {
       log('step 0: this build carries no Claude extension file; helper install not run');
     }
+
+    // 0b. Send feedback (1.16): Help > Send feedback…, the box that shows
+    // what is sent, and ONE real POST to the address the update check
+    // carried (the local "website" of this run).
+    await tester.tap(find.widgetWithText(SubmenuButton, 'Help'));
+    await waitFor(
+        () => find.byKey(const ValueKey('menu-send-feedback')).evaluate().isNotEmpty,
+        'Help > Send feedback…');
+    await tester.tap(find.byKey(const ValueKey('menu-send-feedback')));
+    await waitFor(
+        () => find.byKey(const ValueKey('feedback-dialog')).evaluate().isNotEmpty,
+        'the Send feedback window');
+    await tester.tap(find.byKey(const ValueKey('feedback-kind-praise')));
+    await tester.enterText(find.byKey(const ValueKey('feedback-message')),
+        'End-to-end run: the feedback page works.');
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+        tester.widget<Text>(find.byKey(const ValueKey('feedback-sent-message'))).data,
+        'End-to-end run: the feedback page works.');
+    expect(tester.widget<Text>(find.byKey(const ValueKey('feedback-sent-version'))).data,
+        '1.11.0 (build 139)');
+    expect(tester.widget<Text>(find.byKey(const ValueKey('feedback-never-included'))).data,
+        allOf(contains('127.0.0.1'), contains('is ever included')));
+    await shot('00b-feedback');
+    expect(feedbackPosts, isEmpty, reason: 'nothing is sent before Send');
+    await tester.ensureVisible(find.byKey(const ValueKey('feedback-send')));
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.byKey(const ValueKey('feedback-send')));
+    await waitFor(() => find.text('Sent. Thank you!').evaluate().isNotEmpty,
+        '"Sent. Thank you!"');
+    expect(feedbackPosts.length, 1);
+    expect(feedbackPosts.single, startsWith('POST /api/feedback {"v":1,"kind":"praise",'));
+    final posted = jsonDecode(feedbackPosts.single.substring('POST /api/feedback '.length)) as Map;
+    expect(posted.keys, ['v', 'kind', 'message', 'app', 'source']);
+    expect(posted['message'], 'End-to-end run: the feedback page works.');
+    expect((posted['app'] as Map)['version'], '1.11.0');
+    expect((posted['app'] as Map)['build'], '139');
+    expect('${(posted['app'] as Map)['os']}', startsWith('Linux'));
+    expect(posted['source'], 'app');
+    await shot('00c-feedback-sent');
+    await tester.tap(find.byKey(const ValueKey('feedback-close')));
+    await wait(400);
+    expect(find.byKey(const ValueKey('feedback-dialog')), findsNothing);
+    log('step 0b: Help > Send feedback… posted one message to the local site: '
+        '${feedbackPosts.single.length} bytes, kind praise, system "${(posted['app'] as Map)['os']}"');
 
     await tester.tap(find.text('New project').first);
     await waitFor(

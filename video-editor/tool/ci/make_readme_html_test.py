@@ -238,7 +238,8 @@ class ReadmeTest(unittest.TestCase):
     def test_the_real_changelog_and_the_download_page_agree(self):
         root = os.path.normpath(os.path.join(HERE, "..", ".."))
         changelog = os.path.join(root, "CHANGELOG.md")
-        site = os.path.join(root, "..", "site", "index.html")
+        # The website's install page (1.16; site/index.html is a signpost now).
+        site = os.path.join(root, "..", "web", "app", "install", "page.tsx")
         if not (os.path.exists(changelog) and os.path.exists(site)):
             self.skipTest("not inside the repository")
         with open(changelog, encoding="utf-8") as f:
@@ -251,12 +252,13 @@ class ReadmeTest(unittest.TestCase):
             self.assertLessEqual(len(page.encode("utf-8")), m.MAX_BYTES)
         # The install steps here and on the download page are the same words.
         with open(site, encoding="utf-8") as f:
-            site_text = words(f.read())
+            # JSX: {" "} is a space, the rest reads like HTML.
+            site_text = words(re.sub(r"\{\s*\"\s*\"\s*\}", " ", f.read()))
         for platform, p in m.PLATFORMS.items():
             for _, steps in p["routes"]:
                 for step in steps:
                     self.assertIn(words(step), site_text,
-                                  "site/index.html does not have this %s step" % platform)
+                                  "web/app/install/page.tsx does not have this %s step" % platform)
             # The guide is part of the download since 1.15, not a link.
             self.assertNotIn("ClipForge-readme-%s.html" % platform,
                              open(site, encoding="utf-8").read())

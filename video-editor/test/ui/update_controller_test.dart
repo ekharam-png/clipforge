@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
+import 'package:clipforge/core/links.dart';
 import 'package:clipforge/core/build_info.dart';
 import 'package:clipforge/core/update/update_download.dart';
 import 'package:clipforge/core/update/update_info.dart';
@@ -231,7 +232,7 @@ void main() {
       await c.openNotes();
       await c.openDownloadPage();
       expect(platform.opened,
-          ['https://example.org/releases/tag/v1.12.0', kDownloadPageUrl]);
+          ['https://example.org/releases/tag/v1.12.0', AppLinks.builtIn.download]);
     });
   });
 
@@ -241,7 +242,7 @@ void main() {
       await c.check(manual: true);
       expect(await c.canInstallHere(), isFalse);
       await c.startUpdate();
-      expect(platform.opened, [kDownloadPageUrl]);
+      expect(platform.opened, [AppLinks.builtIn.download]);
       expect(c.stage, UpdateStage.failed);
       expect(c.message, contains('download page was opened'));
     });
@@ -255,7 +256,7 @@ void main() {
       await c.check(manual: true);
       expect(await c.canInstallHere(), isFalse);
       await c.startUpdate();
-      expect(platform.opened, [kDownloadPageUrl]);
+      expect(platform.opened, [AppLinks.builtIn.download]);
       expect(platform.installed, isEmpty);
     });
 
@@ -316,7 +317,7 @@ void main() {
       await c.check(manual: true);
       await c.startUpdate();
       expect(downloads, 0);
-      expect(platform.opened, [kDownloadPageUrl]);
+      expect(platform.opened, [AppLinks.builtIn.download]);
       expect(c.message, contains('cannot update itself where it is installed'));
     });
 

@@ -28,6 +28,7 @@ export function FeedbackForm() {
   const [version, setVersion] = useState("");
   const [system, setSystem] = useState("");
   const [agree, setAgree] = useState(false);
+  const [fromApp, setFromApp] = useState(false);
   const [state, setState] = useState<State>({ kind: "idle" });
   const opened = useRef(0);
   const trap = useRef<HTMLInputElement>(null);
@@ -37,7 +38,10 @@ export function FeedbackForm() {
   useEffect(() => {
     opened.current = Date.now();
     // The app (or a link) may open this page with ?version=…&os=…&kind=…
+    // The app adds source=app (its "Open the feedback page in the browser",
+    // shown when a message could not be sent from inside the app).
     const q = new URLSearchParams(window.location.search);
+    if (q.get("source") === "app") setFromApp(true);
     const v = q.get("version");
     const os = q.get("os");
     const k = q.get("kind");
@@ -120,6 +124,13 @@ export function FeedbackForm() {
 
   return (
     <form className="form" onSubmit={send} noValidate>
+      {fromApp ? (
+        <p className="note" id="from-app" role="note">
+          <b>From the app.</b> ClipForge opened this page because your message could not be sent from inside the app.
+          The kind, version and system are already filled in. In the app, <b>Copy my message</b> copies what you wrote:
+          paste it below. Nothing was sent yet.
+        </p>
+      ) : null}
       <fieldset>
         <legend>What is it?</legend>
         <div className="kinds">

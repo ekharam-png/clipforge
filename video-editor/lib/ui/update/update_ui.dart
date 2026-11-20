@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/update/tidy_up.dart';
+import '../feedback/feedback_screen.dart';
 import '../theme.dart';
 import 'update_controller.dart';
 
@@ -348,10 +349,19 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
             onPressed: () => copyUpdateDetails(context, c, problem: c.message),
             child: const Text('Copy details'),
           );
+          // "Send feedback": the page shows what would be sent; the last
+          // lines of the update log go along only when ticked there.
+          final tell = TextButton(
+            key: const ValueKey('update-send-feedback'),
+            onPressed: () =>
+                openFeedback(context, updateFailed: true, problem: c.message),
+            child: const Text('Send feedback'),
+          );
           if (c.helperBlocked) {
             // Trying again would end the same way: the download page is
             // the way forward.
             actions
+              ..add(tell)
               ..add(copy)
               ..add(TextButton(onPressed: close, child: const Text('Close')))
               ..add(FilledButton(
@@ -361,6 +371,7 @@ class _UpdateDialogState extends ConsumerState<_UpdateDialog> {
               ));
           } else {
             actions
+              ..add(tell)
               ..add(copy)
               ..add(pageButton)
               ..add(TextButton(onPressed: close, child: const Text('Close')))
@@ -507,6 +518,12 @@ Future<void> showUpdateOutcome(BuildContext context, UpdateController c,
       ),
       actionsOverflowButtonSpacing: 4,
       actions: [
+        TextButton(
+          key: const ValueKey('update-failed-feedback'),
+          onPressed: () =>
+              openFeedback(context, updateFailed: true, problem: reason),
+          child: const Text('Send feedback'),
+        ),
         TextButton(
           key: const ValueKey('update-failed-copy'),
           onPressed: () => copyUpdateDetails(context, c, problem: reason),

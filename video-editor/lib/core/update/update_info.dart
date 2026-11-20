@@ -9,7 +9,13 @@
 //    "notes_url":"https://.../releases/tag/v1.12.0",
 //    "platforms":{
 //      "windows":  {"url":"https://.../ClipForge-windows.zip","size":123,"sha256":"..."},
-//      "macos":    {...}, "android": {...}}}
+//      "macos":    {...}, "android": {...}},
+//    "links":{"site":"https://...","download":"https://.../install",
+//      "feedback_api":"https://.../api/feedback","feedback_page":"...",
+//      "help":"...","privacy":"..."}}
+//
+// "links" (1.16, optional) are the outside addresses of the moment, from
+// tool/ci/links.json; lib/core/links.dart checks them before they are used.
 //
 // (Until 1.14 there was also a 32-bit Android file. It is no longer built: a
 // 32-bit phone finds no file for itself and is offered the download page.)
@@ -21,12 +27,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-/// Where the newest release describes itself.
-const String kLatestJsonUrl =
-    'https://github.com/ekharam-png/clipforge/releases/latest/download/latest.json';
+import '../links.dart';
 
-/// The page people download ClipForge from (plan B for every update).
-const String kDownloadPageUrl = 'https://ekharam-png.github.io/clipforge/';
 
 /// At most one automatic check in this time.
 const Duration kAutoCheckEvery = Duration(hours: 24);
@@ -70,6 +72,7 @@ class UpdateInfo {
     this.date,
     this.notesUrl,
     this.platforms = const {},
+    this.links,
   });
 
   /// e.g. "1.12.0".
@@ -84,6 +87,11 @@ class UpdateInfo {
 
   /// "windows", "macos", "android" -> the file for it.
   final Map<String, UpdateAsset> platforms;
+
+  /// The outside addresses of the moment ("site", "download", ... as
+  /// text, not checked yet: [AppLinks.withOverrides] does that); null in
+  /// files made before 1.16.
+  final Map<String, String>? links;
 
   /// Parses the text of latest.json; a [FormatException] when it is not
   /// what a release writes.
@@ -124,6 +132,7 @@ class UpdateInfo {
           ? notes as String
           : null,
       platforms: platforms,
+      links: readLinksObject(json['links']),
     );
   }
 

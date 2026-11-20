@@ -15,6 +15,11 @@
 #   android   -> ClipForge-android.apk
 # (No 32-bit Android file since 1.15: such a phone finds no entry and the
 # app offers the download page.)
+# New in 1.16: "links" - the outside addresses of the moment (site, download
+# page, feedback, help, privacy) from tool/ci/links.json, so that installed
+# apps follow a move of the site without a new build. Apps before 1.16
+# ignore it. --links <file> names another links.json; --no-links leaves the
+# object out.
 # The address is the file inside THIS release (releases/download/<tag>/...),
 # not "latest": the size and fingerprint belong to exactly this file.
 # Standard library only.
@@ -24,6 +29,9 @@ import hashlib
 import json
 import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import links as links_file  # noqa: E402
 
 FILES = {
     "windows": "ClipForge-windows.zip",
@@ -51,6 +59,8 @@ def main():
     ap.add_argument("--out", help="default: <dir>/latest.json")
     ap.add_argument("--allow-missing", action="store_true",
                     help="leave out a system whose file is not there instead of failing")
+    ap.add_argument("--links", help="another links.json (default: tool/ci/links.json)")
+    ap.add_argument("--no-links", action="store_true", help="write no \"links\" object")
     args = ap.parse_args()
 
     base = args.base_url.rstrip("/")
@@ -74,6 +84,12 @@ def main():
         "notes_url": "%s/releases/tag/%s" % (base, args.tag),
         "platforms": platforms,
     }
+    if not args.no_links:
+        try:
+            latest["links"] = links_file.latest_links(args.links)
+        except (OSError, ValueError, KeyError) as e:
+            print("error: links.json: %s" % e, file=sys.stderr)
+            return 1
     out = args.out or os.path.join(args.dir, "latest.json")
     with open(out, "w", encoding="utf-8", newline="\n") as f:
         json.dump(latest, f, separators=(",", ":"))

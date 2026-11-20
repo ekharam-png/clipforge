@@ -214,7 +214,7 @@ void main() {
           ((i.child as Row).children.last as Text).data,
       ], [
         'Shape and size', 'Fade in and out', 'Publishing notes', 'Text', //
-        'History', 'Markers', 'Settings', 'Help',
+        'History', 'Markers', 'Settings', 'Help', 'Send feedback',
       ]);
       for (final i in items) {
         expect(i.height, greaterThanOrEqualTo(48));

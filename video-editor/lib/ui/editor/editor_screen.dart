@@ -17,6 +17,7 @@ import '../../core/storage/project_store.dart' show freeProjectName;
 import '../app_menu.dart';
 import '../app_prefs.dart';
 import '../format.dart';
+import '../feedback/feedback_screen.dart';
 import '../help/help_screen.dart';
 import '../help/tour.dart';
 import '../playback/media_kit_backend.dart' show MediaKitBackend;
@@ -1129,6 +1130,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
           if (!mounted) return;
           if (v is Act) {
             actions.run(context, v);
+          } else if (v == 'feedback') {
+            s.playback.pause();
+            openFeedback(context);
           } else {
             s.playback.pause();
             openHelp(context);
@@ -1160,6 +1164,18 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
               Icon(Icons.help_outline, size: 20, color: AppColors.textDim),
               SizedBox(width: 14),
               Text('Help'),
+            ],
+          ),
+        ),
+        const PopupMenuItem<Object>(
+          key: ValueKey('project-menu-feedback'),
+          value: 'feedback',
+          height: 48,
+          child: Row(
+            children: [
+              Icon(Icons.chat_bubble_outline, size: 20, color: AppColors.textDim),
+              SizedBox(width: 14),
+              Text('Send feedback'),
             ],
           ),
         ),

@@ -6,7 +6,9 @@ import 'dart:ui' as ui;
 import 'package:clipforge/core/update/update_download.dart';
 import 'package:clipforge/core/update/update_info.dart';
 import 'package:clipforge/core/update/update_install.dart';
+import 'package:clipforge/core/feedback/feedback.dart';
 import 'package:clipforge/ui/claude/claude_helper.dart';
+import 'package:clipforge/ui/feedback/feedback_screen.dart';
 import 'package:clipforge/ui/update/update_controller.dart';
 import 'package:clipforge/core/storage/project_lock.dart';
 import 'package:clipforge/core/build_info.dart';
@@ -527,6 +529,12 @@ class Fakes {
   int updateChecks = 0;
   UpdateDownload Function(UpdateAsset asset, String dir, int build)? downloader;
 
+  /// "Send feedback" (1.16): what the app posted (address and payload),
+  /// and what the pretend website answers. Nothing leaves a widget test.
+  final List<({Uri api, Map<String, Object?> payload})> feedbackPosts = [];
+  FeedbackOutcome feedbackAnswer =
+      const FeedbackOutcome('sent', 'Sent. Thank you!', status: 200);
+
   /// "Connect to Claude" (a phone by default: nothing is installed).
   ClaudeHelperService? claude;
 
@@ -611,6 +619,10 @@ class Fakes {
           buildInfoProvider.overrideWithValue(buildInfo),
           deviceDetailsProvider.overrideWithValue(() async => device),
           updatePlatformProvider.overrideWithValue(updatePlatform),
+          feedbackSenderProvider.overrideWithValue((api, payload) async {
+            feedbackPosts.add((api: api, payload: payload));
+            return feedbackAnswer;
+          }),
           swapStarterProvider.overrideWithValue(({
             required String os,
             required String scriptText,

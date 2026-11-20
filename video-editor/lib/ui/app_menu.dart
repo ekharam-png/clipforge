@@ -173,6 +173,7 @@ class HelpMenuActions {
     this.copyVersionInfo,
     this.checkForUpdates,
     this.connectClaude,
+    this.sendFeedback,
     this.showWhatsNew,
     this.showShortcuts,
     this.openSettings,
@@ -191,6 +192,9 @@ class HelpMenuActions {
 
   /// Opens "Connect to Claude" (computers only; null on phones).
   final VoidCallback? connectClaude;
+
+  /// Opens "Send feedback" (lib/ui/feedback).
+  final VoidCallback? sendFeedback;
 
   /// Opens "What's new" (the release notes inside the app).
   final VoidCallback? showWhatsNew;
@@ -514,6 +518,8 @@ List<MenuNode> buildMenuTree(
       MenuNode.item('Check for updates…',
           id: 'check-updates', onSelected: help?.checkForUpdates),
       divider,
+      MenuNode.item('Send feedback…',
+          id: 'send-feedback', onSelected: help?.sendFeedback),
       MenuNode.item('Copy version info',
           id: 'copy-version', onSelected: help?.copyVersionInfo),
       MenuNode.item('About ClipForge',

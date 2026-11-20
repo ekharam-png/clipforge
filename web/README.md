@@ -29,6 +29,7 @@ The site does not keep its own copy of the app's texts. Before every build,
 
 | Page | Source |
 |---|---|
+| Every outside address (this site's own, the repository) | `../video-editor/tool/ci/links.json` |
 | Help (one page per article, plus the search index) | `../video-editor/assets/help/help_en.md` |
 | What's new | `../video-editor/CHANGELOG.md` |
 | Features | `../video-editor/docs/FEATURES.md` |
@@ -107,6 +108,9 @@ directly, from any origin, without cookies):
 status 400 (not valid), 413 (too big), 429 (too many), 502 (the e-mail
 service failed) or 503 (not set up).
 
+The app (1.16+) posts the same schema with `"source": "app"`; see "The app
+posts feedback here" below.
+
 What it does and does not do:
 
 - Sends **one** plain-text e-mail through Resend's REST API (no SDK), with
@@ -136,7 +140,7 @@ repository; see `.env.example`):
 | `FEEDBACK_TO` | Where feedback goes (the owner's address). |
 | `FEEDBACK_FROM` | The sender, e.g. `ClipForge feedback <feedback@your-domain>`. |
 | `TURNSTILE_SECRET`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Optional check on the form. |
-| `NEXT_PUBLIC_SITE_URL` | Optional: the site's address for the sitemap and link previews. |
+| `NEXT_PUBLIC_SITE_URL` | Optional: overrides the site's address (from `links.json`) for the sitemap and link previews. |
 
 ## Privacy promises the code has to keep
 
@@ -154,41 +158,58 @@ walk-through runs along a playhead with time marks. Light and dark follow
 the system. Only four small pieces run script in the browser
 (`components/Live.tsx`, `HelpSearch.tsx`, `FeedbackForm.tsx`).
 
+## Addresses: one file for the app, the release tools and this site
+
+Nothing in `web/` writes the site's own address. The outside addresses live
+in **`../video-editor/tool/ci/links.json`** (the site, the download page,
+the feedback address and page, help, privacy, the repository, the old
+GitHub Pages address). `scripts/build-content.mjs` copies them into
+`content/generated/links.json` before every build and `lib/site.ts` gives
+them to the pages (`LINKS`, `REPO_URL`, `OLD_PAGES_URL`, `siteUrl()`).
+
+The same file is written into every release's `latest.json` (`links`), so
+installed apps (1.16 and newer) follow a move of the site without a new
+build, and it is the built-in default of the app
+(`video-editor/lib/core/links.dart`). **To move the site or rename the
+product, edit `links.json`**; `video-editor/docs/RENAMING.md` lists the
+rest. Tests on both sides (`tests/links.test.ts` here,
+`test/core/links_test.dart` in the app) fail when the address is written
+anywhere else, or when a page named in `links.json` does not exist here.
+
+`siteUrl()` (sitemap, link previews) is `NEXT_PUBLIC_SITE_URL` when set,
+else the `site` of `links.json` on the production deployment, else the
+preview's own address.
+
+## The app posts feedback here
+
+From version 1.16 the app has its own **Send feedback** page. It posts
+schema v1 straight to `/api/feedback` with `"source": "app"` and `app:
+{version, build, os}`; no honeypot, timing or Turnstile fields. So that the
+two sides cannot drift apart they share one fixture,
+`../video-editor/test/core/fixtures/feedback_payloads.json`: the app's test
+checks that it builds exactly those payloads, `tests/app-feedback.test.ts`
+checks that this site accepts exactly those and writes the expected mail.
+Change the schema on both sides and then the fixture.
+
+When the app cannot send (offline, or this site answers with an error) it
+offers "Open the feedback page in the browser", which opens
+`/feedback?source=app&kind=…&version=…&os=…`. The form then shows a short
+"From the app" note; the message itself is never put into the address
+(the app offers "Copy my message" instead).
+
 ## The old download page (`site/`, GitHub Pages)
 
-`site/` is still published to GitHub Pages and still works; nothing here
-changes it. The app and the "Read me first" guide link to it
-(`https://ekharam-png.github.io/clipforge/`), so it must keep answering.
+`site/index.html` is a signpost since 1.16: "ClipForge has a new home", a
+button to this site, and still the three download buttons. It has no
+automatic redirect on purpose. **It must keep answering**: versions of the
+app before 1.16 open the Pages address for "Open the download page", and
+their "Read me first" guide links to it. `site/claude-setup.html` is
+unchanged and still reachable (the Claude page here links to it as the full
+setup guide).
 
-When the new site has its final address, the Pages page can become a
-signpost. Do it in this order:
-
-1. Replace the body of `site/index.html` with a short page that sends
-   people on (GitHub Pages cannot do a real redirect, so this is the way):
-
-   ```html
-   <!doctype html>
-   <html lang="en">
-   <head>
-   <meta charset="utf-8">
-   <title>ClipForge has moved</title>
-   <link rel="canonical" href="https://YOUR-SITE/">
-   <meta http-equiv="refresh" content="0; url=https://YOUR-SITE/">
-   </head>
-   <body>
-   <p>ClipForge has a new home: <a href="https://YOUR-SITE/">https://YOUR-SITE/</a></p>
-   </body>
-   </html>
-   ```
-
-2. Do the same for `site/claude-setup.html`, pointing at
-   `https://YOUR-SITE/claude`, or leave that page as it is: the Claude page
-   of the new site links to it as the full setup guide.
-3. `video-editor/tool/ci/make_readme_html_test.py` compares the install
-   sentences in `site/index.html` with the "Read me first" guide. When the
-   Pages page becomes a signpost, that test has to compare against
-   something else (or be dropped) in the same change.
-4. Later, in the app: change the download-page address
-   (`DOWNLOAD_PAGE` in `video-editor/tool/ci/make_readme_html.py` and the
-   address the updater opens) to the new site. Old versions of the app keep
-   opening the Pages address, which is why the signpost has to stay.
+`video-editor/tool/ci/links_test.py` fails when the signpost points
+anywhere but the `site` of `links.json`, and
+`video-editor/tool/ci/release_assets.py --check-links` when it does not
+offer exactly the three downloads. The "Read me first" guide's install
+steps are compared with `app/install/page.tsx` now (same sentences;
+`make_readme_html_test.py`), no longer with the Pages page.

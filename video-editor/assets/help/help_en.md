@@ -799,7 +799,7 @@ On a computer the menu bar has every command of the editor. On a Mac it is at th
 - **Text and speech**: **Text window**, and on a computer with speech to text: **Transcribe speech…**, **Captions from speech…**, **Remove filler words…**, **Automatic cuts…**.
 - **View**: **Zoom in**, **Zoom out**, **Snap to playhead and edges**, **Show sound waves**, Shape, Video size.
 - **Playback**: **Play/Pause**, **Play backwards**, **Pause**, **Play forwards**, **Go to start**, **Go to end**, **Previous frame**, **Next frame**, **Previous speech start**, **Next speech start**.
-- **Help**: this help, **Keyboard shortcuts**, **Show the tour**, **What's new**, **Connect to Claude…**, **Check for updates…**, **Copy version info** and About ClipForge.
+- **Help**: this help, **Keyboard shortcuts**, **Show the tour**, **What's new**, **Connect to Claude…**, **Check for updates…**, **Send feedback…**, **Copy version info** and About ClipForge.
 
 The shortcut of each item is shown next to it. Every shortcut from earlier versions still works.
 
@@ -813,7 +813,7 @@ Right-click a clip, a sound, a title or caption, an overlay, a marker or an empt
 
 ## On a phone
 
-There is no menu bar. With nothing selected the bar at the bottom has **Add**, **Text**, **Split** and **More**. With something selected it shows that item's most used tools and **More**, which lists the rest under the same names as the menus: Clip, Sound, Text. The three dots at the top of a project have **Shape and size**, **Fade in and out**, **Publishing notes**, **Text**, **History**, **Markers** and **Settings**.
+There is no menu bar. With nothing selected the bar at the bottom has **Add**, **Text**, **Split** and **More**. With something selected it shows that item's most used tools and **More**, which lists the rest under the same names as the menus: Clip, Sound, Text. The three dots at the top of a project have **Shape and size**, **Fade in and out**, **Publishing notes**, **Text**, **History**, **Markers**, **Settings**, **Help** and **Send feedback**.
 
 === settings
 title: Settings
@@ -934,16 +934,16 @@ Once only, when you go from 1.7 or older to 1.8: Android says "App not installed
 title: If the app closes or something goes wrong
 section: Troubleshooting
 keywords: crash, crashes, crashed, closes, quit unexpectedly, freeze, frozen, stuck, error, bug, problem, report, not working, keeps stopping
-related: undo-and-saving, graphics-card, mac-cant-open, about-version
+related: undo-and-saving, graphics-card, mac-cant-open, about-version, send-feedback
 
 Your work is saved after every change, so a crash loses very little. Open the project again.
 
-If it keeps happening, please tell whoever gave you ClipForge, with:
+If it keeps happening, please tell us: **Help** > **Send feedback…** (on a phone: the three dots > **Send feedback**; see "Send feedback"). It helps to say:
 
 - what you were doing just before,
 - on a Mac: the text from the **Report…** button in the "quit unexpectedly" box (copy it),
 - on Windows or Android: a photo or screenshot of any message,
-- which version you have: **Copy version info** (see "Which version do I have?").
+- which version you have. **Send feedback** adds the version by itself; for a message written elsewhere use **Copy version info** (see "Which version do I have?").
 
 ClipForge does not send crash reports by itself.
 
@@ -953,7 +953,7 @@ If an export goes wrong, open **Technical details** in the export box and copy w
 title: Which version do I have?
 section: Troubleshooting
 keywords: version, build, build number, about, which version, release, date, updated, latest, copy version, version info, bug report, report a problem, commit, number
-related: crashes, getting-started
+related: crashes, getting-started, send-feedback
 
 Every copy of ClipForge has a version number (like 1.4.0), a build number and the date it was made. When you report a problem, send them along, so it is clear exactly which build you used.
 
@@ -968,6 +968,52 @@ Every copy of ClipForge has a version number (like 1.4.0), a build number and th
 The date is shown in your own time zone; the copied text uses UTC (world time), so everyone reads the same time.
 
 To see what changed in each version, open **What's new** in Help.
+
+About ClipForge also shows the address of the ClipForge website and has **Send feedback**.
+
+=== send-feedback
+title: Send feedback
+section: Troubleshooting
+keywords: feedback, send feedback, contact, tell, report, report a problem, bug, idea, suggestion, wish, praise, thanks, question, ask, message, email, e-mail, mail, reply, support, help me, what is sent, privacy, internet, offline, website
+related: crashes, about-version, updates
+
+A problem, an idea, something you liked, a question: you can write to the person who makes ClipForge from inside the app. A person reads every message.
+
+- On a computer: **Help** > **Send feedback…**
+- On a phone: the three dots at the top right of the project list (or at the top of a project) > **Send feedback**.
+- Also in About ClipForge, at the bottom of Help, in **Settings**, and on the message of an update that did not work.
+
+On the page:
+
+1. Choose what it is: **Problem**, **Idea**, **Praise** or **Question**.
+2. Write your message, in any language. For a problem: what you did, what you expected, and what happened instead.
+3. If you would like an answer, add your e-mail address. It is used only to reply to you. Leave it empty otherwise.
+4. Press **Send**. ClipForge answers "Sent. Thank you!".
+
+## What is sent
+
+The box "What is sent" on the page shows it exactly, before you press **Send**:
+
+- the kind of message and your text,
+- your e-mail address, only if you gave one,
+- the version and build of ClipForge,
+- the name and version of your system (for example "Windows 11").
+
+Nothing about your projects, file names, videos, photos or music is ever included. Nothing is sent until you press **Send**, and ClipForge never sends a message by itself or tries again in the background.
+
+After an update that did not work, the page has one more box: **Include the last update log lines**. It is off. If you tick it, the last lines of the update log are added to your message and shown in "What is sent" first. They say at which step the update stopped, and they can name the folder ClipForge is installed in.
+
+The message goes to the ClipForge website, which passes it on as one e-mail and keeps no copy.
+
+## If it cannot be sent
+
+Without an internet connection, or when the website cannot take the message, ClipForge says so in plain words. Your message is not lost:
+
+- It stays on the page, also if you close it, until it has been sent. Try **Send** again later.
+- **Open the feedback page in the browser** opens the form on the website with the kind, version and system filled in.
+- **Copy my message** copies your text, so you can paste it into that form.
+
+To keep junk away, at most 5 messages can be sent in 10 minutes from one device.
 
 === updates
 title: Updates
@@ -1025,7 +1071,16 @@ To switch the automatic check off, turn off **Check for updates automatically** 
 
 ## Privacy
 
-For the check, ClipForge reads one small file from the ClipForge release page that says which version is the newest. That is the only thing it fetches by itself. Nothing about you, your device or your videos is sent. The new version itself is downloaded only when you press **Update**.
+For the check, ClipForge reads one small file from the ClipForge release page that says which version is the newest. That is the only thing it fetches by itself. Nothing about you, your device or your videos is sent. The new version itself is downloaded only when you press **Update**. That file can also tell ClipForge that its website has moved; ClipForge then opens the new address for the download page and for feedback.
+
+The app goes online only for:
+
+- the update check (and the download when you press **Update**),
+- free music search, when you use it,
+- language-pack downloads for speech to text, when you click **Download**,
+- feedback, when you press **Send** (see "Send feedback").
+
+Everything else works offline, and your videos, photos, music and projects never leave your device.
 
 === connect-claude
 title: Connect Claude (computer only)

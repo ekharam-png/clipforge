@@ -1,0 +1,169 @@
+{
+  "about": "What the app's Send feedback posts (lib/core/feedback/feedback.dart, buildFeedbackPayload) and what the website's feedback address must accept (web/lib/feedback.ts). Read by test/core/feedback_test.dart AND web/tests/feedback.test.ts: 'input' goes into the app's function and must give exactly 'payload' (same keys, same order); 'payload' is posted to the website's handler, which must answer ok and write a mail with 'mail'. Change the schema on both sides, then this file.",
+  "cases": [
+    {
+      "name": "a problem with an e-mail address",
+      "input": {
+        "kind": "problem",
+        "message": "  The export stopped at 40%.\nI tried twice.  ",
+        "email": " me@example.org ",
+        "version": "1.16.0",
+        "build": "160",
+        "system": "Windows 11 Home 10.0 (Build 26100), windows_x64",
+        "logLines": []
+      },
+      "payload": {
+        "v": 1,
+        "kind": "problem",
+        "message": "The export stopped at 40%.\nI tried twice.",
+        "email": "me@example.org",
+        "app": {
+          "version": "1.16.0",
+          "build": "160",
+          "os": "Windows 11 Home 10.0 (Build 26100), windows_x64"
+        },
+        "source": "app"
+      },
+      "mail": {
+        "subject": "[ClipForge] problem · 1.16.0 Windows 11 Home 10.0 (Build 26100), windows_x64",
+        "replyTo": "me@example.org",
+        "contains": [
+          "Kind: problem",
+          "From: the app",
+          "Reply to: me@example.org",
+          "Version: 1.16.0 (build 160)",
+          "System: Windows 11 Home 10.0 (Build 26100), windows_x64",
+          "The export stopped at 40%.\nI tried twice."
+        ]
+      }
+    },
+    {
+      "name": "an idea, no address, a copy without a build number",
+      "input": {
+        "kind": "idea",
+        "message": "A button for skipping 5 seconds would be nice.",
+        "email": "",
+        "version": "1.16.0",
+        "build": null,
+        "system": "macOS Version 15.1 (Build 24B83), macos_arm64",
+        "logLines": []
+      },
+      "payload": {
+        "v": 1,
+        "kind": "idea",
+        "message": "A button for skipping 5 seconds would be nice.",
+        "app": {
+          "version": "1.16.0",
+          "os": "macOS Version 15.1 (Build 24B83), macos_arm64"
+        },
+        "source": "app"
+      },
+      "mail": {
+        "subject": "[ClipForge] idea · 1.16.0 macOS Version 15.1 (Build 24B83), macos_arm64",
+        "replyTo": null,
+        "contains": [
+          "Reply to: (no address given)",
+          "Version: 1.16.0\n",
+          "A button for skipping 5 seconds would be nice."
+        ]
+      }
+    },
+    {
+      "name": "praise in Russian and Hebrew, with quotes and an emoji",
+      "input": {
+        "kind": "praise",
+        "message": "Спасибо! \"Очень\" удобно.\nתודה רבה 🎬",
+        "email": "",
+        "version": "1.16.0",
+        "build": "2161",
+        "system": "Android 15 (API 35), android_arm64",
+        "logLines": []
+      },
+      "payload": {
+        "v": 1,
+        "kind": "praise",
+        "message": "Спасибо! \"Очень\" удобно.\nתודה רבה 🎬",
+        "app": {
+          "version": "1.16.0",
+          "build": "2161",
+          "os": "Android 15 (API 35), android_arm64"
+        },
+        "source": "app"
+      },
+      "mail": {
+        "subject": "[ClipForge] praise · 1.16.0 Android 15 (API 35), android_arm64",
+        "replyTo": null,
+        "contains": [
+          "Спасибо! \"Очень\" удобно.\nתודה רבה 🎬"
+        ]
+      }
+    },
+    {
+      "name": "a question from a system with a very long name (cut to 60 characters)",
+      "input": {
+        "kind": "question",
+        "message": "Is there an iPhone version?",
+        "email": "ask@example.co.uk",
+        "version": "1.16.0",
+        "build": "160",
+        "system": "Linux 6.8.0-49-generic #49~22.04.1-Ubuntu SMP PREEMPT_DYNAMIC Wed Nov  6 17:42:15 UTC 2, linux_x64",
+        "logLines": []
+      },
+      "payload": {
+        "v": 1,
+        "kind": "question",
+        "message": "Is there an iPhone version?",
+        "email": "ask@example.co.uk",
+        "app": {
+          "version": "1.16.0",
+          "build": "160",
+          "os": "Linux 6.8.0-49-generic #49~22.04.1-Ubuntu SMP PREEMPT_DYNAMI"
+        },
+        "source": "app"
+      },
+      "mail": {
+        "subject": null,
+        "replyTo": "ask@example.co.uk",
+        "contains": [
+          "System: Linux 6.8.0-49-generic #49~22.04.1-Ubuntu SMP PREEMPT_DYNAMI",
+          "Is there an iPhone version?"
+        ]
+      }
+    },
+    {
+      "name": "an update that did not work, with the last update log lines ticked",
+      "input": {
+        "kind": "problem",
+        "message": "The update did not work: the folder could not be changed",
+        "email": "",
+        "version": "1.15.0",
+        "build": "151",
+        "system": "Windows 10 Pro 10.0 (Build 19045), windows_x64",
+        "logLines": [
+          "2026-11-20 10:00:01 app: update to 1.16.0 started",
+          "2026-11-20 10:00:09 script: copy step returned 5",
+          "2026-11-20 10:00:09 script: stopped, nothing changed"
+        ]
+      },
+      "payload": {
+        "v": 1,
+        "kind": "problem",
+        "message": "The update did not work: the folder could not be changed\n\nLast lines of the update log:\n2026-11-20 10:00:01 app: update to 1.16.0 started\n2026-11-20 10:00:09 script: copy step returned 5\n2026-11-20 10:00:09 script: stopped, nothing changed",
+        "app": {
+          "version": "1.15.0",
+          "build": "151",
+          "os": "Windows 10 Pro 10.0 (Build 19045), windows_x64"
+        },
+        "source": "app"
+      },
+      "mail": {
+        "subject": null,
+        "replyTo": null,
+        "contains": [
+          "Last lines of the update log:\n2026-11-20 10:00:01 app: update to 1.16.0 started",
+          "2026-11-20 10:00:09 script: stopped, nothing changed"
+        ]
+      }
+    }
+  ]
+}

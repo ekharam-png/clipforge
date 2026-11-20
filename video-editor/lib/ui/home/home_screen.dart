@@ -10,6 +10,7 @@ import '../claude/claude_helper.dart';
 import '../editor/editor_screen.dart';
 import '../file_drop.dart';
 import '../format.dart';
+import '../feedback/feedback_screen.dart';
 import '../help/help_screen.dart';
 import '../help/tour.dart';
 import '../help/whats_new.dart' show kWhatsNewId;
@@ -662,6 +663,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 _HomeMore.about => showAboutClipForge(context),
                 _HomeMore.copyVersion => copyVersionInfo(context),
                 _HomeMore.checkUpdates => checkForUpdatesNow(context),
+                _HomeMore.feedback => openFeedback(context),
               },
               itemBuilder: (context) => [
                 const PopupMenuItem(
@@ -674,6 +676,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     value: _HomeMore.checkUpdates,
                     child: Text('Check for updates')),
                 const PopupMenuDivider(),
+                const PopupMenuItem(
+                    key: ValueKey('home-more-feedback'),
+                    value: _HomeMore.feedback,
+                    child: Text('Send feedback')),
                 const PopupMenuItem(
                     value: _HomeMore.about, child: Text('About ClipForge')),
                 const PopupMenuItem(
@@ -723,7 +729,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-enum _HomeMore { settings, whatsNew, about, copyVersion, checkUpdates }
+enum _HomeMore { settings, whatsNew, about, copyVersion, checkUpdates, feedback }
 
 class _Message extends StatelessWidget {
   const _Message({
