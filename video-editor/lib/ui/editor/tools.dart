@@ -14,6 +14,7 @@ import 'clip_panels.dart';
 import 'editor_actions.dart';
 import 'import_actions.dart';
 import 'music_actions.dart';
+import 'panel_sections.dart';
 import 'picture_tools.dart';
 import 'publishing_panel.dart';
 import 'shorts_actions.dart';
@@ -542,18 +543,47 @@ class InspectorPanel extends StatelessWidget {
                           'the timeline to change it.',
                   style: const TextStyle(color: AppColors.textDim),
                 ),
-                if (session.project.clips.isNotEmpty) ...[
-                  const Divider(height: 32),
-                  ProjectFadesPanel(session: session),
-                ],
-                if (session.project.audio.isNotEmpty) ...[
-                  const Divider(height: 32),
-                  DuckMusicSwitch(session: session),
-                ],
-                if (session.project.clips.isNotEmpty) ...[
-                  const Divider(height: 32),
-                  ShortsPanel(session: session, host: context, notes: true),
-                ],
+                const SizedBox(height: 12),
+                if (session.project.clips.isNotEmpty)
+                  PanelSection(
+                    id: 'project.fades',
+                    icon: Icons.gradient_outlined,
+                    title: 'Fade in and out',
+                    summary: session.project.fadeInMs > 0 ||
+                            session.project.fadeOutMs > 0
+                        ? 'On'
+                        : 'None',
+                    changed: session.project.fadeInMs > 0 ||
+                        session.project.fadeOutMs > 0,
+                    child: ProjectFadesPanel(session: session),
+                  ),
+                if (session.project.audio.isNotEmpty)
+                  PanelSection(
+                    id: 'project.music',
+                    icon: Icons.music_note_outlined,
+                    title: 'Music under speech',
+                    summary: session.project.soundTracks.any((t) => t.duck)
+                        ? 'Lowered'
+                        : '',
+                    changed: session.project.soundTracks.any((t) => t.duck),
+                    child: DuckMusicSwitch(session: session),
+                  ),
+                if (session.project.clips.isNotEmpty)
+                  PanelSection(
+                    id: 'project.shorts',
+                    icon: Icons.smartphone,
+                    title: 'Shorts and publishing',
+                    summary: session.project.markers.isEmpty
+                        ? ''
+                        : '${session.project.markers.length} '
+                            '${session.project.markers.length == 1 ? 'marker' : 'markers'}',
+                    child: ShortsPanel(
+                        session: session,
+                        host: context,
+                        notes: true,
+                        heading: false),
+                  ),
+                const Divider(height: 1),
               ] else if (clip != null)
                 ..._clipSections(clip)
               else if (overlay != null)
@@ -568,23 +598,38 @@ class InspectorPanel extends StatelessWidget {
     );
   }
 
-  /// The overlay item's groups of settings, one open at a time.
+  /// What the heading of [tool] does besides opening and closing: a
+  /// section that an action asked for ([EditorSession.openTool]) stops
+  /// being asked for when it is closed; Crop is open exactly while it is
+  /// asked for (while its panel shows, the preview is in crop mode).
+  void _toggled(ClipTool tool, bool open) {
+    if (tool == ClipTool.crop) {
+      session.openTool.value = open ? ClipTool.crop : null;
+    } else if (!open && session.openTool.value == tool) {
+      session.openTool.value = null;
+    }
+  }
+
+  /// The overlay item's groups of settings (1.18: each opens and closes
+  /// by itself and is remembered).
   List<Widget> _overlaySections(OverlayClip overlay) {
     final tools = overlayToolsFor(overlay);
     final wanted = session.openTool.value;
-    final open = tools.contains(wanted) ? wanted : tools.first;
     return [
       for (final tool in tools)
-        _Section(
+        PanelSection(
+          id: 'overlay.${tool.name}',
           icon: overlayToolIcon(tool),
           title: overlayToolLabel(tool, overlay),
           summary: overlayToolSummary(tool, overlay),
-          open: tool == open,
-          onToggle: () => session.openTool.value = tool,
+          changed: overlayToolChanged(tool, overlay),
+          remember: tool != ClipTool.crop,
+          forceOpen: tool == wanted,
+          onToggle: (open) => _toggled(tool, open),
           child: OverlayToolPanel(
               session: session, overlay: overlay, tool: tool),
         ),
-      const Divider(),
+      const Divider(height: 1),
       const SizedBox(height: 12),
       Text(
         'Length ${formatLength(overlay.durationMs)} — drag the ends on the '
@@ -594,23 +639,26 @@ class InspectorPanel extends StatelessWidget {
     ];
   }
 
-  /// The clip's groups of settings, one open at a time.
+  /// The clip's groups of settings (1.18: each opens and closes by itself
+  /// and is remembered; before, exactly one was open).
   List<Widget> _clipSections(Clip clip) {
     final tools = clipToolsFor(clip);
     final wanted = session.openTool.value;
-    final open = tools.contains(wanted) ? wanted : tools.first;
     final project = session.project;
     return [
       for (final tool in tools)
-        _Section(
+        PanelSection(
+          id: 'clip.${tool.name}',
           icon: clipToolIcon(tool),
           title: clipToolLabel(tool),
           summary: clipToolSummary(tool, clip, project),
-          open: tool == open,
-          onToggle: () => session.openTool.value = tool,
+          changed: clipToolChanged(tool, clip, project),
+          remember: tool != ClipTool.crop,
+          forceOpen: tool == wanted,
+          onToggle: (open) => _toggled(tool, open),
           child: ClipToolPanel(session: session, clip: clip, tool: tool),
         ),
-      const Divider(),
+      const Divider(height: 1),
       const SizedBox(height: 12),
       Text(
         'Length ${formatLength(clip.durationMs)}'
@@ -647,67 +695,6 @@ class InspectorPanel extends StatelessWidget {
   }
 }
 
-/// A collapsible group in the side panel.
-class _Section extends StatelessWidget {
-  const _Section({
-    required this.icon,
-    required this.title,
-    required this.summary,
-    required this.open,
-    required this.onToggle,
-    required this.child,
-  });
-  final IconData icon;
-  final String title;
-  final String summary;
-  final bool open;
-  final VoidCallback onToggle;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Divider(),
-        Semantics(
-          button: true,
-          expanded: open,
-          child: InkWell(
-            onTap: onToggle,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Row(
-                children: [
-                  Icon(icon, size: 20, color: AppColors.textDim),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(title,
-                        style: Theme.of(context).textTheme.titleSmall),
-                  ),
-                  if (!open)
-                    Text(summary,
-                        style: const TextStyle(
-                            color: AppColors.textDim, fontSize: 13)),
-                  const SizedBox(width: 4),
-                  Icon(open ? Icons.expand_less : Icons.expand_more,
-                      size: 20, color: AppColors.textDim),
-                ],
-              ),
-            ),
-          ),
-        ),
-        if (open)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: child,
-          ),
-      ],
-    );
-  }
-}
-
 /// Property controls for the selected music or text.
 class PropertiesEditor extends StatelessWidget {
   const PropertiesEditor({super.key, required this.session});
@@ -735,8 +722,18 @@ class PropertiesEditor extends StatelessWidget {
     final maxFade = (audio.durationMs / 2).clamp(100, 10000).toDouble();
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        PanelSection(
+          id: 'sound.level',
+          icon: Icons.volume_up_outlined,
+          title: 'Volume and fades',
+          summary: '${(audio.volume * 100).round()}%',
+          changed: audio.volume != 1 || audio.fadeInMs > 0,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
         LiveSlider(
           editor: editor,
           label: 'Volume',
@@ -766,7 +763,19 @@ class PropertiesEditor extends StatelessWidget {
           onChanged: (v) =>
               editor.updateAudio(audio.copyWith(fadeOutMs: v.round())),
         ),
-        const SizedBox(height: 4),
+            ],
+          ),
+        ),
+        PanelSection(
+          id: 'sound.place',
+          icon: Icons.place_outlined,
+          title: audio.belongsToClip ? 'Where it plays' : 'Where it plays, fit, voice',
+          summary: 'From ${formatTime(audio.startMs)}',
+          changed: audio.looped,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
         Text(
           _audioPlacement(audio),
           style: const TextStyle(color: AppColors.textDim, fontSize: 12),
@@ -803,8 +812,24 @@ class PropertiesEditor extends StatelessWidget {
             ),
         ],
         MusicCreditPanel(session: session, audio: audio),
-        const Divider(height: 28),
-        SoundClipOptions(session: session, audio: audio),
+            ],
+          ),
+        ),
+        PanelSection(
+          id: 'sound.clean',
+          icon: Icons.auto_fix_high_outlined,
+          title: 'Clean up, voice focus, quiet parts',
+          changed: audio.soundClip.denoise ||
+              audio.soundClip.voiceFocus > 0 ||
+              audio.quiet.isNotEmpty,
+          summary: [
+            if (audio.soundClip.denoise) 'Cleaned',
+            if (audio.soundClip.voiceFocus > 0) 'Voice focus',
+            if (audio.quiet.isNotEmpty) 'Quiet parts',
+          ].join(', '),
+          child: SoundClipOptions(session: session, audio: audio),
+        ),
+        const Divider(height: 1),
       ],
     );
   }
@@ -946,9 +971,13 @@ class _TitlePropertiesState extends State<_TitleProperties> {
   @override
   Widget build(BuildContext context) {
     final title = widget.title;
+    Widget group(List<Widget> children) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children);
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
           controller: _text,
@@ -966,7 +995,13 @@ class _TitlePropertiesState extends State<_TitleProperties> {
                 () => _editor.updateTitle(_current.copyWith(text: value)));
           },
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        PanelSection(
+          id: 'title.style',
+          icon: Icons.format_size,
+          title: 'Size and style',
+          summary: titleSizeLabel(title.fontSize),
+          child: group([
         LiveSlider(
           editor: _editor,
           label: 'Text size',
@@ -995,7 +1030,15 @@ class _TitlePropertiesState extends State<_TitleProperties> {
               ),
           ],
         ),
-        const SizedBox(height: 12),
+          ]),
+        ),
+        PanelSection(
+          id: 'title.font',
+          icon: Icons.font_download_outlined,
+          title: 'Font and colour',
+          summary: titleFontLabel(title.font),
+          changed: titleLooksChanged(title),
+          child: group([
         const PanelLabel('Font'),
         const SizedBox(height: 6),
         Wrap(
@@ -1065,9 +1108,13 @@ class _TitlePropertiesState extends State<_TitleProperties> {
             onChanged: (v) =>
                 _editor.updateTitle(_current.copyWith(shadow: v)),
           ),
-        const SizedBox(height: 4),
-        const PanelLabel('Position'),
-        const SizedBox(height: 6),
+          ]),
+        ),
+        PanelSection(
+          id: 'title.position',
+          icon: Icons.open_with,
+          title: 'Position',
+          child: group([
         Wrap(
           key: const ValueKey('title-positions'),
           spacing: 8,
@@ -1096,7 +1143,24 @@ class _TitlePropertiesState extends State<_TitleProperties> {
           onSelected: (a) => _editor.updateTitle(
               _current.copyWith(align: a, x: titleAlignX(a))),
         ),
-        const SizedBox(height: 12),
+          ]),
+        ),
+        PanelSection(
+          id: 'title.animation',
+          icon: Icons.animation,
+          title: 'Appear and disappear',
+          summary: title.animIn == TitleAnimation.none &&
+                  title.animOut == TitleAnimation.none
+              ? 'None'
+              : [
+                  if (title.animIn != TitleAnimation.none)
+                    titleAnimationLabel(title.animIn),
+                  if (title.animOut != TitleAnimation.none)
+                    titleAnimationLabel(title.animOut),
+                ].join(', '),
+          changed: title.animIn != TitleAnimation.none ||
+              title.animOut != TitleAnimation.none,
+          child: group([
         LabelWithHint('Appear',
             articleId: 'text-styles',
             style: Theme.of(context).textTheme.labelLarge),
@@ -1116,7 +1180,14 @@ class _TitlePropertiesState extends State<_TitleProperties> {
           onSelected: (a) =>
               _editor.updateTitle(_current.copyWith(animOut: a)),
         ),
-        const SizedBox(height: 12),
+          ]),
+        ),
+        PanelSection(
+          id: 'title.time',
+          icon: Icons.schedule,
+          title: 'When it shows',
+          summary: '${formatTime(title.startMs)} to ${formatTime(title.endMs)}',
+          child: group([
         Text(
           'Shown from ${formatTime(title.startMs)} to '
           '${formatTime(title.endMs)}',
@@ -1148,6 +1219,9 @@ class _TitlePropertiesState extends State<_TitleProperties> {
             ],
           ),
         ),
+          ]),
+        ),
+        const Divider(height: 1),
         const SizedBox(height: 8),
         const Text(
           'Drag the text on the picture to place it.',
@@ -1156,6 +1230,18 @@ class _TitlePropertiesState extends State<_TitleProperties> {
       ],
     );
   }
+}
+
+/// True when the font, colour or decoration of [t] is not what a new
+/// title has.
+bool titleLooksChanged(TitleOverlay t) {
+  const fresh = TitleOverlay(id: '', text: '', startMs: 0, endMs: 1);
+  return t.font != fresh.font ||
+      t.colorArgb != fresh.colorArgb ||
+      t.bold != fresh.bold ||
+      t.background != fresh.background ||
+      t.outline != fresh.outline ||
+      t.shadow != fresh.shadow;
 }
 
 bool _isDark(int argb) {
@@ -1220,7 +1306,14 @@ class _Swatch extends StatelessWidget {
 /// computers (nothing selected), in a sheet from More on phones.
 class ShortsPanel extends StatelessWidget {
   const ShortsPanel(
-      {super.key, required this.session, required this.host, this.notes = false});
+      {super.key,
+      required this.session,
+      required this.host,
+      this.notes = false,
+      this.heading = true});
+
+  /// False inside a section that already has the heading.
+  final bool heading;
   final EditorSession session;
 
   /// The editor's context (the dialogs belong there, not to a sheet).
@@ -1244,7 +1337,7 @@ class ShortsPanel extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (notes) const PanelLabel('Shorts and publishing'),
+            if (notes && heading) const PanelLabel('Shorts and publishing'),
             Wrap(
               spacing: 8,
               runSpacing: 8,

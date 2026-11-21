@@ -300,6 +300,39 @@ class FoundTool {
   final String version;
 }
 
+/// The one command that installs FFmpeg on [operatingSystem] (what the
+/// "Copy the command" button of the Connect page copies).
+String ffmpegInstallCommand([String? operatingSystem]) =>
+    switch (operatingSystem ?? Platform.operatingSystem) {
+      'windows' => 'winget install ffmpeg',
+      'macos' => 'brew install ffmpeg',
+      _ => 'sudo apt install ffmpeg',
+    };
+
+/// THE sentence for "the helper has no FFmpeg" (1.18): the same words on
+/// the Connect to Claude page, in the self-test and from every tool that
+/// reads media. The app itself carries its own FFmpeg; the helper is a
+/// separate program and uses the one installed on the computer.
+String ffmpegNeededMessage([String? operatingSystem]) {
+  final os = operatingSystem ?? Platform.operatingSystem;
+  final where = switch (os) {
+    'macos' => 'this Mac',
+    'windows' => 'this PC',
+    _ => 'this computer',
+  };
+  final how = switch (os) {
+    'macos' => 'open Terminal and run "${ffmpegInstallCommand(os)}" (this '
+        'needs Homebrew from https://brew.sh)',
+    'windows' => 'open PowerShell (or Terminal) and run '
+        '"${ffmpegInstallCommand(os)}"',
+    _ => 'run "${ffmpegInstallCommand(os)}"',
+  };
+  return 'Claude control needs the free program FFmpeg on $where: $how, '
+      'then quit and reopen Claude. The ClipForge app itself works without '
+      'it; only '
+      'Claude needs it, to read, render and export videos.';
+}
+
 /// One-line instruction for installing ffmpeg on [operatingSystem].
 String ffmpegInstallHint([String? operatingSystem]) {
   switch (operatingSystem ?? Platform.operatingSystem) {
@@ -429,10 +462,9 @@ class MediaTools {
         if (mpeg == null && ffmpegOption != null) ffmpegOption,
         if (probe == null && ffprobeOption != null) ffprobeOption,
       ];
-      throw ToolError(
-          'This needs the free program FFmpeg, and $missing could not be '
-          '${configured.isEmpty ? 'found on this computer' : 'started from the configured path (${configured.join(', ')})'}. '
-          '${ffmpegInstallHint(_os)} '
+      throw ToolError('${ffmpegNeededMessage(_os)} '
+          '($missing could not be '
+          '${configured.isEmpty ? 'found' : 'started from the configured path (${configured.join(', ')})'}.) '
           'If it is installed in an unusual place, start the server with '
           '--ffmpeg <path> and --ffprobe <path>. '
           'Editing tools that do not read media files keep working without it.');

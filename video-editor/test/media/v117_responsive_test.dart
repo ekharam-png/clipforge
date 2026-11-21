@@ -241,7 +241,6 @@ class FloodSession implements KitSession {
 class LaneEngine extends FakeMediaEngine implements CancellableSoundPeaksEngine {
   LaneEngine(this.runner);
   final KitRunner runner;
-  int probes = 0;
 
   @override
   Future<MediaInfo> probe(String path) async {

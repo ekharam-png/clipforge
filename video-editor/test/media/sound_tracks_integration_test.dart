@@ -340,8 +340,8 @@ void main() {
         ),
       ],
     );
-    expect(p.canvasSize, (width: 1080, height: 1918));
-    await exportAndCheck(p, width: 1080, height: 1918);
+    expect(p.canvasSize, (width: 1080, height: 1920));
+    await exportAndCheck(p, width: 1080, height: 1920);
     await exportAndCheck(p.copyWith(videoSize: VideoSize.matchFirstClip),
         width: 464, height: 824);
   });

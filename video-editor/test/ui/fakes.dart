@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:clipforge/core/install_place.dart';
+import 'package:clipforge/ui/home/home_screen.dart';
+import 'package:clipforge/core/perf_log.dart';
 import 'package:clipforge/core/update/update_download.dart';
 import 'package:clipforge/core/update/update_info.dart';
 import 'package:clipforge/core/update/update_install.dart';
@@ -190,9 +193,21 @@ class FakeMediaEngine implements MediaEngine {
     return silences[path] ?? const [];
   }
 
+  /// Files whose probe never answers (1.18: an 8 GiB file on a Mac).
+  final Set<String> neverAnswers = {};
+
+  /// How often [probe] was asked.
+  int probes = 0;
+
   @override
-  Future<MediaInfo> probe(String path) async =>
-      infos[path] ?? (throw const FileSystemException('unreadable'));
+  Future<MediaInfo> probe(String path) {
+    probes++;
+    if (neverAnswers.contains(path)) return Completer<MediaInfo>().future;
+    final info = infos[path];
+    return info == null
+        ? Future.error(const FileSystemException('unreadable'))
+        : Future.value(info);
+  }
 
   @override
   Future<String> thumbnail(String path,
@@ -543,6 +558,21 @@ class Fakes {
   /// "Connect to Claude" (a phone by default: nothing is installed).
   ClaudeHelperService? claude;
 
+  /// The release notes the project list reads its highlights from.
+  String changelog = '';
+
+  /// "Today" (the tip of the day).
+  DateTime today = DateTime(2026, 11, 21);
+
+  /// What a Mac says about the place the app runs from (null: nothing).
+  InstallAdvice? installAdvice;
+
+  /// Whether the Claude helper would find FFmpeg.
+  bool helperFfmpeg = true;
+
+  /// What "Copy version info" and feedback read as the performance log.
+  PerfLog perfLog = PerfLog();
+
   /// How many tour sample projects were made.
   int samplesMade = 0;
 
@@ -595,6 +625,16 @@ class Fakes {
           musicSearchProvider.overrideWithValue(music),
           gallerySearchProvider.overrideWithValue(gallery),
           liveMediaProvider.overrideWithValue(liveMedia),
+          // The app's own performance log collects lines from every test
+          // of a run; "Copy version info" gets this one (empty unless a
+          // test writes to it).
+          perfLogProvider.overrideWithValue(perfLog),
+          // The project list (1.18): release notes, the day (for the
+          // tip), where a Mac app runs from; the helper's FFmpeg.
+          changelogProvider.overrideWithValue(() async => changelog),
+          todayProvider.overrideWithValue(() => today),
+          installAdviceProvider.overrideWithValue(() => installAdvice),
+          helperFfmpegProvider.overrideWithValue(() async => helperFfmpeg),
           projectLockProvider.overrideWithValue((store, id) => lockRoot == null
               ? null
               : AppProjectLock('$lockRoot/$id', app: 'test')),
@@ -905,8 +945,61 @@ Future<void> openClipTool(WidgetTester tester, Size size, String label) async {
     await tester.tap(find.text(label).first);
   } else {
     await tester.ensureVisible(find.text(label).first);
-    await tester.tap(find.text(label).first);
+    // 1.18: the groups of the side panel open and close by themselves;
+    // one that is open already (Speed and Sound are, by default) stays.
+    if (!sectionIsOpen(tester, label)) {
+      await tester.tap(find.text(label).first);
+      await tester.pumpAndSettle();
+    }
+    // The other groups of the clip are closed, so that a test finds ONE
+    // "Apply to all clips" and only this group's sliders.
+    for (final other in const [
+      'Speed', 'Look', 'Sound', 'Transition and fades', //
+    ]) {
+      if (other != label) await closeSection(tester, other);
+    }
   }
+  await tester.pumpAndSettle();
+}
+
+/// Closes the group [label] of the side panel when it is there and open.
+Future<void> closeSection(WidgetTester tester, String label) async {
+  final heading = sectionHeading(label);
+  if (heading.evaluate().isEmpty || !sectionIsOpen(tester, label)) return;
+  await tester.ensureVisible(heading.first);
+  await tester.pumpAndSettle();
+  await tester.tap(heading.first);
+  await tester.pumpAndSettle();
+}
+
+/// The heading of the side panel's group called [label] (an InkWell with
+/// the key `section-<id>`).
+Finder sectionHeading(String label) => find.ancestor(
+    of: find.text(label),
+    matching: find.byWidgetPredicate((w) {
+      final k = w.key;
+      return w is InkWell &&
+          k is ValueKey<String> &&
+          k.value.startsWith('section-');
+    }));
+
+/// Whether the group [label] of the side panel is open (true when
+/// [label] is not the heading of a group at all).
+bool sectionIsOpen(WidgetTester tester, String label) {
+  final heading = sectionHeading(label);
+  if (heading.evaluate().isEmpty) return true;
+  return find
+      .descendant(of: heading.first, matching: find.byIcon(Icons.expand_more))
+      .evaluate()
+      .isEmpty;
+}
+
+/// Opens the group [label] of the side panel when it is closed.
+Future<void> openSection(WidgetTester tester, String label) async {
+  if (sectionIsOpen(tester, label)) return;
+  await tester.ensureVisible(sectionHeading(label).first);
+  await tester.pumpAndSettle();
+  await tester.tap(sectionHeading(label).first);
   await tester.pumpAndSettle();
 }
 

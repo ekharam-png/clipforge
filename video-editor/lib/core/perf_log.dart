@@ -105,15 +105,51 @@ class PerfLog {
 
   /// Notes the start of something and returns a function that notes its
   /// end with the time it took (and [result], e.g. "stopped").
+  ///
+  /// Until the returned function is called, [what] counts as IN FLIGHT:
+  /// the watchdog's "NOT RESPONDING" line and every long gap name what
+  /// was in flight (1.18: a Mac did not respond for 100 s after a project
+  /// opened, and the log showed nothing running).
   void Function([String result]) span(String what) {
     note('$what start');
     final w = Stopwatch()..start();
+    final id = _nextSpan++;
+    _open[id] = what;
+    _tellFlight();
     var ended = false;
     return ([String result = 'end']) {
       if (ended) return;
       ended = true;
+      _open.remove(id);
       note('$what $result after ${w.elapsedMilliseconds} ms');
+      _tellFlight();
     };
+  }
+
+  /// [span] around [work]: "end", or "failed" when it throws.
+  Future<T> track<T>(String what, Future<T> Function() work) async {
+    final end = span(what);
+    try {
+      final v = await work();
+      end();
+      return v;
+    } catch (_) {
+      end('failed');
+      rethrow;
+    }
+  }
+
+  int _nextSpan = 0;
+  final Map<int, String> _open = {};
+
+  /// What was started and has not ended, oldest first (the same thing
+  /// running three times is "3 x thing").
+  List<String> get inFlight => flightSummary(_open.values);
+
+  void _tellFlight() {
+    try {
+      _dog?.send(<Object>['flight', inFlight.join('; ')]);
+    } catch (_) {}
   }
 
   /// The last [count] lines, oldest first.
@@ -124,7 +160,9 @@ class PerfLog {
   void reportGap(int gapMs) {
     if (gapMs > _longestGapMs) _longestGapMs = gapMs;
     if (gapMs < kGapNotedMs) return;
-    note('gap $gapMs ms (the app could not respond)');
+    final flight = inFlight;
+    note('gap $gapMs ms (the app could not respond)'
+        '${gapMs >= kUnresponsiveMs ? '; in flight: ${flight.isEmpty ? 'nothing the log knows of' : flight.join('; ')}' : ''}');
     for (final f in [..._gapListeners]) {
       try {
         f(gapMs);
@@ -165,6 +203,7 @@ class PerfLog {
           port.send(l);
         }
         _dog = port;
+        _tellFlight();
       }
     } catch (_) {
       // No watchdog: the log still works, only a stalled app cannot
@@ -224,6 +263,17 @@ class PerfLog {
   }
 }
 
+/// [names] with repeats counted: `[a, b, a]` gives `[2 x a, b]`.
+List<String> flightSummary(Iterable<String> names) {
+  final count = <String, int>{};
+  for (final n in names) {
+    count[n] = (count[n] ?? 0) + 1;
+  }
+  return [
+    for (final e in count.entries) e.value == 1 ? e.key : '${e.value} x ${e.key}',
+  ];
+}
+
 /// The last lines of the file at [path] when its run ended while the app
 /// was not responding (the watchdog's mark with no "responding again"
 /// after it); empty otherwise or when there is no file.
@@ -263,6 +313,7 @@ void _watchdogMain(List<Object?> args) {
   var lastBeat = watch.elapsedMilliseconds;
   var beats = 0;
   var stalledSince = -1;
+  var flight = '';
   Timer? timer;
 
   void write() {
@@ -290,6 +341,9 @@ void _watchdogMain(List<Object?> args) {
       inbox.close();
     } else if (m is String) {
       add(m);
+    } else if (m is List) {
+      // What is in flight right now (see PerfLog.span).
+      if (m.length == 2 && m[0] == 'flight') flight = '${m[1]}';
     } else {
       beats++;
       final now = watch.elapsedMilliseconds;
@@ -309,7 +363,8 @@ void _watchdogMain(List<Object?> args) {
     stalledSince = lastBeat;
     add('${clock()} $kNotRespondingMark for $quiet ms and counting '
         '(written by the watchdog; the lines above are what the app did '
-        'last)');
+        'last). In flight when it stopped: '
+        '${flight.isEmpty ? 'nothing the log knows of' : flight}');
     write();
   });
   ready.send(inbox.sendPort);

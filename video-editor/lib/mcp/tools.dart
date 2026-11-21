@@ -2727,7 +2727,7 @@ class ClipForgeTools {
           ? 'Title fonts: NOT FOUND (see below)'
           : 'Title fonts: ${p.dirname(fonts.regular)}')
       ..writeln(mpeg == null
-          ? 'ffmpeg: NOT FOUND. ${ffmpegInstallHint()}'
+          ? 'ffmpeg: NOT FOUND. ${ffmpegNeededMessage()}'
           : 'ffmpeg: ${mpeg.path} (version ${mpeg.version})')
       ..writeln(probe == null
           ? 'ffprobe: NOT FOUND (it is installed together with ffmpeg).'
@@ -2780,7 +2780,7 @@ class ClipForgeTools {
       'projectCount': count,
       'ffmpeg': mpeg == null ? null : {'path': mpeg.path, 'version': mpeg.version},
       'ffprobe': probe == null ? null : {'path': probe.path, 'version': probe.version},
-      'ffmpegInstallHint': mpeg == null || probe == null ? ffmpegInstallHint() : null,
+      'ffmpegInstallHint': mpeg == null || probe == null ? ffmpegNeededMessage() : null,
       'fontsDir': fonts == null ? null : p.dirname(fonts.regular),
       'jobsDir': jobs.dir,
       'exportsRun': exportLauncher.description,

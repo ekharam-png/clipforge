@@ -5,9 +5,11 @@ import '../../core/editor/editor_controller.dart';
 import '../../core/editor/part.dart';
 import '../../core/editor/snapping.dart';
 import '../../core/model/project.dart';
+import '../../core/background_work.dart';
 import '../../core/perf_log.dart';
 import '../../core/storage/project_store.dart';
 import '../../media/media_api.dart';
+import '../../media/media_common.dart' show kProbeTimeout;
 import '../../media/processed_sound_cache.dart';
 import '../../media/sound_peaks_job.dart';
 import '../../media/speech_gate.dart';
@@ -41,6 +43,7 @@ class EditorHooks {
     required this.stopReverse,
     required this.setSnapping,
     required this.setSoundWaves,
+    this.setSidePanel,
     this.scaffold,
   });
   final void Function({bool several}) export;
@@ -50,6 +53,9 @@ class EditorHooks {
   final VoidCallback stopReverse;
   final ValueChanged<bool> setSnapping;
   final ValueChanged<bool> setSoundWaves;
+
+  /// Shows or hides the side panel and remembers it.
+  final ValueChanged<bool>? setSidePanel;
 
   /// The editor page's scaffold (the crop sheet is shown on it).
   final Object? Function()? scaffold;
@@ -212,6 +218,8 @@ class EditorSession {
         'clips, ${editor.project.audio.length} sounds, '
         '${editor.project.durationMs ~/ 1000} s');
     PerfLog.instance.addGapListener(_onGap);
+    BackgroundWork.instance.add(_background);
+    BackgroundWork.instance.addListener(_onBackgroundPaused);
     this.pictures.update(editor.project);
     // "Only when speaking": the preview turns a gated microphone down by
     // the same lists the export gets.
@@ -242,8 +250,34 @@ class EditorSession {
   /// this editor, the app comes first.
   void _onGap(int gapMs) {
     if (_disposed || gapMs < kUnresponsiveMs) return;
-    pictures.pauseForResponsiveness(gapMs);
+    // Everything in the background, not only the pictures (1.18): the
+    // app's registry also holds the FFmpeg lane of the engine.
+    BackgroundWork.instance.onGap(gapMs);
   }
+
+  /// True while the app's background work is paused by the safety valve
+  /// (the timeline then says so, with "Turn back on").
+  final ValueNotifier<bool> backgroundPaused = ValueNotifier(false);
+
+  void _onBackgroundPaused() {
+    if (!_disposed) backgroundPaused.value = BackgroundWork.instance.paused;
+  }
+
+  /// This editor's own background work for [BackgroundWork].
+  late final BackgroundTask _background = BackgroundTask(
+    'sound pictures, processed sound',
+    busy: () => !_disposed && (pictures.busy || sounds.busyCount > 0),
+    pause: () {
+      if (_disposed) return;
+      pictures.pauseForResponsiveness(BackgroundWork.instance.pausedAfterMs);
+      sounds.pauseAll();
+    },
+    resume: () {
+      if (_disposed) return;
+      pictures.resume();
+      sounds.resumeAll();
+    },
+  );
 
   void _onPartChanged() {
     if (part.value == null) {
@@ -431,6 +465,10 @@ class EditorSession {
   final PlaybackController playback;
   final PlayerBackend backend;
   final MediaEngine engine;
+
+  /// How long reading a file that is being added may take (tests shorten
+  /// it).
+  Duration probeTimeout = kProbeTimeout;
   final FileService files;
   final DocumentService documents;
   final ThumbnailCache thumbnails;
@@ -493,6 +531,10 @@ class EditorSession {
   /// "Show sound waves" (an app setting, on by default).
   final ValueNotifier<bool> showWaves = ValueNotifier(true);
 
+  /// The side panel of a wide window is shown (View > Show the side
+  /// panel, 1.18): hidden, the preview gets its width.
+  final ValueNotifier<bool> showSidePanel = ValueNotifier(true);
+
   /// Moves the playhead to where speech next starts ([forward]) or last
   /// started: on the selected sound's track when that is a speaker's,
   /// else wherever the speaker changes. False when there is no such place
@@ -523,8 +565,10 @@ class EditorSession {
     final service = speech;
     if (service == null) return;
     try {
-      final found = await service.transcriptsOf(
-          project.id, speechSourcesOfProject(project));
+      final found = await PerfLog.instance.track(
+          'open: transcripts',
+          () => service.transcriptsOf(
+              project.id, speechSourcesOfProject(project)));
       if (!_disposed) transcripts.value = found;
     } catch (_) {
       // No transcripts is a normal state.
@@ -733,6 +777,11 @@ class EditorSession {
     if (_disposed) return;
     _disposed = true;
     PerfLog.instance.removeGapListener(_onGap);
+    BackgroundWork.instance.removeListener(_onBackgroundPaused);
+    BackgroundWork.instance.remove(_background);
+    // Leaving the project ends the pause: the next one starts fresh.
+    BackgroundWork.instance.resumeAll();
+    backgroundPaused.dispose();
     PerfLog.instance.note('project closed');
     part.dispose();
     partRows.dispose();
@@ -757,6 +806,7 @@ class EditorSession {
     textHeight.dispose();
     findInText.dispose();
     showWaves.dispose();
+    showSidePanel.dispose();
     pictures.dispose();
     transcripts.dispose();
     copiedSettings.dispose();

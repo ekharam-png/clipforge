@@ -44,7 +44,7 @@ Future<McpServer> createClipForgeServer(
     final mpeg = await media.ffmpeg();
     final probe = await media.ffprobe();
     log(mpeg == null
-        ? 'warning: ffmpeg not found. ${ffmpegInstallHint()}'
+        ? 'warning: ffmpeg not found. ${ffmpegNeededMessage()}'
         : 'ffmpeg: ${mpeg.path} (${mpeg.version})');
     log(probe == null
         ? 'warning: ffprobe not found'

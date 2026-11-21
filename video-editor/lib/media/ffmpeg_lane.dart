@@ -93,6 +93,31 @@ class FfmpegLane {
     _pump();
   }
 
+  /// The safety valve (1.18, core/background_work.dart): no background
+  /// run is started until [resumeBackground], and a running one is
+  /// stopped. User runs and exports go on.
+  void pauseBackground() {
+    if (_held) return;
+    _held = true;
+    _log.note('lane: background runs paused');
+    _preempt('the app did not respond');
+  }
+
+  void resumeBackground() {
+    if (!_held) return;
+    _held = false;
+    _log.note('lane: background runs go on');
+    _pump();
+  }
+
+  bool get backgroundPaused => _held;
+
+  /// A background run is going or waiting.
+  bool get backgroundBusy =>
+      _background.isNotEmpty ||
+      _running?.priority == LanePriority.background;
+  bool _held = false;
+
   void _preempt(String why) {
     final job = _running;
     final run = _run;
@@ -108,7 +133,7 @@ class FfmpegLane {
     final _Job<Object?> job;
     if (_user.isNotEmpty) {
       job = _user.removeFirst();
-    } else if (_background.isNotEmpty && _exports == 0) {
+    } else if (_background.isNotEmpty && _exports == 0 && !_held) {
       job = _background.removeFirst();
     } else {
       return;

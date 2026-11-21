@@ -608,9 +608,8 @@ void main() {
       addTearDown(() => tester.binding.defaultBinaryMessenger
           .setMockMethodCallHandler(SystemChannels.platform, null));
       useScreen(tester, desk);
-      final f = Fakes();
+      final f = Fakes()..perfLog = log;
       await tester.pumpWidget(ProviderScope(
-        overrides: [perfLogProvider.overrideWithValue(log)],
         child: f.app(Builder(
           builder: (context) => Scaffold(
             body: Column(children: [

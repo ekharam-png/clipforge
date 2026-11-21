@@ -75,3 +75,31 @@ String safeFileName(String name) {
       .trim();
   return cleaned.isEmpty ? 'video' : cleaned;
 }
+
+/// The ending a saved file must have, from the name that was offered:
+/// ".clipforge.zip" for a project file (two parts), else the last part
+/// (".mp4", ".srt").
+String fileEnding(String offeredName) {
+  final lower = offeredName.toLowerCase();
+  if (lower.endsWith('.clipforge.zip')) {
+    return offeredName.substring(offeredName.length - '.clipforge.zip'.length);
+  }
+  return p.extension(offeredName);
+}
+
+/// The path to write to after a save window gave [chosen] for a file that
+/// was offered as [offeredName]: always with the offered ending. A save
+/// window only knows the LAST part of an ending, so a project file typed
+/// as "My trip" came back as "My trip.zip" (1.17 on a Mac) instead of
+/// "My trip.clipforge.zip"; that is put right here.
+String savePathFor(String chosen, String offeredName) {
+  final ending = fileEnding(offeredName);
+  if (ending.isEmpty) return chosen;
+  final lower = chosen.toLowerCase(), want = ending.toLowerCase();
+  if (lower.endsWith(want)) return chosen;
+  final last = p.extension(ending).toLowerCase(); // ".zip"
+  if (last != want && lower.endsWith(last)) {
+    return '${chosen.substring(0, chosen.length - last.length)}$ending';
+  }
+  return '$chosen$ending';
+}

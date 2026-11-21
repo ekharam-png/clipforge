@@ -4,6 +4,26 @@ Newest first. The version you have is in Help > About ClipForge (and at the
 bottom of the project list). This file is also the "What's new" page in the
 app's Help.
 
+## 1.18.0 – 21 November 2026
+
+Fixes from a real test on a Mac, a side panel that folds away, and a project list with more on it.
+
+- Adding a file always ends. A very large video (8 GB in the test) stayed on "Adding file…" with no way out. Now there is a **Cancel** button, **Esc** works, **File** > **Back to projects** cancels and goes back, and after 45 seconds ClipForge stops by itself and says what to try (copy the file to this computer first). Videos and sound files are now only asked for their table of contents when they are added, never for a first picture.
+- The side panel folds. Every group of settings at the right of the editor (Speed, Look, Sound, Transition and fades, the groups of a title or a sound) opens and closes with one click on its heading, by itself, and ClipForge remembers which ones you keep open. A closed group with a setting you changed shows a small dot. **View** > **Show the side panel** (**Ctrl+Shift+P**, on a Mac Cmd+Shift+P) and the arrow at the top of the panel hide all of it, so the picture gets the room. On a phone, the sheets of a title and of a sound have the same groups.
+- The project list has a Start row: **New video**, **Podcast** (the video first, then one sound file per speaker, lined up by their sound) and **Make a short** (choose the video it comes from). Projects are bigger cards with their picture, their length and when they were last edited. After an update a card says what is new in two or three lines, with a link to all release notes. One tip a day at the bottom of the row, with **Don't show tips** (and a switch in **Settings**). Nothing here comes from the internet.
+- **Only when speaking** can be exported with as many pauses as a real conversation has. A 9-minute recording with two voice tracks was refused with "its FFmpeg has no "if" filter"; that was ClipForge misreading its own instructions, not a missing part.
+- The editor no longer waits for the preview player. On the Mac of the test, opening a project made ClipForge unresponsive for 100 seconds: it had asked the player whether the video was loaded and waited inside the player for the answer. Such questions now have a two-second limit and never hold up the app.
+- When ClipForge does stop responding for more than two seconds, it now pauses everything it does in the background (sound waves, thumbnail strips, processed sound), not only the sound waves, and says so on the timeline with **Turn back on**. **Help** > **Copy version info** now names what was running when it happened.
+- Mac: when ClipForge is opened from the download instead of the Applications folder, one line says so ("Move ClipForge to the Applications folder so it can update itself"), with **Show me how**. If an older ClipForge is still in Applications, the line says that too. Nothing is moved for you.
+- Claude:
+  - The Claude helper needs the free program FFmpeg installed on the computer (ClipForge itself does not). **Help** > **Connect to Claude…** now says so before anything fails, with the one command to install it and **Copy the command**. The self-test and Claude's tools give the same sentence.
+  - The helper is brought up to date as the first thing after ClipForge starts, and the page says "Updating the helper…" instead of showing the old version.
+- Speech to text with your own whisper.cpp program no longer needs FFmpeg installed on a Mac or a Windows PC: ClipForge reads the sound itself.
+- Smaller things:
+  - Mac: **Cmd+?** opens ClipForge Help, and **Cmd+comma** opens Settings with any keyboard layout. Tooltips say **Cmd** instead of Ctrl.
+  - A video that is almost 16:9 comes out at 1280 × 720 for WhatsApp / Telegram and with **Video size** 720p, not 1278 × 720.
+  - **Share project file**: the file is always called "….clipforge.zip", also when you type your own name in the save window.
+
 ## 1.17.0 – 20 November 2026
 
 Select a part of the timeline, say which rows it is about, and do something with it: cut it out, silence it, slow it down. And long projects no longer make ClipForge wait for the sound pictures.

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../mcp/environment.dart' show ffmpegInstallCommand, ffmpegNeededMessage;
 import '../../core/claude/connect.dart';
 import '../../core/claude/helper_install.dart';
 import '../help/help_screen.dart';
@@ -43,17 +44,50 @@ class _ConnectClaudeState extends ConsumerState<ConnectClaudeScreen> {
   HelperTestResult? _test;
   bool _busy = false, _testing = false;
 
+  /// Whether the helper would find FFmpeg (null: not known yet).
+  bool? _ffmpeg;
+  ClaudeHelperService? _service;
+
   @override
   void initState() {
     super.initState();
+    final ClaudeHelperService service = ref.read(claudeHelperProvider);
+    _service = service;
+    service.refreshing.addListener(_onRefreshing);
     _refresh();
+  }
+
+  @override
+  void dispose() {
+    _service?.refreshing.removeListener(_onRefreshing);
+    super.dispose();
+  }
+
+  /// The helper was just put in place (the app's start, this page): show
+  /// the new version, not the one from before.
+  void _onRefreshing() {
+    if (!mounted) return;
+    if (_service?.refreshing.value ?? false) {
+      setState(() {});
+    } else {
+      _refresh();
+    }
   }
 
   ConnectHost get _host => ref.read(connectHostProvider);
 
   Future<void> _refresh() async {
     final service = ref.read(claudeHelperProvider);
+    // A refresh that is still running (the app just started) first: the
+    // version shown is then the one that is in place.
+    if (service.refreshing.value) await service.installAtStart();
     var s = await service.state();
+    bool? ffmpeg;
+    if (s.supported) {
+      try {
+        ffmpeg = await ref.read(helperFfmpegProvider)();
+      } catch (_) {}
+    }
     if (s.supported && !s.installed && s.hasBundle) {
       // E.g. the folder was deleted while the app was open.
       await service.installAtStart();
@@ -78,6 +112,7 @@ class _ConnectClaudeState extends ConsumerState<ConnectClaudeScreen> {
     if (!mounted) return;
     setState(() {
       _state = s;
+      _ffmpeg = ffmpeg;
       _code = code;
       _desktop = desktop;
       _sessions = sessions;
@@ -326,16 +361,52 @@ class _ConnectClaudeState extends ConsumerState<ConnectClaudeScreen> {
           style: text.bodyMedium,
         ),
         const SizedBox(height: 16),
+        if (_ffmpeg == false)
+          _Card(
+            key: const ValueKey('claude-needs-ffmpeg'),
+            icon: Icons.warning_amber_outlined,
+            title: 'One more thing to install: FFmpeg',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(ffmpegNeededMessage()),
+                const SizedBox(height: 8),
+                SelectableText(ffmpegInstallCommand(),
+                    style: const TextStyle(fontFamily: 'monospace')),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 6, children: [
+                  FilledButton.icon(
+                    key: const ValueKey('claude-ffmpeg-copy'),
+                    onPressed: () =>
+                        _copy(ffmpegInstallCommand(), 'The command was'),
+                    icon: const Icon(Icons.copy, size: 18),
+                    label: const Text('Copy the command'),
+                  ),
+                  TextButton.icon(
+                    key: const ValueKey('claude-ffmpeg-recheck'),
+                    onPressed: _busy ? null : _refresh,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('I installed it: check again'),
+                  ),
+                ]),
+              ],
+            ),
+          ),
         _Card(
           key: const ValueKey('claude-helper-status'),
           icon: s.installed ? Icons.check_circle_outline : Icons.info_outline,
-          title: s.installed
-              ? 'The Claude helper is installed'
-              : 'The Claude helper is not installed yet',
+          title: (_service?.refreshing.value ?? false)
+              ? 'Updating the helper…'
+              : s.installed
+                  ? 'The Claude helper is installed'
+                  : 'The Claude helper is not installed yet',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(s.installed
+              Text((_service?.refreshing.value ?? false)
+                  ? 'ClipForge is putting the helper of this version in '
+                      'place. This takes a few seconds.'
+                  : s.installed
                   ? 'Version $version'
                       '${(current?.build ?? 0) > 0 ? ' (build ${current!.build})' : ''}. '
                       'ClipForge refreshes it every time the app starts.'

@@ -82,6 +82,7 @@ View > Zoom in (open a project first)  [+]
 View > Zoom out (open a project first)  [-]
 View > Snap to playhead and edges (open a project first)
 View > Show sound waves (open a project first)
+View > Show the side panel (open a project first)  [Cmd+Shift+P]
 View > ---
 View > Shape > Original (as the first clip)
 View > Shape > 9:16 upright
@@ -201,6 +202,7 @@ View > Zoom in (open a project first)  [+]
 View > Zoom out (open a project first)  [-]
 View > Snap to playhead and edges (open a project first)
 View > Show sound waves (open a project first)
+View > Show the side panel (open a project first)  [Ctrl+Shift+P]
 View > ---
 View > Shape > Original (as the first clip)
 View > Shape > 9:16 upright
@@ -320,6 +322,7 @@ View > Zoom in (open a project first)  [+]
 View > Zoom out (open a project first)  [-]
 View > Snap to playhead and edges (open a project first)
 View > Show sound waves (open a project first)
+View > Show the side panel (open a project first)  [Ctrl+Shift+P]
 View > ---
 View > Shape > Original (as the first clip)
 View > Shape > 9:16 upright

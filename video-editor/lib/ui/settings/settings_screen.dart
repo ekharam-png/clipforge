@@ -180,6 +180,15 @@ class _SettingsBodyState extends ConsumerState<SettingsBody> {
               settings.soundWaves,
               settings.setSoundWaves,
               articleId: 'who-is-speaking'),
+          if (!phone)
+            toggle(
+                'settings-side-panel',
+                'Show the side panel',
+                'The settings at the right of the editor. Hidden, the '
+                    'picture gets the room; View > Show the side panel '
+                    'brings it back.',
+                settings.sidePanel,
+                settings.setSidePanel),
           if (phone)
             toggle(
                 'settings-smooth-preview',
@@ -226,6 +235,13 @@ class _SettingsBodyState extends ConsumerState<SettingsBody> {
               settings.suggestions,
               settings.setSuggestions,
               articleId: 'suggestions'),
+          toggle(
+              'settings-tips',
+              'Show a tip on the project list',
+              'One line about something that is easy to miss, a new one '
+                  'each day.',
+              settings.tips,
+              settings.setTips),
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton(

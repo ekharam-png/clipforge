@@ -2040,6 +2040,23 @@ class Project {
     return (width: (w * k).round(), height: (h * k).round());
   }
 
+  /// A size that was SCALED to a standard height comes out at the standard
+  /// 16:9 width when it is within half a percent of it (1.18): 1704 x 960
+  /// scaled to 720 is 1278 x 720, which reads like a mistake next to
+  /// "720p" and is 1280 x 720 here (and 720 x 1280 upright). The picture
+  /// is stretched by two pixels in 1280, which nobody can see; a clip of
+  /// that shape still fills the frame (`kSameShapeTolerance`). Sizes that
+  /// are not close to 16:9, and other heights, are left alone.
+  static ({int width, int height}) snapToWide(int width, int height) {
+    const standard = {480: 854, 720: 1280, 1080: 1920, 1440: 2560, 2160: 3840};
+    final wide = width >= height;
+    final short = wide ? height : width, long = wide ? width : height;
+    final want = standard[short];
+    if (want == null || long == want) return (width: width, height: height);
+    if ((long - want).abs() > want * 0.005) return (width: width, height: height);
+    return wide ? (width: want, height: height) : (width: width, height: want);
+  }
+
   /// Where the music clip [a] stops being heard: `min(a.endMs, durationMs)`,
   /// or `a.startMs` when it starts at or after the end of the video (it is
   /// then never heard). The fade-out is positioned to FINISH at this time,
@@ -2170,7 +2187,8 @@ class Project {
       final short = base.width < base.height ? base.width : base.height;
       if (short > 0 && short != target) {
         final k = target / short;
-        base = (width: (base.width * k).round(), height: (base.height * k).round());
+        base = snapToWide(
+            (base.width * k).round(), (base.height * k).round());
       }
     }
     final r = aspect.ratio;

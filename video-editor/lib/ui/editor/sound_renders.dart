@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../core/perf_log.dart';
 import '../../core/model/project.dart';
 import '../../media/media_api.dart';
 import '../../media/processed_sound.dart';
@@ -96,7 +97,8 @@ class SoundRenders extends ChangeNotifier {
     this.maxCacheBytes = kProcessedSoundCacheBytes,
     this.focusIndex,
   }) {
-    _cacheReady = cache.ready().then((_) {
+    final scanned = PerfLog.instance.span('processed-sound cache scan');
+    _cacheReady = cache.ready().whenComplete(scanned).then((_) {
       if (_disposed) return;
       _isCacheReady = true;
       _refresh(force: true);
@@ -250,9 +252,30 @@ class SoundRenders extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The safety valve (1.18): the running renders stop and go back into
+  /// the queue; nothing starts until [resumeAll].
+  void pauseAll() {
+    if (_held || _disposed) return;
+    _held = true;
+    for (final k in [..._busy.keys]) {
+      _busy.remove(k)!.obsolete();
+      _queued.add(k);
+    }
+    notifyListeners();
+  }
+
+  void resumeAll() {
+    if (!_held || _disposed) return;
+    _held = false;
+    _pump();
+    notifyListeners();
+  }
+
+  bool _held = false;
+
   /// Starts renders while there is room, nearest the playhead first.
   void _pump() {
-    if (_disposed || !_isCacheReady) return;
+    if (_disposed || !_isCacheReady || _held) return;
     while (_busy.length < _limit && _queued.isNotEmpty) {
       final key = _next();
       _queued.remove(key);

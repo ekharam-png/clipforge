@@ -326,7 +326,7 @@ void main() {
       ],
       child: RepaintBoundary(key: shotKey, child: const ClipForgeApp()),
     ));
-    await waitFor(() => find.text('New project').evaluate().isNotEmpty,
+    await waitFor(() => find.text('New video').evaluate().isNotEmpty,
         'home screen');
 
     // 0. Updates and the Claude helper (1.12) ------------------------------
@@ -407,7 +407,7 @@ void main() {
     log('step 0b: Help > Send feedback… posted one message to the local site: '
         '${feedbackPosts.single.length} bytes, kind praise, system "${(posted['app'] as Map)['os']}"');
 
-    await tester.tap(find.text('New project').first);
+    await tester.tap(find.text('New video').first);
     await waitFor(
         () => find.text('Add videos or photos').evaluate().isNotEmpty,
         'empty editor');

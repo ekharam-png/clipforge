@@ -290,6 +290,15 @@ String describeShortcut(SingleActivator a) {
   ].join('+');
 }
 
+/// A shortcut written the Windows way ("Ctrl+Left", "Ctrl+Shift+T") in
+/// the words of the computer the app runs on: "Cmd+Left" on a Mac. THE
+/// one place for shortcut text outside the menus (tooltips, notes), so
+/// that a Mac never reads "Ctrl" (1.18).
+String shortcutText(String keys, {TargetPlatform? platform}) =>
+    (platform ?? defaultTargetPlatform) == TargetPlatform.macOS
+        ? keys.replaceAll('Ctrl', 'Cmd')
+        : keys;
+
 /// The whole menu tree as text, one line per item (tests keep a copy, so
 /// a moved or renamed item is noticed).
 List<String> describeMenuTree(List<MenuNode> menus) {
@@ -509,6 +518,8 @@ List<MenuNode> buildMenuTree(
       act(Act.zoomOut, 'zoom-out', shortcut: plain(LogicalKeyboardKey.minus)),
       act(Act.snapping, 'snapping'),
       act(Act.soundWaves, 'waves'),
+      act(Act.sidePanel, 'side-panel',
+          shortcut: key(LogicalKeyboardKey.keyP, shift: true)),
       divider,
       MenuNode.submenu('Shape', id: 'shape', [
         for (final a in CanvasAspect.values)
@@ -684,12 +695,16 @@ class AppMenuBar extends StatelessWidget {
       return WindowMenuBar(controller: c, help: help, child: child);
     }
     if (!usesPlatformMenuBar) return child;
-    return ListenableBuilder(
-      listenable: c,
-      builder: (context, child) => PlatformMenuBar(
-          menus: buildAppMenus(c.editor, help: help, home: c.home),
-          child: child!),
-      child: child,
+    return MacAppKeys(
+      controller: c,
+      help: help,
+      child: ListenableBuilder(
+        listenable: c,
+        builder: (context, child) => PlatformMenuBar(
+            menus: buildAppMenus(c.editor, help: help, home: c.home),
+            child: child!),
+        child: child,
+      ),
     );
   }
 }
@@ -721,7 +736,10 @@ Map<ShortcutActivator, VoidCallback> windowMenuShortcuts(
   final export = e?.run(Act.export);
   final history = e?.run(Act.history);
   final text = e?.run(Act.textWindow);
+  final panel = e?.run(Act.sidePanel);
   return {
+    const SingleActivator(LogicalKeyboardKey.keyP,
+        control: true, shift: true): ?panel,
     if (h != null) ...{
       const SingleActivator(LogicalKeyboardKey.keyN, control: true):
           h.newProject,
@@ -749,14 +767,90 @@ Map<ShortcutActivator, VoidCallback> windowMenuShortcuts(
 /// the comma key types another letter, and Flutter only maps letters and
 /// digits back to their Latin keys, so matching the typed character alone
 /// missed it (1.17; Ctrl+, did nothing in a real Windows test).
-bool isSettingsShortcut(KeyEvent event) {
+///
+/// [mac]: Cmd+, instead (1.18). The Mac's own menu bar normally answers
+/// it before the app sees the key; this is the second way in for a
+/// keyboard layout where it does not.
+bool isSettingsShortcut(KeyEvent event, {bool mac = false}) {
   if (event is! KeyDownEvent) return false;
   final keys = HardwareKeyboard.instance;
-  if (!keys.isControlPressed || keys.isAltPressed || keys.isMetaPressed) {
+  if (keys.isAltPressed || keys.isShiftPressed) return false;
+  if (mac
+      ? (!keys.isMetaPressed || keys.isControlPressed)
+      : (!keys.isControlPressed || keys.isMetaPressed)) {
     return false;
   }
   return event.logicalKey == LogicalKeyboardKey.comma ||
       event.physicalKey == PhysicalKeyboardKey.comma;
+}
+
+/// True for Cmd+? (Cmd+Shift+/) on a Mac: by what the key types or by its
+/// place on the keyboard.
+bool isMacHelpShortcut(KeyEvent event) {
+  if (event is! KeyDownEvent) return false;
+  final keys = HardwareKeyboard.instance;
+  if (!keys.isMetaPressed || keys.isControlPressed || keys.isAltPressed) {
+    return false;
+  }
+  if (event.logicalKey == LogicalKeyboardKey.question) return true;
+  return keys.isShiftPressed &&
+      (event.logicalKey == LogicalKeyboardKey.slash ||
+          event.physicalKey == PhysicalKeyboardKey.slash);
+}
+
+/// The Mac: Cmd+? opens ClipForge Help and Cmd+, Settings ALSO when the
+/// system's menu bar did not answer the key (1.18). In the 1.17 test
+/// Cmd+? did nothing visible: macOS gives that key to the search box of
+/// the Help menu before the menu item's own shortcut. A key the menu bar
+/// did answer never arrives here, so nothing opens twice (and the pages
+/// themselves ignore a second request within a moment).
+class MacAppKeys extends StatefulWidget {
+  const MacAppKeys(
+      {super.key, required this.controller, required this.child, this.help});
+  final AppMenuController controller;
+  final HelpMenuActions? help;
+  final Widget child;
+
+  @override
+  State<MacAppKeys> createState() => _MacAppKeysState();
+}
+
+class _MacAppKeysState extends State<MacAppKeys> {
+  DateTime? _last;
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    super.dispose();
+  }
+
+  bool _onKey(KeyEvent event) {
+    if (!mounted) return false;
+    VoidCallback? open;
+    if (isMacHelpShortcut(event)) {
+      open = widget.help?.openHelp;
+    } else if (isSettingsShortcut(event, mac: true)) {
+      open = widget.controller.editor?.run(Act.settings) ??
+          widget.help?.openSettings;
+    }
+    if (open == null) return false;
+    // Key repeat, or the menu bar and this both: once.
+    final now = DateTime.now();
+    final last = _last;
+    _last = now;
+    if (last != null && now.difference(last).inMilliseconds < 600) return true;
+    open();
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// The menu bar along the top of the window on Windows and Linux: the same

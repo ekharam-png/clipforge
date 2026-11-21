@@ -9,10 +9,26 @@ import '../format.dart';
 import '../services.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import '../../media/media_api.dart';
+import '../../media/media_common.dart' show ProbeTimeout, probeWithin;
 import 'session.dart';
 import 'voice_actions.dart';
 
 const _uuid = Uuid();
+
+/// The line a busy window shows when reading a file takes long.
+const String kSlowReadNote =
+    'This is taking longer than usual. You can wait, or cancel and try '
+    'again with the file copied to this computer.';
+
+/// What is said about [name] when reading it failed with [e].
+String readProblem(Object e, String name) =>
+    e is ProbeTimeout ? e.message : '$name — the file could not be read';
+
+/// The probe every "add a file" path uses: with a time limit
+/// ([kProbeTimeout]), so "Adding file…" always ends.
+Future<MediaInfo> readMedia(EditorSession session, String path) =>
+    probeWithin(session.engine, path, timeout: session.probeTimeout);
 
 /// How long a newly added photo stays on screen.
 const int kDefaultPhotoMs = 3000;
@@ -73,10 +89,12 @@ Future<List<String>> addMediaFiles(
   // Sound files picked here (a voice recording next to its video) are
   // asked about once the videos are in.
   final sounds = <PickedFile>[];
-  await whileBusy(context, 'Adding ${picked.length == 1 ? 'file' : '${picked.length} files'}…', () async {
+  final cancel = BusyCancel();
+  final done = await whileBusy(context, 'Adding ${picked.length == 1 ? 'file' : '${picked.length} files'}…', cancel: cancel, slowNote: kSlowReadNote, () async {
     for (final file in picked) {
+      if (cancel.cancelled) return;
       try {
-        final info = await session.engine.probe(file.path);
+        final info = await readMedia(session, file.path);
         if (info.width <= 0 && info.height <= 0 && !info.hasVideo &&
             info.hasAudio && info.durationMs > 0 && !isImagePath(file.path)) {
           sounds.add(file);
@@ -120,11 +138,13 @@ Future<List<String>> addMediaFiles(
             frameRate: info.fps,
           ));
         }
-      } catch (_) {
-        problems.add('${file.name} — the file could not be read');
+      } catch (e) {
+        problems.add(readProblem(e, file.name));
       }
     }
   });
+  // Cancelled: nothing is added, also not what was read before.
+  if (!done || session.isDisposed) return const [];
 
   if (clips.isNotEmpty) {
     final afterSelection = atIndex == null && session.selectedClip != null;
@@ -174,20 +194,23 @@ Future<List<String>> addMusicFiles(
   if (credits.isEmpty) return addSoundFiles(context, session, picked);
   final files = <SoundFile>[];
   final problems = <String>[];
-  await whileBusy(context, 'Adding music…', () async {
+  final cancel = BusyCancel();
+  final done = await whileBusy(context, 'Adding music…', cancel: cancel, slowNote: kSlowReadNote, () async {
     for (final file in picked) {
+      if (cancel.cancelled) return;
       try {
-        final info = await session.engine.probe(file.path);
+        final info = await readMedia(session, file.path);
         if (!info.hasAudio || info.durationMs <= 0) {
           problems.add('${file.name} — no sound found in this file');
           continue;
         }
         files.add(SoundFile(file, info));
-      } catch (_) {
-        problems.add('${file.name} — the file could not be read');
+      } catch (e) {
+        problems.add(readProblem(e, file.name));
       }
     }
   });
+  if (!done || session.isDisposed) return const [];
   placeSounds(session, files, credits: credits);
   return problems;
 }
@@ -497,10 +520,12 @@ Future<List<String>> addOverlayFiles(
   final startMs = session.playback.positionMs < session.project.durationMs
       ? session.playback.positionMs
       : 0;
-  await whileBusy(context, 'Adding overlay…', () async {
+  final cancel = BusyCancel();
+  final done = await whileBusy(context, 'Adding overlay…', cancel: cancel, slowNote: kSlowReadNote, () async {
     for (final file in picked) {
+      if (cancel.cancelled) return;
       try {
-        final info = await session.engine.probe(file.path);
+        final info = await readMedia(session, file.path);
         if (info.width <= 0 || info.height <= 0) {
           problems.add('${file.name} — not a video or photo');
           continue;
@@ -525,11 +550,12 @@ Future<List<String>> addOverlayFiles(
             audioStreams: photo ? const [] : info.audioStreams,
           ),
         ));
-      } catch (_) {
-        problems.add('${file.name} — the file could not be read');
+      } catch (e) {
+        problems.add(readProblem(e, file.name));
       }
     }
   });
+  if (!done || session.isDisposed) return const [];
   if (items.isNotEmpty) {
     final ids = <String>[];
     session.editor.transaction(() {

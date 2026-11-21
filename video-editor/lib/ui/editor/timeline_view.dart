@@ -8,6 +8,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/background_work.dart';
+
 import '../../core/editor/editor_controller.dart';
 import '../../core/editor/snapping.dart';
 import '../../core/model/project.dart';
@@ -1570,9 +1572,36 @@ class _TimelineViewState extends State<TimelineView> {
           right: 8,
           top: 3,
           child: ListenableBuilder(
-            listenable: _s.pictures,
+            listenable: Listenable.merge([_s.pictures, _s.backgroundPaused]),
             builder: (context, _) {
               final pics = _s.pictures;
+              if (!pics.pausedForApp && _s.backgroundPaused.value) {
+                // The generic safety valve (1.18): something else than
+                // the sound waves was (or might have been) in the way.
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                        'Background work was paused to keep ClipForge '
+                        'responsive · ',
+                        key: ValueKey('background-paused'),
+                        style: TextStyle(
+                            fontSize: 11, color: AppColors.textDim)),
+                    InkWell(
+                      key: const ValueKey('background-resume'),
+                      onTap: BackgroundWork.instance.resumeAll,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 2),
+                        child: Text('Turn back on',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.accent,
+                                decoration: TextDecoration.underline)),
+                      ),
+                    ),
+                  ],
+                );
+              }
               if (pics.pausedForApp) {
                 // The safety valve: one line, and the way back.
                 return Row(
@@ -1586,7 +1615,10 @@ class _TimelineViewState extends State<TimelineView> {
                             fontSize: 11, color: AppColors.textDim)),
                     InkWell(
                       key: const ValueKey('sound-waves-resume'),
-                      onTap: pics.resume,
+                      onTap: () {
+                        pics.resume();
+                        BackgroundWork.instance.resumeAll();
+                      },
                       child: const Padding(
                         padding: EdgeInsets.symmetric(vertical: 2),
                         child: Text('Turn back on',

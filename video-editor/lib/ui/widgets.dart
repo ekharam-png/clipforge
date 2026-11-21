@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import 'format.dart';
@@ -149,35 +151,166 @@ Future<bool> confirmDelete(
   return ok ?? false;
 }
 
-/// Shows [message] with a spinner while [work] runs.
-Future<void> whileBusy(
-    BuildContext context, String message, Future<void> Function() work) async {
+/// A way out of a [whileBusy] window (1.18): given to [whileBusy], the
+/// window gets a Cancel button, Esc and the back button close it, and
+/// [whileBusy] returns at once - the work may still be running and must
+/// check [cancelled] before it uses its result.
+class BusyCancel {
+  bool _cancelled = false;
+  final Completer<void> _done = Completer<void>();
+
+  bool get cancelled => _cancelled;
+
+  /// Completes when the user cancelled.
+  Future<void> get whenCancelled => _done.future;
+
+  void cancel() {
+    if (_cancelled) return;
+    _cancelled = true;
+    _done.complete();
+  }
+
+  /// The cancellable busy window that is open right now, if any.
+  static BusyCancel? _current;
+
+  /// True while a busy window that can be cancelled is open.
+  static bool get busy => _current != null;
+
+  /// Cancels the open busy window (File > Back to projects during
+  /// "Adding file…"). True when there was one.
+  static bool cancelCurrent() {
+    final c = _current;
+    if (c == null) return false;
+    c.cancel();
+    return true;
+  }
+}
+
+/// Shows [message] with a spinner while [work] runs. With [cancel] the
+/// window can be left (Cancel, Esc); the result is then false and [work]
+/// is no longer waited for. [slowNote] replaces nothing: it is added
+/// under the message after [slowAfter], for work that normally takes a
+/// moment ("This is taking longer than usual…").
+Future<bool> whileBusy(
+    BuildContext context, String message, Future<void> Function() work,
+    {BusyCancel? cancel,
+    String? slowNote,
+    Duration slowAfter = const Duration(seconds: 6)}) async {
   final navigator = Navigator.of(context, rootNavigator: true);
-  showDialog<void>(
+  var open = true;
+  final closed = showDialog<void>(
     context: context,
     barrierDismissible: false,
     useRootNavigator: true,
     builder: (_) => PopScope(
-      canPop: false,
-      child: AlertDialog(
-        content: Row(
+      canPop: cancel != null,
+      // Esc cancels (a window that cannot be dismissed by a click outside
+      // does not take Esc by itself).
+      child: CallbackShortcuts(
+        bindings: cancel == null
+            ? const {}
+            : {
+                const SingleActivator(LogicalKeyboardKey.escape): () {
+                  if (open) navigator.pop();
+                },
+              },
+        child: Focus(
+          autofocus: true,
+          child: AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 3)),
-            const SizedBox(width: 20),
-            Expanded(child: Text(message)),
+            Row(
+              children: [
+                const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 3)),
+                const SizedBox(width: 20),
+                Expanded(child: Text(message)),
+              ],
+            ),
+            if (slowNote != null) _SlowNote(slowNote, slowAfter),
           ],
+        ),
+        actions: cancel == null
+            ? null
+            : [
+                TextButton(
+                  key: const ValueKey('busy-cancel'),
+                  onPressed: () => navigator.pop(),
+                  child: const Text('Cancel'),
+                ),
+              ],
+          ),
         ),
       ),
     ),
-  );
+  ).then((_) {
+    // Closed by the user (Cancel, Esc, back) when the work is not over.
+    if (open) cancel?.cancel();
+    open = false;
+  });
+  if (cancel != null) BusyCancel._current = cancel;
   try {
-    await work();
+    if (cancel == null) {
+      await work();
+      return true;
+    }
+    final finished = work().then((_) => true);
+    // A failure after the user left must not become an unhandled error.
+    unawaited(finished.then((_) {}, onError: (_) {}));
+    final done = await Future.any<bool>(
+        [finished, cancel.whenCancelled.then((_) => false)]);
+    return done && !cancel.cancelled;
   } finally {
-    navigator.pop();
+    if (identical(BusyCancel._current, cancel)) BusyCancel._current = null;
+    if (open) {
+      open = false;
+      navigator.pop();
+    }
+    unawaited(closed);
   }
+}
+
+/// A line that appears after a while under a busy message.
+class _SlowNote extends StatefulWidget {
+  const _SlowNote(this.text, this.after);
+  final String text;
+  final Duration after;
+
+  @override
+  State<_SlowNote> createState() => _SlowNoteState();
+}
+
+class _SlowNoteState extends State<_SlowNote> {
+  Timer? _timer;
+  bool _show = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(widget.after, () {
+      if (mounted) setState(() => _show = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => !_show
+      ? const SizedBox.shrink()
+      : Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: Text(widget.text,
+              key: const ValueKey('busy-slow-note'),
+              style: Theme.of(context).textTheme.bodySmall),
+        );
 }
 
 

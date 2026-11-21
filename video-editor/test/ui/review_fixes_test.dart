@@ -633,6 +633,7 @@ void main() {
     await tapAdd(tester, 'Title');
     expect(find.text('Edit title'), findsOneWidget);
     expect(find.text('Text size'), findsOneWidget);
+    await openSection(tester, 'Font and colour');
     expect(find.text('Text colour'), findsOneWidget);
     expect(find.text('Medium · 6%'), findsOneWidget);
     // The placeholder is selected, so typing replaces it.

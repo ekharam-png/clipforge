@@ -162,7 +162,7 @@ List<TourStep> buildTourSteps({required bool wide, required bool canDrop}) => [
     anchors: const [TourIds.newProject],
     title: 'Start a new video',
     body:
-        'Tap "New project" to start. Inside it you add your videos, '
+        'Tap "New video" to start. Inside it you add your videos, '
         'photos and music.'
         '${canDrop ? ' You can also drag them from a folder straight '
                   'onto this window.' : ''}',

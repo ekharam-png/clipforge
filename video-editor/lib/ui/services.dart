@@ -14,10 +14,12 @@ import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import '../core/model/project.dart';
+import '../core/perf_log.dart';
 import '../core/storage/media_check.dart' as media_check;
 import '../core/storage/media_cleanup.dart' as media_cleanup;
 import '../core/storage/media_import.dart';
 import '../media/processed_sound_cache.dart';
+import 'format.dart' show savePathFor;
 import '../core/storage/project_bundle.dart' as bundle;
 import '../core/storage/project_lock.dart';
 import '../core/build_info.dart';
@@ -472,12 +474,19 @@ class PlatformDocumentService implements DocumentService {
       final uri = await FilePicker.saveFile(
           fileName: fileName, bytes: Uint8List(0));
       if (uri == null || uri.scheme != 'file') return null;
-      var path = uri.toFilePath();
-      final ext = p.extension(fileName);
-      if (p.extension(path).toLowerCase() != ext.toLowerCase()) {
-        path = '$path$ext';
-      }
+      final chosen = uri.toFilePath();
+      // The offered ending, whole (".clipforge.zip", not only ".zip").
+      final path = savePathFor(chosen, fileName);
       await write(path);
+      if (path != chosen) {
+        // The save window left an empty file under the name it made.
+        try {
+          final placeholder = File(chosen);
+          if (await placeholder.exists() && await placeholder.length() == 0) {
+            await placeholder.delete();
+          }
+        } catch (_) {}
+      }
       return path;
     }
     return await shareFile(fileName, write) ? fileName : null;
@@ -578,7 +587,8 @@ class ThumbnailCache {
   Future<String?> get(String path, {int timeMs = 0}) {
     final key = '$timeMs|$path';
     return _cache[key] ??= _limited(
-        () => engine.thumbnail(path, timeMs: timeMs, maxHeight: 120),
+        () => PerfLog.instance.track('thumbnail',
+            () => engine.thumbnail(path, timeMs: timeMs, maxHeight: 120)),
         (v) => _done[key] = v);
   }
 
@@ -595,8 +605,10 @@ class ThumbnailCache {
     final e = engine;
     if (e is! ThumbnailStripEngine) return Future.value(null);
     return _strips[path] ??= _limited(
-        () => (e as ThumbnailStripEngine)
-            .thumbnailStrip(path, durationMs: durationMs),
+        () => PerfLog.instance.track(
+            'thumbnail strip (${durationMs ~/ 1000} s)',
+            () => (e as ThumbnailStripEngine)
+                .thumbnailStrip(path, durationMs: durationMs)),
         (v) => _stripsDone[path] = v);
   }
 

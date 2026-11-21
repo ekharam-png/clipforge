@@ -280,7 +280,7 @@ void main() {
       final fakes = await openFirstTime(tester, phone);
       await tester.tap(find.text('Show me around'));
       await settle(tester);
-      await tester.tap(find.text('New project'), warnIfMissed: false);
+      await tester.tap(find.text('New video'), warnIfMissed: false);
       await settle(tester);
       expect(find.byType(EditorScreen), findsNothing);
       expect(fakes.store.projects, isEmpty);

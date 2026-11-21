@@ -129,8 +129,10 @@ void main() {
       if (phoneScreen) {
         await tester.tap(find.byKey(const ValueKey('crop-sheet-done')));
       } else {
-        await tester.ensureVisible(find.text('Look').first);
-        await tester.tap(find.text('Look').first);
+        // 1.18: the groups no longer close each other; Crop is closed
+        // on its own heading.
+        await tester.ensureVisible(sectionHeading('Crop').first);
+        await tester.tap(sectionHeading('Crop').first);
       }
       await tester.pumpAndSettle();
       expect(s.cropTarget.value, isNull);

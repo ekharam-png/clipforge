@@ -1,7 +1,13 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/install_place.dart';
+import '../../core/perf_log.dart';
 import '../../core/storage/project_store.dart';
 import '../about.dart';
 import '../app_menu.dart';
@@ -13,17 +19,35 @@ import '../format.dart';
 import '../feedback/feedback_screen.dart';
 import '../help/help_screen.dart';
 import '../help/tour.dart';
-import '../help/whats_new.dart' show kWhatsNewId;
+import '../help/whats_new.dart' show kChangelogAsset, kWhatsNewId;
 import '../help/what_moved.dart';
 import '../app_settings.dart';
 import '../settings/settings_screen.dart';
-import 'dart:async';
 import '../help/tour_sample.dart';
 import '../services.dart';
 import '../theme.dart';
 import '../update/update_controller.dart';
 import '../update/update_ui.dart';
 import '../widgets.dart';
+import 'home_extras.dart';
+
+/// The release notes (CHANGELOG.md, bundled with the app).
+final changelogProvider = Provider<Future<String> Function()>(
+    (ref) => () => rootBundle.loadString(kChangelogAsset));
+
+/// Today (tests give a fixed day, so the tip is known).
+final todayProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
+/// Macs: what to say about the place the app runs from; null elsewhere,
+/// and when it is in an Applications folder.
+final installAdviceProvider = Provider<InstallAdvice? Function()>((ref) => () {
+      if (!Platform.isMacOS) return null;
+      return macInstallAdvice(
+        executable: Platform.resolvedExecutable,
+        home: Platform.environment['HOME'],
+        version: ref.read(buildInfoProvider).version,
+      );
+    });
 
 /// The list of saved projects.
 class HomeScreen extends ConsumerStatefulWidget {
@@ -67,6 +91,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _tour.attachHome(_tourHooks);
     _tour.addListener(_onTour);
     // The app's media folder is tidied once per run of the app.
+    _settings = ref.read(appSettingsProvider)..addListener(_onSettings);
+    _checkInstallPlace();
     _reload().then((_) {
       if (!mounted) return;
       _offerTour();
@@ -84,8 +110,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _startUpdatesAndClaude() async {
     final updates = ref.read(updateControllerProvider);
     final claude = ref.read(claudeHelperProvider);
+    // First, and not behind the update check or its windows (1.18: a Mac
+    // still had the helper of the build before until the Connect page was
+    // opened a second time). Unpacking runs on another isolate.
+    unawaited(claude.installAtStart());
     try {
-      await updates.onAppStart();
+      await PerfLog.instance.track('start: update check', updates.onAppStart);
       if (updates.lastResult != null && mounted) {
         // The quiet "Updated to X" line on the list says it already.
         await _updatedKnown.future
@@ -104,13 +134,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     } catch (_) {
       // Updates are never in the way of using the app.
     }
-    try {
-      await claude.installAtStart();
-    } catch (_) {}
+  }
+
+  late final AppSettings _settings;
+  void _onSettings() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _settings.removeListener(_onSettings);
     appMenu.detachHome(this);
     _tour.removeListener(_onTour);
     _tour.detachHome(_tourHooks);
@@ -153,6 +186,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// moved" once. A first install sees neither.
   String? _updatedTo;
 
+  /// Two or three lines about this version from the release notes, for
+  /// the "What's new in (version)" card (empty: the notes have none).
+  List<String> _highlights = const [];
+
+  Future<void> _loadHighlights(String version) async {
+    try {
+      final notes = await ref.read(changelogProvider)();
+      final lines = changelogHighlights(notes, version);
+      if (mounted) setState(() => _highlights = lines);
+    } catch (_) {
+      // The card then shows without lines.
+    }
+  }
+
+  /// Macs: the app does not run from an Applications folder (null: it
+  /// does, or the line was closed).
+  InstallAdvice? _advice;
+
+  Future<void> _checkInstallPlace() async {
+    try {
+      final advice = ref.read(installAdviceProvider)();
+      if (advice == null) return;
+      if (await ref.read(appPrefsProvider).flag(kMoveToApplicationsSeenFlag)) {
+        return;
+      }
+      if (mounted) setState(() => _advice = advice);
+    } catch (_) {}
+  }
+
+  void _closeAdvice() {
+    setState(() => _advice = null);
+    ref
+        .read(appPrefsProvider)
+        .setFlag(kMoveToApplicationsSeenFlag)
+        .catchError((Object _) {});
+  }
+
   /// Done once it is known whether the "Updated to" line shows.
   final Completer<void> _updatedKnown = Completer<void>();
 
@@ -167,6 +237,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       final updated = previous == null ? existingUser : previous != current;
       if (updated && await prefs.text(kUpdatedLineSeenText) != current) {
         if (mounted) setState(() => _updatedTo = current);
+        unawaited(_loadHighlights(current));
       }
       if (!_updatedKnown.isCompleted) _updatedKnown.complete();
       // 1.17: I and O changed their meaning. Said once to people who come
@@ -246,7 +317,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// (see [cleanAppMedia]). Quietly: there is nothing for the user to do.
   Future<void> _cleanMedia() async {
     try {
-      await ref.read(mediaCleanupProvider)(await _store);
+      final store = await _store;
+      await PerfLog.instance.track('start: tidy unused media',
+          () => ref.read(mediaCleanupProvider)(store));
     } catch (_) {
       // Tidying up is best effort.
     }
@@ -257,7 +330,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _reload() async {
     try {
       final store = await _store;
-      final list = await store.list();
+      final list =
+          await PerfLog.instance.track('project list', () => store.list());
       var damaged = const <DamagedProject>[];
       try {
         damaged = await ref
@@ -291,11 +365,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     await _reload();
   }
 
-  Future<void> _open(String id, {FileDrop? drop, bool tour = false}) async {
+  Future<void> _open(String id,
+      {FileDrop? drop,
+      bool tour = false,
+      EditorStart start = EditorStart.none}) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-          builder: (_) =>
-              EditorScreen(projectId: id, initialDrop: drop, tour: tour)),
+          builder: (_) => EditorScreen(
+              projectId: id, initialDrop: drop, tour: tour, start: start)),
     );
     await _reload();
     // A tour asked for while the editor was open starts now.
@@ -303,13 +380,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   /// Starts a new project and opens it; [drop]: files to put in it.
-  Future<void> _create({FileDrop? drop}) =>
+  Future<void> _create(
+          {FileDrop? drop,
+          EditorStart start = EditorStart.none,
+          String kind = 'Video'}) =>
       _run('Could not create the project.', () async {
         final now = DateTime.now();
-        final name = 'Video ${formatDate(now).split(',').first}';
-        final project = await (await _store).create(name);
-        if (mounted) await _open(project.id, drop: drop);
+        final store = await _store;
+        final name = await freeProjectName(
+            store, '$kind ${formatDate(now).split(',').first}');
+        final project = await store.create(name);
+        if (mounted) await _open(project.id, drop: drop, start: start);
       });
+
+  /// "Make a short" on the Start row: which video is it from? Then that
+  /// project opens with "Make a short from here".
+  Future<void> _startShort() async {
+    final projects = _projects ?? const <ProjectInfo>[];
+    final withVideo = [
+      for (final p in projects)
+        if (p.durationMs > 0) p,
+    ];
+    if (withVideo.isEmpty) {
+      _say('A short is made from a video you already have here. Start '
+          'with "New video", then come back to "Make a short".');
+      return;
+    }
+    final chosen = withVideo.length == 1
+        ? withVideo.single
+        : await showDialog<ProjectInfo>(
+            context: context,
+            builder: (context) => SimpleDialog(
+              key: const ValueKey('short-choose-project'),
+              title: const Text('Make a short from which video?'),
+              children: [
+                for (final p in withVideo.take(12))
+                  SimpleDialogOption(
+                    key: ValueKey('short-from-${p.id}'),
+                    onPressed: () => Navigator.of(context).pop(p),
+                    child: Text('${p.name}  ·  ${formatDuration(p.durationMs)}'),
+                  ),
+              ],
+            ),
+          );
+    if (chosen == null || !mounted) return;
+    await _open(chosen.id, start: EditorStart.short);
+  }
 
   /// Files dragged onto the project list from the desktop: project files
   /// (.clipforge.zip) are opened as projects; videos, photos, music and
@@ -572,69 +688,174 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     } else if (projects == null) {
       body = const Center(child: CircularProgressIndicator());
-    } else if (projects.isEmpty && _damaged.isEmpty) {
-      body = _Message(
-        icon: Icons.movie_creation_outlined,
-        title: 'No projects yet',
-        detail: 'Start one to put your videos and photos together.',
-        action: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TourAnchor(
-              id: TourIds.newProject,
-              child: FilledButton.icon(
-                onPressed: _busy ? null : _create,
-                icon: const Icon(Icons.add),
-                label: const Text('New project'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TourAnchor(
-              id: TourIds.openProjectFile,
-              child: TextButton.icon(
-                onPressed: _busy ? null : _openFile,
-                icon: const Icon(Icons.folder_open, size: 18),
-                label: const Text('Open project file'),
-              ),
-            ),
-          ],
-        ),
-      );
     } else {
       final thumbnails = ref.watch(thumbnailsProvider);
-      body = GridView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 460,
-          mainAxisExtent: 88,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-        ),
-        itemCount: projects.length + _damaged.length,
-        itemBuilder: (context, i) {
-          if (i >= projects.length) {
-            return _DamagedCard(project: _damaged[i - projects.length]);
-          }
-          final info = projects[i];
-          return _ProjectCard(
-            info: info,
-            thumbnails: thumbnails,
-            onOpen: () => _open(info.id),
-            onAction: (action) => switch (action) {
-              _CardAction.rename => _rename(info),
-              _CardAction.duplicate => _duplicate(info),
-              _CardAction.share => _share(info),
-              _CardAction.delete => _delete(info),
-            },
-          );
-        },
-      );
+      final empty = projects.isEmpty && _damaged.isEmpty;
+      body = LayoutBuilder(builder: (context, box) {
+        // One column on a phone, cards with a big picture on a computer.
+        final narrow = box.maxWidth < 600;
+        return CustomScrollView(
+          key: const ValueKey('home-list'),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              sliver: SliverToBoxAdapter(child: _header(empty)),
+            ),
+            if (empty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _Message(
+                  icon: Icons.movie_creation_outlined,
+                  title: 'Welcome to ClipForge',
+                  detail: 'Your videos will be listed here. Start with one '
+                      'of the three above'
+                      '${ref.read(fileDropServiceProvider).supported ? ', or drop a video file on this window' : ''}.',
+                  action: TourAnchor(
+                    id: TourIds.openProjectFile,
+                    child: TextButton.icon(
+                      onPressed: _busy ? null : _openFile,
+                      icon: const Icon(Icons.folder_open, size: 18),
+                      label: const Text('Open project file'),
+                    ),
+                  ),
+                ),
+              )
+            else ...[
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                sliver: SliverToBoxAdapter(
+                  child: Text('Your videos',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppColors.textDim)),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+                sliver: SliverGrid.builder(
+                  gridDelegate: narrow
+                      ? const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 1,
+                          mainAxisExtent: 104,
+                          mainAxisSpacing: 12,
+                        )
+                      : const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 320,
+                          mainAxisExtent: 236,
+                          crossAxisSpacing: 14,
+                          mainAxisSpacing: 14,
+                        ),
+                  itemCount: projects.length + _damaged.length,
+                  itemBuilder: (context, i) {
+                    if (i >= projects.length) {
+                      return _DamagedCard(
+                          project: _damaged[i - projects.length]);
+                    }
+                    final info = projects[i];
+                    return _ProjectCard(
+                      info: info,
+                      tall: !narrow,
+                      thumbnails: thumbnails,
+                      onOpen: () => _open(info.id),
+                      onAction: (action) => switch (action) {
+                        _CardAction.rename => _rename(info),
+                        _CardAction.duplicate => _duplicate(info),
+                        _CardAction.share => _share(info),
+                        _CardAction.delete => _delete(info),
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        );
+      });
     }
     return FileDropZone(
       message: 'Drop to start a new video',
       enabled: !_busy,
       onDrop: _dropped,
       child: _scaffold(projects, body),
+    );
+  }
+
+  /// Above the projects: the Start row, "What's new" after an update,
+  /// and one tip.
+  Widget _header(bool empty) {
+    final version = _updatedTo;
+    final advice = _advice;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (advice != null) ...[
+          MoveToApplicationsLine(
+            message: advice.message,
+            onHow: () => showHelpArticle(context, 'move-to-applications'),
+            onClose: _closeAdvice,
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (version != null) ...[
+          WhatsNewCard(
+            version: version,
+            highlights: _highlights,
+            onReadAll: () {
+              _closeUpdatedLine();
+              openHelp(context, articleId: kWhatsNewId);
+            },
+            onClose: _closeUpdatedLine,
+          ),
+          const SizedBox(height: 12),
+        ],
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text('Start',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(color: AppColors.textDim)),
+        ),
+        StartRow(
+          wrapFirst: (child) =>
+              TourAnchor(id: TourIds.newProject, child: child),
+          choices: [
+            StartChoice(
+              id: 'new',
+              icon: Icons.add_circle_outline,
+              title: 'New video',
+              detail: 'Put videos and photos together',
+              onTap: _busy ? null : _create,
+            ),
+            StartChoice(
+              id: 'podcast',
+              icon: Icons.mic_none_outlined,
+              title: 'Podcast',
+              detail: 'A video and one sound file per speaker',
+              onTap: _busy
+                  ? null
+                  : () =>
+                      _create(start: EditorStart.podcast, kind: 'Podcast'),
+            ),
+            StartChoice(
+              id: 'short',
+              icon: Icons.smartphone,
+              title: 'Make a short',
+              detail: 'An upright piece of a video you have here',
+              onTap: _busy ? null : _startShort,
+            ),
+          ],
+        ),
+        if (_settings.tips) ...[
+          const SizedBox(height: 12),
+          TipLine(
+            tip: tipFor(ref.read(todayProvider)()),
+            onHide: () {
+              _settings.setTips(false);
+              _say('Tips are off. You can turn them back on in Settings.');
+            },
+          ),
+        ],
+      ],
     );
   }
 
@@ -707,16 +928,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           children: [
             // "Version X is available" (nothing when there is no update).
             const UpdateBanner(),
-            // "Updated to 1.15.0 · What's new" (once per new version).
-            if (_updatedTo != null)
-              UpdatedLine(
-                version: _updatedTo!,
-                onWhatsNew: () {
-                  _closeUpdatedLine();
-                  openHelp(context, articleId: kWhatsNewId);
-                },
-                onClose: _closeUpdatedLine,
-              ),
+            // "What's new in 1.18.0" (once per new version) is the first
+            // thing in the list itself ([_header]).
             Expanded(child: body),
           ],
         ),
@@ -726,17 +939,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         top: false,
         child: VersionLine(padding: EdgeInsets.fromLTRB(16, 4, 16, 6)),
       ),
-      floatingActionButton:
-          projects == null || (projects.isEmpty && _damaged.isEmpty)
-              ? null
-          : TourAnchor(
-              id: TourIds.newProject,
-              child: FloatingActionButton.extended(
-                onPressed: _busy ? null : _create,
-                icon: const Icon(Icons.add),
-                label: const Text('New project'),
-              ),
-            ),
     );
   }
 }
@@ -853,7 +1055,11 @@ class _ProjectCard extends StatelessWidget {
     required this.thumbnails,
     required this.onOpen,
     required this.onAction,
+    this.tall = false,
   });
+
+  /// A big picture on top (computers); else a row (phones).
+  final bool tall;
   final ProjectInfo info;
   final ThumbnailCache thumbnails;
   final VoidCallback onOpen;
@@ -863,6 +1069,94 @@ class _ProjectCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final source = info.thumbnailSourcePath;
+    final picture = Stack(
+      fit: StackFit.expand,
+      children: [
+        const ColoredBox(
+          color: AppColors.panelHigh,
+          child: Icon(Icons.movie_outlined, color: AppColors.textDim, size: 28),
+        ),
+        if (source != null) MediaThumb(path: source, thumbnails: thumbnails),
+        // The length on the picture, as video sites show it.
+        Positioned(
+          right: 6,
+          bottom: 6,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xB3000000),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              child: Text(formatDuration(info.durationMs),
+                  style: const TextStyle(fontSize: 11, color: Colors.white)),
+            ),
+          ),
+        ),
+      ],
+    );
+    final menu = PopupMenuButton<_CardAction>(
+      tooltip: 'Project options',
+      // Its own name, not only a tooltip: assistive tools list
+      // icon-only buttons by name.
+      icon: Icon(Icons.adaptive.more, semanticLabel: 'Project options'),
+      onSelected: onAction,
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: _CardAction.rename, child: Text('Rename')),
+        PopupMenuItem(value: _CardAction.duplicate, child: Text('Duplicate')),
+        PopupMenuItem(
+            value: _CardAction.share, child: Text('Share project file')),
+        PopupMenuDivider(),
+        PopupMenuItem(value: _CardAction.delete, child: Text('Delete')),
+      ],
+    );
+    final words = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          info.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: text.titleMedium,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          // The length is on the picture.
+          'Edited ${formatDate(info.updatedAt)}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: text.bodySmall?.copyWith(color: AppColors.textDim),
+        ),
+      ],
+    );
+    if (tall) {
+      return Material(
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(12),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onOpen,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: picture),
+              SizedBox(
+                height: 60,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 14),
+                    Expanded(child: words),
+                    menu,
+                    const SizedBox(width: 4),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Material(
       color: AppColors.panel,
       borderRadius: BorderRadius.circular(12),
@@ -872,62 +1166,13 @@ class _ProjectCard extends StatelessWidget {
         child: Row(
           children: [
             SizedBox(
-              width: 124,
+              width: 150,
               height: double.infinity,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  const ColoredBox(
-                    color: AppColors.panelHigh,
-                    child: Icon(Icons.movie_outlined,
-                        color: AppColors.textDim, size: 28),
-                  ),
-                  if (source != null)
-                    MediaThumb(path: source, thumbnails: thumbnails),
-                ],
-              ),
+              child: picture,
             ),
             const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    info.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${formatDuration(info.durationMs)}  ·  '
-                    '${formatDate(info.updatedAt)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.bodySmall?.copyWith(color: AppColors.textDim),
-                  ),
-                ],
-              ),
-            ),
-            PopupMenuButton<_CardAction>(
-              tooltip: 'Project options',
-              // Its own name, not only a tooltip: assistive tools list
-              // icon-only buttons by name.
-              icon: Icon(Icons.adaptive.more,
-                  semanticLabel: 'Project options'),
-              onSelected: onAction,
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: _CardAction.rename, child: Text('Rename')),
-                PopupMenuItem(
-                    value: _CardAction.duplicate, child: Text('Duplicate')),
-                PopupMenuItem(
-                    value: _CardAction.share,
-                    child: Text('Share project file')),
-                PopupMenuDivider(),
-                PopupMenuItem(value: _CardAction.delete, child: Text('Delete')),
-              ],
-            ),
+            Expanded(child: words),
+            menu,
             const SizedBox(width: 4),
           ],
         ),

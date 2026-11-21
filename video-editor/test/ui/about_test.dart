@@ -67,9 +67,9 @@ void main() {
       // New project button.
       final lineBox = tester.getRect(line);
       expect(lineBox.bottom, lessThanOrEqualTo(size.height));
-      expect(
-          tester.getRect(find.byType(FloatingActionButton)).bottom,
-          lessThanOrEqualTo(lineBox.top + 0.5));
+      // (1.18: the round New project button is gone; the Start row is at
+      // the top of the list.)
+      expect(find.byType(FloatingActionButton), findsNothing);
       expect(tester.takeException(), isNull);
       await fakes.screenshot(tester, 'version_home_$label');
 

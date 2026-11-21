@@ -553,8 +553,10 @@ List<ClipRun> findClipRuns(Project project, List<ClipFrames> placed, int fps,
     final shortSide = w < h ? w : h;
     if (shortSide > 720) {
       final k = 720 / shortSide;
-      w = _even(w * k);
-      h = _even(h * k);
+      // 1278 x 720 becomes 1280 x 720 (Project.snapToWide).
+      final snapped = Project.snapToWide(_even(w * k), _even(h * k));
+      w = snapped.width;
+      h = snapped.height;
     }
   }
   return (width: _even(w), height: _even(h));
@@ -2020,16 +2022,38 @@ List<String> buildThumbnailCommand({
 
 /// Arguments for ffprobe that print streams + format (+ the first frame,
 /// which carries the EXIF orientation of photos) as JSON on stdout.
-List<String> buildProbeCommand(String path) => [
+List<String> buildProbeCommand(String path, {bool? firstFrame}) => [
       '-v', 'error',
       '-hide_banner',
       '-print_format', 'json',
       '-show_format',
       '-show_streams',
-      '-show_frames',
-      '-read_intervals', '%+#1',
+      if (firstFrame ?? probeReadsFirstFrame(path)) ...[
+        '-show_frames',
+        '-read_intervals', '%+#1',
+      ],
       '-i', path,
     ];
+
+/// File endings that are certainly a video or a sound recording: their
+/// probe reads the file's index only, never a packet (1.18).
+const Set<String> kProbeIndexOnly = {
+  '.mp4', '.m4v', '.mov', '.mkv', '.webm', '.avi', '.mts', '.m2ts', '.ts',
+  '.mpg', '.mpeg', '.wmv', '.flv', '.3gp', '.mxf', '.mp3', '.m4a', '.wav',
+  '.aac', '.flac', '.ogg', '.opus', '.wma', '.aiff', '.aif',
+};
+
+/// Whether the probe of [path] also decodes the first frame. That is
+/// only needed for photos (their EXIF orientation shows on the decoded
+/// frame only). For a video it means opening every decoder and reading
+/// packets - work that buys nothing (a video's rotation is in its stream
+/// description) and one more place where a very large or slowly read file
+/// can keep the probe waiting.
+bool probeReadsFirstFrame(String path) {
+  final dot = path.lastIndexOf('.');
+  if (dot < 0) return true;
+  return !kProbeIndexOnly.contains(path.substring(dot).toLowerCase());
+}
 
 /// Interprets the JSON printed by [buildProbeCommand].
 ///

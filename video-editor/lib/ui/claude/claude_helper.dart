@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/build_info.dart';
 import '../../core/claude/helper_install.dart';
+import '../../core/perf_log.dart';
 import '../about.dart';
 
 // The Claude helper that travels with the app (1.12): the desktop app
@@ -94,9 +95,29 @@ class ClaudeHelperService {
     return true;
   }
 
-  /// Installs or refreshes the helper (every start of the app; quick when
-  /// nothing changed). Never throws.
-  Future<void> installAtStart() async {
+  /// True while the helper is being put in place: the Connect page then
+  /// says "Updating the helper…" instead of showing the version that is
+  /// about to be replaced (1.18).
+  final ValueNotifier<bool> refreshing = ValueNotifier(false);
+
+  Future<void>? _installing;
+
+  /// Installs or refreshes the helper (every start of the app, as its
+  /// first background task; quick when nothing changed). Never throws. A
+  /// second call while one runs waits for that one.
+  Future<void> installAtStart() => _installing ??= () async {
+        refreshing.value = true;
+        final end = PerfLog.instance.span('start: claude helper refresh');
+        try {
+          await _install();
+        } finally {
+          end();
+          refreshing.value = false;
+          _installing = null;
+        }
+      }();
+
+  Future<void> _install() async {
     final dir = stableDir;
     if (dir == null) return;
     try {

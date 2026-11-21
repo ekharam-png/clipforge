@@ -59,7 +59,11 @@ Set<String> parseFilterList(String output) {
 
 /// The names of the filters a `-filter_complex` [graph] uses, in order of
 /// first use. Pad labels (`[a0]`) and option values are skipped; escaped
-/// characters inside values (`\,`) do not start a new filter.
+/// characters inside values (`\,`) do not start a new filter, and nothing
+/// inside a quoted value (`volume='if(lt(t,5),if(..),1)'`) is a filter:
+/// before 1.18 the commas of such an expression were read as the end of a
+/// filter, so an "Only when speaking" export with three or more pauses was
+/// refused with `its FFmpeg has no "if" filter`.
 List<String> filtersInGraph(String graph) {
   final names = <String>{};
   bool letter(int c) =>
@@ -73,6 +77,14 @@ List<String> filtersInGraph(String graph) {
     if (c == 0x5C) {
       // \x: an escaped character inside a value.
       i += 2;
+      continue;
+    }
+    if (c == 0x27) {
+      // '...': a quoted value, taken as it is up to the closing quote
+      // (FFmpeg has no escapes inside quotes).
+      final close = graph.indexOf("'", i + 1);
+      i = close < 0 ? n : close + 1;
+      atStart = false;
       continue;
     }
     if (c == 0x5B) {

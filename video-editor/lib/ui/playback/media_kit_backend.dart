@@ -5,8 +5,39 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+// The path of the libmpv media_kit loaded: the helper isolate of
+// mpv_ask.dart opens the same library.
+// ignore: implementation_imports
+import 'package:media_kit/src/player/native/core/native_library.dart';
 
+import '../../core/perf_log.dart';
+import 'mpv_ask.dart';
 import 'timeline_player.dart';
+
+MpvCalls Function() _libMpv(String path) => () => LibMpvCalls(path);
+
+/// Every property the app reads from or sets on the preview players goes
+/// through here: asked on a helper isolate, with a time limit, so a
+/// player that is busy inside libmpv cannot hold the whole app (see
+/// mpv_ask.dart for what happened on a Mac in the 1.17 test).
+MpvAsk? _mpvAsk;
+
+MpvAsk get _ask => _mpvAsk ??= MpvAsk(_libMpv(NativeLibrary.path));
+
+/// The property, or '' when there is none or the player did not answer.
+Future<String> _getProperty(NativePlayer native, String name) async {
+  try {
+    return await _ask.get(await native.handle, name) ?? '';
+  } catch (_) {
+    return '';
+  }
+}
+
+Future<void> _setProperty(NativePlayer native, String name, String value) async {
+  try {
+    await _ask.set(await native.handle, name, value);
+  } catch (_) {}
+}
 
 /// The value of mpv's `volume` property that plays a sound at [amplitude]
 /// times its own level (1.0 = unchanged, 0.5 = half the sample values,
@@ -74,6 +105,20 @@ class MediaKitTimelinePlayer implements TimelinePlayer {
   Future<void> open(String path,
       {required int positionMs, required bool play}) async {
     final media = Media(path, start: Duration(milliseconds: positionMs));
+    // In flight until the file plays: a log that ends here says the
+    // player was still loading.
+    final loaded = PerfLog.instance
+        .span('preview player open (${controller == null ? 'sound' : 'video'})');
+    try {
+      await _open(media, path, play);
+      loaded();
+    } catch (_) {
+      loaded('failed');
+      rethrow;
+    }
+  }
+
+  Future<void> _open(Media media, String path, bool play) async {
     var reopened = false;
     for (var attempt = 0;; attempt++) {
       // A player given back mid-load must not touch the core again: the
@@ -116,7 +161,9 @@ class MediaKitTimelinePlayer implements TimelinePlayer {
       // No news is not always bad news: ask.
       final native = player.platform;
       if (_disposed || native is! NativePlayer) return !_disposed;
-      return (await native.getProperty('time-pos')).isNotEmpty;
+      PerfLog.instance.note('preview player: no position after '
+          '${loadTimeout.inMilliseconds} ms, asking it');
+      return (await _getProperty(native, 'time-pos')).isNotEmpty;
     } on StateError {
       return false; // the player was disposed while waiting
     }
@@ -168,9 +215,9 @@ class MediaKitTimelinePlayer implements TimelinePlayer {
     final native = player.platform;
     if (_disposed || native is! NativePlayer) return;
     final want = '${_audioTrack + 1}';
-    final now = await native.getProperty('aid');
+    final now = await _getProperty(native, 'aid');
     if (now == want || (now == 'auto' && _audioTrack == 0)) return;
-    await native.setProperty('aid', want);
+    await _setProperty(native, 'aid', want);
   }
 
   /// mpv's `af` property. The libmpv builds media_kit ships for Android,
@@ -193,7 +240,7 @@ class MediaKitTimelinePlayer implements TimelinePlayer {
     final native = player.platform;
     if (_disposed || native is! NativePlayer) return;
     _audioFilter = filter;
-    await native.setProperty('af', filter);
+    await _setProperty(native, 'af', filter);
   }
 
   /// `af` values that made mpv drop the sound on this computer.
@@ -207,16 +254,16 @@ class MediaKitTimelinePlayer implements TimelinePlayer {
       return false;
     }
     try {
-      final aid = await native.getProperty('aid');
+      final aid = await _getProperty(native, 'aid');
       if (aid != 'no' && aid != 'false') return false;
-      final count = int.tryParse(await native.getProperty('track-list/count')) ?? 0;
+      final count = int.tryParse(await _getProperty(native, 'track-list/count')) ?? 0;
       return filterSilencedSound(
         filter: _audioFilter,
         aid: aid,
-        aidOption: await native.getProperty('options/aid'),
+        aidOption: await _getProperty(native, 'options/aid'),
         trackTypes: [
           for (var i = 0; i < count && i < 32; i++)
-            await native.getProperty('track-list/$i/type'),
+            await _getProperty(native, 'track-list/$i/type'),
         ],
       );
     } catch (_) {
@@ -247,6 +294,10 @@ class MediaKitTimelinePlayer implements TimelinePlayer {
         if (pooled != null) {
           await VideoPlayerPool.instance.giveBack(pooled);
           return;
+        }
+        // Nothing may still be asking this player when its core goes.
+        for (var i = 0; i < 40 && (_mpvAsk?.unanswered ?? 0) > 0; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
         }
         try {
           await player.dispose();
@@ -352,8 +403,8 @@ class VideoPlayerPool {
       await p.player.setRate(1);
       final native = p.player.platform;
       if (native is NativePlayer) {
-        await native.setProperty('af', '');
-        await native.setProperty('aid', 'auto');
+        await _setProperty(native, 'af', '');
+        await _setProperty(native, 'aid', 'auto');
       }
     } catch (_) {
       return;
@@ -380,9 +431,9 @@ class MediaKitBackend implements PlayerBackend {
     final native = player.platform;
     if (native is! NativePlayer) return;
     try {
-      await native.setProperty(
-          'vd-lavc-skiploopfilter', smoothPreview ? 'all' : 'default');
-      await native.setProperty('vd-lavc-fast', smoothPreview ? 'yes' : 'no');
+      await _setProperty(
+          native, 'vd-lavc-skiploopfilter', smoothPreview ? 'all' : 'default');
+      await _setProperty(native, 'vd-lavc-fast', smoothPreview ? 'yes' : 'no');
     } catch (_) {
       // An mpv without these options: the preview just stays as it is.
     }

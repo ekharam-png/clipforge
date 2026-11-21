@@ -13,6 +13,7 @@ import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/model/project.dart';
+import '../core/background_work.dart';
 import '../core/perf_log.dart';
 import 'ffmpeg_command.dart';
 import 'ffmpeg_lane.dart';
@@ -37,6 +38,7 @@ class FfmpegKitMediaEngine
         SoundAlignEngine,
         SoundPeaksEngine,
         CancellableSoundPeaksEngine,
+        SpeechWavEngine,
         JumpCheckEngine {
   FfmpegKitMediaEngine({
     FontResolver? fontResolver,
@@ -95,8 +97,17 @@ class FfmpegKitMediaEngine
   Future<MediaInfo> probe(String path) async {
     // Never in the lane: a probe is what the user waits for when a file
     // is added, and it must not sit behind a sound picture.
+    final log = PerfLog.instance;
+    final quiet = log.span('probe: log messages off');
     await _quiet();
-    final end = PerfLog.instance.span('probe');
+    quiet();
+    // The size only (a stat; nothing of the file is read): a log that
+    // ends inside a probe then says how big the file was.
+    var size = '';
+    try {
+      size = ', ${formatProbeSize(await File(path).length())}';
+    } catch (_) {}
+    final end = log.span('probe$size');
     try {
       final info = await _probe(path);
       end('end (${info.hasVideo ? 'video' : 'sound'} '
@@ -109,14 +120,21 @@ class FfmpegKitMediaEngine
   }
 
   Future<MediaInfo> _probe(String path) async {
-    // Our own arguments also ask for the first frame (EXIF orientation of
-    // photos); fall back to the plugin's stock command if that yields nothing.
+    final log = PerfLog.instance;
+    // Our own arguments also ask for the first frame of a photo (EXIF
+    // orientation); fall back to the plugin's stock command if that yields
+    // nothing. A video is asked for its index only.
+    var step = log.span('probe: ffprobe'
+        '${probeReadsFirstFrame(path) ? ' with first frame' : ''}');
     var session = await FFprobeKit.getMediaInformationFromCommandArguments(
         buildProbeCommand(path));
     var props = session.getMediaInformation()?.getAllProperties();
+    step(props == null ? 'gave nothing' : 'end');
     if (props == null) {
+      step = log.span('probe: ffprobe, plain command');
       session = await FFprobeKit.getMediaInformation(path);
       props = session.getMediaInformation()?.getAllProperties();
+      step(props == null ? 'gave nothing' : 'end');
     }
     if (props == null) {
       String? log;
@@ -157,7 +175,15 @@ class FfmpegKitMediaEngine
   /// kit_runner.dart for how FFmpeg inside the app is kept from holding
   /// up the app (no log messages to Dart, `-loglevel error -nostats`,
   /// throttled progress, one run at a time with the user's first).
-  static final KitRunner _kit = KitRunner(_PluginPlatform());
+  static final KitRunner _kit = () {
+    final kit = KitRunner(_PluginPlatform());
+    // The safety valve: thumbnail strips and sound decodes wait while
+    // the app's background work is paused.
+    BackgroundWork.instance.add(BackgroundTask('ffmpeg runs in the background',
+        busy: () => kit.lane.backgroundBusy,
+        pause: kit.lane.pauseBackground, resume: kit.lane.resumeBackground));
+    return kit;
+  }();
 
   /// The lane (the editor's status, tests).
   static FfmpegLane get lane => _kit.lane;
@@ -178,6 +204,30 @@ class FfmpegKitMediaEngine
 
   Future<FfmpegRun> _background(List<String> args, {Future<void>? cancel}) =>
       _kit.background(args, cancel: cancel);
+
+  @override
+  Future<void> speechWav(String input, String output,
+      {required int audioTrack,
+      required int durationMs,
+      required void Function(double fraction) onProgress,
+      required Future<void> cancelled}) async {
+    var stopped = false;
+    unawaited(cancelled.then((_) => stopped = true));
+    final run = await _ffmpegStreaming(
+        speechWavArgs(input, output, audioTrack),
+        (ms) {
+          if (durationMs > 0) onProgress((ms / durationMs).clamp(0.0, 1.0));
+        },
+        cancelled);
+    if (stopped) throw ExportException('Stopped.', cancelled: true);
+    if (!run.ok) {
+      final why = summarizeFfmpegError(run.log);
+      throw ExportException(
+          'The sound of ${p.basename(input)} could not be read'
+          '${why == null ? '.' : ': $why'}',
+          log: run.log);
+    }
+  }
 
   @override
   Future<String> extractFrame(String path, int timeMs, String outputPath) =>

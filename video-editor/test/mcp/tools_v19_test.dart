@@ -391,7 +391,7 @@ void main() {
       expect(r.text, allOf(contains('464x824 because'), contains('"small.mp4", 464x824'),
           contains('video_size "1080p"')));
       final big = await c.ok('set_project_settings', {'project_id': 'p1', 'video_size': '1080p'});
-      expect(big.data['project']['canvasReason'], startsWith('1080x1918 because video_size is "1080p"'));
+      expect(big.data['project']['canvasReason'], startsWith('1080x1920 because video_size is "1080p"'));
     });
 
     test('captions that get very short: warned, or kept on screen with min_caption_ms', () async {

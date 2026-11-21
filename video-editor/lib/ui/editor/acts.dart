@@ -124,6 +124,7 @@ enum Act {
   zoomOut,
   snapping,
   soundWaves,
+  sidePanel,
   // Playback
   playPause,
   playBackwards,
@@ -219,6 +220,7 @@ String actLabel(Act a) => switch (a) {
       Act.zoomOut => 'Zoom out',
       Act.snapping => 'Snap to playhead and edges',
       Act.soundWaves => 'Show sound waves',
+      Act.sidePanel => 'Show the side panel',
       Act.playPause => 'Play/Pause',
       Act.playBackwards => 'Play backwards',
       Act.pause => 'Pause',
@@ -313,6 +315,7 @@ IconData actIcon(Act a) => switch (a) {
       Act.zoomOut => Icons.zoom_out,
       Act.snapping => Icons.vertical_align_center,
       Act.soundWaves => Icons.graphic_eq,
+      Act.sidePanel => Icons.view_sidebar_outlined,
       Act.playPause || Act.playForwards => Icons.play_arrow,
       Act.playBackwards => Icons.fast_rewind,
       Act.pause => Icons.pause,

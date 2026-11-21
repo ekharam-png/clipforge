@@ -21,7 +21,7 @@ related: importing, timeline, export, undo-and-saving
 
 ClipForge puts your videos, photos and music together into one video.
 
-1. On the project list, tap **New project**.
+1. On the project list, tap **New video** in the **Start** row.
 2. Tap **Add media** and pick videos or photos.
 3. Arrange them on the timeline at the bottom: trim, split and move clips.
 4. Add music, titles or captions if you like.
@@ -30,6 +30,14 @@ ClipForge puts your videos, photos and music together into one video.
 Everything is saved by itself as you go.
 
 On the project list, the three dots on a project give you **Rename**, **Duplicate**, **Share project file** and **Delete**.
+
+## The Start row
+
+- **New video**: an empty project.
+- **Podcast**: for a recording with one sound file per speaker. ClipForge asks for the video first and then for the sound files, and lines them up with the video by their sound (see Voice recorded separately).
+- **Make a short**: choose one of your videos; it opens with **Make a short from here** (see Make a short).
+
+Under the row there is one tip, a new one each day. **Don't show tips** turns them off; **Settings** > **Show a tip on the project list** turns them back on. After an update a card says what is new in a few lines; **All release notes** opens the whole list. None of this comes from the internet.
 
 Want the quick tour again? Open Help (the **?** at the top) and tap **Show the tour**.
 
@@ -57,6 +65,10 @@ You can drag videos, photos and music straight from a folder onto the ClipForge 
 - A project file (.clipforge.zip) dropped on the project list opens as a project.
 
 Files ClipForge cannot use are listed, and the rest are added.
+
+## If adding a file takes long
+
+Reading a file normally takes a moment. If "Adding file…" stays, press **Cancel** (or **Esc**): nothing is added and you can go on. After 45 seconds ClipForge stops by itself and says so. This usually means the file is on a slow or far-away place: a network drive, an external disk that went to sleep, or a cloud folder (iCloud, OneDrive, Dropbox) that has not downloaded the file yet. Copy the file to this computer and add it again.
 
 === timeline
 title: The timeline: select, trim and move clips
@@ -694,6 +706,7 @@ The shortcuts work wherever you last clicked: on the timeline, in the Text windo
 - **Ctrl+Z**: undo. **Ctrl+Shift+Z** or **Ctrl+Y**: redo.
 - **Ctrl+Shift+H**: show or hide the History.
 - **Ctrl+Shift+T**: show or hide the Text window. **Ctrl+F**: find in the text.
+- **Ctrl+Shift+P**: show or hide the side panel.
 - **M**: mark a good moment at the playhead, also while playing (see Make a short).
 - **Ctrl+E**: export.
 - Hold **Alt** (Option on a Mac) while dragging on the timeline: no snapping for that drag.
@@ -807,7 +820,7 @@ On a computer the menu bar has every command of the editor. On a Mac it is at th
 - **Part**: ways to select a part of the timeline (**Select a part**, **Part starts at playhead**, **Part ends at playhead**, this clip's time, this speaker's turn, the pause here, between markers, **Clear the selected part**) and what to do with it (**Cut out**, **Delete and leave a gap**, **Silence**, **Lower volume…**, **Speed…**, **Clean up sound here**, **Make a short from the part…**, **Duplicate the part**, **Title over the part**). See Select a part.
 - **Sound**: **Fit music to video**, **Line up voice with video**, **Separate sound…**, **Put sound back**, **Add sound track**, **Lower music under speech**, **Only when speaking…**, **Copy music credits**.
 - **Text and speech**: **Text window**, and on a computer with speech to text: **Transcribe speech…**, **Captions from speech…**, **Remove filler words…**, **Automatic cuts…**.
-- **View**: **Zoom in**, **Zoom out**, **Snap to playhead and edges**, **Show sound waves**, Shape, Video size.
+- **View**: **Zoom in**, **Zoom out**, **Snap to playhead and edges**, **Show sound waves**, **Show the side panel**, Shape, Video size.
 - **Playback**: **Play/Pause**, **Play backwards**, **Pause**, **Play forwards**, **Go to start**, **Go to end**, **Previous frame**, **Next frame**, **Previous speech start**, **Next speech start**.
 - **Help**: this help, **Keyboard shortcuts**, **Show the tour**, **What's new**, **Connect to Claude…**, **Check for updates…**, **Send feedback…**, **Copy version info** and About ClipForge.
 
@@ -840,10 +853,10 @@ All the app's settings are on one page.
 
 What is there:
 
-- **Editing**: **Snap to playhead and edges**, **Show sound waves**, and on a phone **Smooth preview**. The first two are also in the **View** menu; it is the same switch.
+- **Editing**: **Snap to playhead and edges**, **Show sound waves**, on a computer **Show the side panel**, and on a phone **Smooth preview**. The first three are also in the **View** menu; it is the same switch.
 - **Text window** (computer): whether it opens at the right or below the picture.
 - **Export**: **Use graphics card (faster)**. It is remembered between exports; the switch in the Export window is the same one.
-- **Suggestions**: **Show suggestions**, and a button that brings back the ones you told not to show again.
+- **Suggestions**: **Show suggestions**, **Show a tip on the project list**, and a button that brings back the ones you told not to show again.
 - **Updates**: **Check for updates automatically**, **Check now**, and which version you have.
 - **Claude** (computer): whether the helper for Claude is on this computer, and **Connect…**.
 - **About**: **About ClipForge**, **Copy version info**, **What's new** and **Licences**.
@@ -880,7 +893,7 @@ A suggestion about a clip of another shape comes back for the next such clip aft
 
 The suggestions about talking (pauses in a long clip, music over speech, captions from speech) need the sound pictures: with **Show sound waves** switched off in Settings they are not made.
 
-The Export window has two more lines of this kind: a note when an upright video is longer than a short, and one line about the graphics card the first time you export. After an update the project list says "Updated to" the new version, with **What's new**.
+The Export window has two more lines of this kind: a note when an upright video is longer than a short, and one line about the graphics card the first time you export. After an update the project list shows a card with what is new in the new version, and **All release notes**. The project list also has one tip a day (see Getting started).
 
 To turn all suggestions off, or to bring back the ones you hid: **Settings** > **Show suggestions** and **Show hidden suggestions again**.
 
@@ -1058,6 +1071,10 @@ When a newer ClipForge is out, the project list shows a line at the top: "Versio
 
 Your projects and videos are never touched by an update.
 
+## The Applications folder (Mac)
+
+On a Mac, ClipForge can only update itself when it is in the Applications folder. If you open it straight from the download, the project list says "Move ClipForge to the Applications folder so it can update itself", with **Show me how** (see Move ClipForge to the Applications folder).
+
 ## The ClipForge folder (Windows)
 
 If you installed ClipForge with the installer (ClipForge-Setup.exe), there is nothing to look after: it lives in its own place and is in the Start menu.
@@ -1104,6 +1121,50 @@ The app goes online only for:
 
 Everything else works offline, and your videos, photos, music and projects never leave your device.
 
+=== move-to-applications
+title: Move ClipForge to the Applications folder (Mac)
+section: Troubleshooting
+keywords: applications, applications folder, move, install, mac, macos, download, downloads, translocation, app translocation, cannot update, update failed, old version, two copies, replace, drag, finder, dock
+related: updates, about-version, getting-started
+
+On a Mac, an app that is opened straight from the download runs from a hidden, read-only copy that macOS makes. ClipForge works there, but it cannot update itself, and the next time you may open an older ClipForge that is still in your Applications folder.
+
+ClipForge tells you with one line on the project list. It never moves anything by itself. To put it right:
+
+1. Quit ClipForge (**Cmd+Q**).
+2. Open Finder and go to the folder with the ClipForge you downloaded (usually Downloads).
+3. Open a second Finder window and choose Applications at the left.
+4. Drag ClipForge from the first window into Applications.
+5. If the Mac asks whether to replace the ClipForge that is already there, choose Replace. That removes the old version; your projects and videos are somewhere else and are not touched.
+6. Open ClipForge from Applications (or from Launchpad). If its icon is in the Dock, remove the old icon and drag the new one in.
+
+The line goes away by itself once ClipForge runs from Applications. The cross closes it if you want to leave ClipForge where it is.
+
+To see where ClipForge runs from: **Help** > **Copy version info** has a line "Folder".
+
+=== side-panel
+title: The side panel and its groups
+section: Computer
+keywords: side panel, inspector, right panel, settings panel, properties, crowded, collapse, fold, expand, open, close, group, section, heading, hide panel, show panel, more room, bigger picture, dot, ctrl shift p
+related: menus, keyboard-shortcuts, settings, timeline
+
+The panel at the right of the editor has the settings of what is selected on the timeline: a clip, a sound, a title, an overlay, or the whole video when nothing is selected.
+
+The settings are in groups with a heading each, for example **Speed**, **Look**, **Sound** and **Transition and fades** for a video clip.
+
+- Click a heading to open or close its group. Several can be open at once.
+- ClipForge remembers which groups you keep open, also the next time you start it.
+- A closed group shows a few words about its setting ("50%", "Muted"). A small dot next to the heading means something in it was changed from how it started, so nothing is hidden without a sign.
+- **Crop and position** is the one exception: it closes again when you select something else, because while it is open the picture shows the crop frame.
+
+## More room for the picture
+
+**View** > **Show the side panel** (**Ctrl+Shift+P**) hides the whole panel and gives its width to the picture. The small arrow at the top right of the panel does the same; when the panel is hidden, a button in its place brings it back. The same switch is in **Settings**.
+
+## On a phone
+
+A phone has no side panel: the settings open as a sheet from the bar at the bottom. The sheets of a title and of a sound have the same groups, so a long list does not have to be scrolled.
+
 === connect-claude
 title: Connect Claude (computer only)
 section: Computer
@@ -1142,7 +1203,16 @@ When ClipForge is updated, it puts the new helper in the same place and Claude u
 
 If you connected Claude before version 1.12, press **Connect** once on this page: an old entry is replaced.
 
-Adding videos, finding silences and exporting through Claude need the free program FFmpeg on the computer. Claude tells you the one line to install it.
+## FFmpeg
+
+Adding videos, finding silences and exporting through Claude need the free program FFmpeg installed on the computer. ClipForge itself does not need it (it has its own), but the Claude helper is a separate small program. When FFmpeg is missing, the page says so at the top, shows the one command that installs it and has **Copy the command**:
+
+- Mac: open Terminal and run "brew install ffmpeg" (this needs Homebrew from brew.sh).
+- Windows: open PowerShell and run "winget install ffmpeg".
+
+Then quit and reopen Claude, and press **I installed it: check again** on the page.
+
+Right after an update the page may say "Updating the helper…" for a few seconds while ClipForge puts the new helper in place.
 
 === claude-self-test
 title: Check that Claude works (self-test)
@@ -1159,7 +1229,7 @@ Claude then makes a small sample video in a temporary folder and tries everythin
 It takes under a minute and ends with a list: PASS or FAIL for each check, with how long it took.
 
 - Your own projects and files are not used and not changed. The temporary folder is deleted at the end.
-- A FAIL comes with a short reason. Most often FFmpeg is missing; Claude tells you the one line to install it.
+- A FAIL comes with a short reason. Most often FFmpeg is missing: "Claude control needs the free program FFmpeg on this Mac" (or PC), with the one line to install it. **Help** > **Connect to Claude…** shows the same, with **Copy the command**.
 - "What is the ClipForge status?" shows which version of the helper Claude is using and where it is.
 
 === transcribe-speech

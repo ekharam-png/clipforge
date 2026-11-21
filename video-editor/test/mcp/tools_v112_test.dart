@@ -142,7 +142,7 @@ void main() {
       final checks = (r.data['checks'] as List).cast<Map>();
       Map row(String name) => checks.firstWhere((x) => x['name'] == name);
       expect(row('Sample media (FFmpeg)')['result'], 'FAIL');
-      expect(row('Sample media (FFmpeg)')['note'], contains('FFmpeg was not found'));
+      expect(row('Sample media (FFmpeg)')['note'], contains('Claude control needs the free program FFmpeg'));
       expect(row('Create a project')['result'], 'PASS');
       expect(row('Titles (Latin, Cyrillic, Hebrew)')['result'], 'PASS');
       expect(row('Undo / redo')['result'], 'PASS');

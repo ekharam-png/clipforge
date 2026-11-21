@@ -151,6 +151,28 @@ class ExportException implements Exception {
   String toString() => 'ExportException: $message';
 }
 
+/// An engine that can write the sound of a file as the 16 kHz mono WAV a
+/// speech program reads (1.18): the FFmpeg INSIDE the app does it on a
+/// Mac or a Windows PC, where no other FFmpeg may be installed.
+abstract class SpeechWavEngine {
+  /// Stream [audioTrack] of [input] to [output]; [onProgress] 0..1;
+  /// stops when [cancelled] completes. Throws [ExportException].
+  Future<void> speechWav(String input, String output,
+      {required int audioTrack,
+      required int durationMs,
+      required void Function(double fraction) onProgress,
+      required Future<void> cancelled});
+}
+
+/// The arguments of that run (after the program's name).
+List<String> speechWavArgs(String input, String output, int audioTrack) => [
+      '-y',
+      '-i', input,
+      '-vn', '-sn', '-dn', '-map', '0:a:$audioTrack',
+      '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le',
+      output,
+    ];
+
 /// A running export. Await [done]; call [cancel] to stop it.
 abstract class ExportJob {
   Stream<ExportProgress> get progress;

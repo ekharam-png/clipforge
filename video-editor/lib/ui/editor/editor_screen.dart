@@ -13,6 +13,7 @@ import '../../core/editor/autosave.dart';
 import '../../core/editor/editor_controller.dart';
 import '../../core/model/project.dart';
 import '../../core/storage/media_import.dart' show relinkProject;
+import '../../core/perf_log.dart';
 import '../../core/storage/project_lock.dart' show AppProjectLock;
 import '../../core/storage/project_store.dart' show freeProjectName;
 import '../app_menu.dart';
@@ -51,14 +52,32 @@ export 'editor_actions.dart' show frameStepFor;
 import 'timeline_view.dart';
 import 'tools.dart';
 
+/// What the editor starts with when it was opened from the "Start" row
+/// of the project list (1.18).
+enum EditorStart {
+  /// Nothing special.
+  none,
+
+  /// "Podcast": the video first, then one sound file per speaker (the
+  /// existing Add media and Add voice recording, one after the other).
+  podcast,
+
+  /// "Make a short": the "Make a short from here" window of this project.
+  short,
+}
+
 class EditorScreen extends ConsumerStatefulWidget {
   const EditorScreen({
     super.key,
     required this.projectId,
     this.initialDrop,
     this.tour = false,
+    this.start = EditorStart.none,
   });
   final String projectId;
+
+  /// See [EditorStart].
+  final EditorStart start;
 
   /// This is the tour's sample project: the tour selects clips and opens
   /// tools here, and closes the editor when it ends.
@@ -184,11 +203,14 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
 
   Future<void> _load() async {
     try {
+      final log = PerfLog.instance;
       final store = await ref.read(projectStoreProvider.future);
-      var project = await store.load(widget.projectId);
+      var project =
+          await log.track('open: read the project', () => store.load(widget.projectId));
       // Android: files a pre-1.8 project still has in the cache folder
       // move into the app's media folder before the cache is emptied.
-      final moved = await ref.read(mediaRescueProvider)(project);
+      final moved = await log.track(
+          'open: media check', () => ref.read(mediaRescueProvider)(project));
       if (moved.isNotEmpty) {
         project = relinkProject(project, moved);
         try {
@@ -254,6 +276,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
             final s = _session;
             if (s != null) _setWaves(s, on);
           },
+          setSidePanel: (on) {
+            final s = _session;
+            if (s == null) return;
+            s.showSidePanel.value = on;
+            ref.read(appSettingsProvider).setSidePanel(on);
+          },
           scaffold: () => _scaffoldKey.currentState,
         );
       _suggestions = SuggestionController(
@@ -271,6 +299,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       s.copiedSettings.addListener(_updateMenu);
       s.showText.addListener(_updateMenu);
       s.showWaves.addListener(_updateMenu);
+      s.showSidePanel.addListener(_updateMenu);
       s.playheadClip.addListener(_updateMenu);
       s.part.addListener(_updateMenu);
       s.partRows.addListener(_updateMenu);
@@ -283,7 +312,8 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       final settings = ref.read(appSettingsProvider);
       _settings = settings;
       settings.addListener(_onSettings);
-      settings.load().then((_) => _onSettings());
+      log.track('open: settings', settings.load).then((_) => _onSettings(),
+          onError: (Object _) {});
       final prefs = ref.read(appPrefsProvider);
       prefs.text(kTextWidthText).then((v) {
         final w = double.tryParse(v ?? '');
@@ -306,10 +336,84 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) addDroppedFiles(context, s, drop);
         });
+      } else if (widget.start != EditorStart.none) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _startWith(s, widget.start);
+        });
       }
     } catch (e) {
       if (mounted) setState(() => _loadError = e);
     }
+  }
+
+  /// The "Start" row of the project list: Podcast and Make a short.
+  Future<void> _startWith(EditorSession s, EditorStart start) async {
+    final actions = EditorActions(s);
+    if (start == EditorStart.short) {
+      if (actions.whyNot(Act.shortFromHere) == null) {
+        actions.run(context, Act.shortFromHere);
+      }
+      return;
+    }
+    // Podcast, step 1: the video.
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('podcast-start'),
+        title: const Text('Podcast'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: const Text(
+              'Two steps:\n\n'
+              '1. Choose the video of the recording.\n'
+              '2. Choose the sound files, one for each speaker. ClipForge '
+              'lines them up with the video by their sound.\n\n'
+              'No separate sound files? Then step 1 is all you need.'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            key: const ValueKey('podcast-choose-video'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Choose the video'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted || s.isDisposed) return;
+    await addMedia(context, s);
+    if (!mounted || s.isDisposed) return;
+    if (actions.whyNot(Act.addVoice) != null) return; // No video came in.
+    // Step 2: the voices.
+    final voices = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('podcast-voices'),
+        title: const Text('Now the sound files'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: const Text(
+              'Choose the sound files of the speakers, all at once if you '
+              'like. You can also add them later: Add > Voice recording.'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            key: const ValueKey('podcast-choose-voices'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Choose the sound files'),
+          ),
+        ],
+      ),
+    );
+    if (voices != true || !mounted || s.isDisposed) return;
+    actions.run(context, Act.addVoice);
   }
 
   void _onEdited() {
@@ -390,19 +494,32 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
       checked: actions.checked(a),
       mixed: actions.mixed(a),
       onTap: reason == null
-          ? _inFront(() {
-              if (a == Act.backToProjects) {
-                // Like the back arrow: during the tour it ends the tour.
-                _back();
-              } else {
-                actions.run(context, a);
-              }
-            })
+          ? (a == Act.backToProjects
+              ? _backFromMenu
+              : _inFront(() => actions.run(context, a)))
           : null,
     );
   }
 
+  /// File > Back to projects. While a file is being read ("Adding
+  /// file…", which can be cancelled) it cancels that first and then goes
+  /// back: on a Mac the menu bar stays usable above such a window, and in
+  /// the 1.17 test nothing led out of a probe that never answered.
+  void _backFromMenu() {
+    if (!mounted) return;
+    if (BusyCancel.cancelCurrent()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && (ModalRoute.of(context)?.isCurrent ?? true)) _back();
+      });
+      WidgetsBinding.instance.scheduleFrame();
+      return;
+    }
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return;
+    _back();
+  }
+
   void _back() {
+    // Like the back arrow: during the tour it ends the tour.
     if (widget.tour && _tour.active) {
       _tour.skip();
     } else {
@@ -438,6 +555,9 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
     if (!settings.loaded) return;
     if (s.snapping.value != settings.snapping) {
       s.snapping.value = settings.snapping;
+    }
+    if (s.showSidePanel.value != settings.sidePanel) {
+      s.showSidePanel.value = settings.sidePanel;
     }
     if (s.showWaves.value != settings.soundWaves) {
       s.showWaves.value = settings.soundWaves;
@@ -1089,12 +1209,51 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
                               },
                             ),
                           ),
-                          const VerticalDivider(width: 1),
-                          TourAnchor(
-                            id: TourIds.inspector,
-                            child: SizedBox(
-                                width: 340,
-                                child: InspectorPanel(session: s)),
+                          // The side panel, or (hidden: View > Show the
+                          // side panel) a slim strip with the button that
+                          // brings it back; the preview gets the width.
+                          ValueListenableBuilder<bool>(
+                            valueListenable: s.showSidePanel,
+                            builder: (context, shown, _) => Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const VerticalDivider(width: 1),
+                                if (shown)
+                                  TourAnchor(
+                                    id: TourIds.inspector,
+                                    child: SizedBox(
+                                      width: 340,
+                                      child: Stack(
+                                        children: [
+                                          Positioned.fill(
+                                              child:
+                                                  InspectorPanel(session: s)),
+                                          Positioned(
+                                            top: 6,
+                                            right: 4,
+                                            child: _panelButton(s, shown),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Material(
+                                    color: AppColors.panel,
+                                    child: SizedBox(
+                                      width: 40,
+                                      child: Align(
+                                        alignment: Alignment.topCenter,
+                                        child: Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 6),
+                                          child: _panelButton(s, shown),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                           ValueListenableBuilder<bool>(
                             valueListenable: s.showHistory,
@@ -1183,6 +1342,20 @@ class _EditorScreenState extends ConsumerState<EditorScreen>
         ),
     );
   }
+
+  /// The button that hides the side panel, or brings it back.
+  Widget _panelButton(EditorSession s, bool shown) => IconButton(
+        key: const ValueKey('side-panel-toggle'),
+        visualDensity: VisualDensity.compact,
+        iconSize: 20,
+        tooltip: shortcutText(shown
+            ? 'Hide the side panel (Ctrl+Shift+P)'
+            : 'Show the side panel (Ctrl+Shift+P)'),
+        icon: Icon(
+            shown ? Icons.chevron_right : Icons.view_sidebar_outlined,
+            semanticLabel: shown ? 'Hide the side panel' : 'Show the side panel'),
+        onPressed: () => EditorActions(s).run(context, Act.sidePanel),
+      );
 
   /// An action of the part bar, from the one registry.
   ActionEntry _partEntry(BuildContext context, Act a) =>
@@ -1625,7 +1798,7 @@ class TransportBar extends StatelessWidget {
                         children: [
                           IconButton(
                             key: const ValueKey('previous-speech'),
-                            tooltip: 'Previous speech start (Ctrl+Left)',
+                            tooltip: shortcutText('Previous speech start (Ctrl+Left)'),
                             icon: const Icon(Icons.keyboard_double_arrow_left,
                                 semanticLabel: 'Previous speech start'),
                             onPressed: () =>
@@ -1633,7 +1806,7 @@ class TransportBar extends StatelessWidget {
                           ),
                           IconButton(
                             key: const ValueKey('next-speech'),
-                            tooltip: 'Next speech start (Ctrl+Right)',
+                            tooltip: shortcutText('Next speech start (Ctrl+Right)'),
                             icon: const Icon(Icons.keyboard_double_arrow_right,
                                 semanticLabel: 'Next speech start'),
                             onPressed: () =>

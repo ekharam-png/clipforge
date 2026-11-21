@@ -1,3 +1,4 @@
+import '../../mcp/environment.dart' show MediaTools;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -83,6 +84,16 @@ class RealConnectHost implements ConnectHost {
 }
 
 final connectHostProvider = Provider<ConnectHost>((ref) => RealConnectHost());
+
+/// Whether the Claude helper would find FFmpeg on this computer (1.18):
+/// the helper is a separate program and uses the installed FFmpeg, not
+/// the one inside the app. Looked for exactly as the helper does
+/// (mcp/environment.dart). Tests answer themselves.
+final helperFfmpegProvider = Provider<Future<bool> Function()>((ref) => () async {
+      if (Platform.environment.containsKey('FLUTTER_TEST')) return true;
+      final tools = MediaTools();
+      return await tools.ffmpeg() != null && await tools.ffprobe() != null;
+    });
 
 /// The names of the files in a folder (for the helper's "in use" files).
 List<String> listFileNames(String dir) {

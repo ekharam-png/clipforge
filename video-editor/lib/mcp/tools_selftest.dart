@@ -206,7 +206,7 @@ extension _SelfTest on ClipForgeTools {
         final mpeg = await media.ffmpeg();
         final probe = await media.ffprobe();
         if (mpeg == null || probe == null) {
-          throw _CheckFailed('FFmpeg was not found. ${ffmpegInstallHint()}');
+          throw _CheckFailed(ffmpegNeededMessage());
         }
         // 6 s: a tone, 1.6 s of silence, a tone (for remove_silences).
         final r1 = await Process.run(mpeg.path, [

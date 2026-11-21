@@ -20,6 +20,23 @@ const String kSuggestionsOffFlag = 'suggestionsOff';
 /// back on. Each one also has its own flag, `hint.<id>.off`.
 const String kHintsOffListText = 'hintsOff';
 
+/// [AppPrefs.flag] that turns the tips on the project list off (Settings >
+/// Suggestions, and "Don't show tips" next to a tip).
+const String kTipsOffFlag = 'tipsOff';
+
+/// [AppPrefs.flag]: the editor's side panel is hidden (View > Show the
+/// side panel).
+const String kSidePanelOffFlag = 'sidePanelOff';
+
+/// [AppPrefs.text]: the sections of the side panel the user opened or
+/// closed, as "id=1,id=0" (1 open). A section that is not listed has its
+/// default (kSectionsOpenByDefault, editor/panel_sections.dart).
+const String kPanelSectionsText = 'panelSections';
+
+/// [AppPrefs.flag]: the line "Move ClipForge to the Applications folder"
+/// was closed (Macs).
+const String kMoveToApplicationsSeenFlag = 'moveToApplicationsSeen';
+
 /// [AppPrefs.flag]: the Text window was opened at least once.
 const String kTextOpenedFlag = 'textOpened';
 
@@ -64,6 +81,47 @@ class AppSettings extends ChangeNotifier {
   bool _textBelow = false;
   bool _graphicsCard = true;
   bool _suggestions = true;
+  bool _tips = true;
+  bool _sidePanel = true;
+  final Map<String, bool> _sections = {};
+
+  /// One tip on the project list.
+  bool get tips => _tips;
+
+  /// The editor's side panel is shown (wide windows).
+  bool get sidePanel => _sidePanel;
+
+  /// Whether the section [id] of the side panel is open; [byDefault]
+  /// until the user opened or closed it.
+  bool sectionOpen(String id, {required bool byDefault}) =>
+      _sections[id] ?? byDefault;
+
+  Future<void> setSectionOpen(String id, bool open) async {
+    if (_sections[id] == open) return;
+    _sections[id] = open;
+    notifyListeners();
+    try {
+      await prefs.setText(
+          kPanelSectionsText,
+          [
+            for (final e in _sections.entries) '${e.key}=${e.value ? 1 : 0}',
+          ].join(','));
+    } catch (_) {}
+  }
+
+  Future<void> setTips(bool on) async {
+    if (_tips == on) return;
+    _tips = on;
+    notifyListeners();
+    await _store(kTipsOffFlag, on);
+  }
+
+  Future<void> setSidePanel(bool on) async {
+    if (_sidePanel == on) return;
+    _sidePanel = on;
+    notifyListeners();
+    await _store(kSidePanelOffFlag, on);
+  }
 
   /// Timeline snapping (View > Snap to playhead and edges).
   bool get snapping => _snapping;
@@ -94,6 +152,16 @@ class AppSettings extends ChangeNotifier {
       _textBelow = await prefs.text(kTextDockText) == 'below';
       _graphicsCard = !await prefs.flag(kGraphicsCardOffFlag);
       _suggestions = !await prefs.flag(kSuggestionsOffFlag);
+      _tips = !await prefs.flag(kTipsOffFlag);
+      _sidePanel = !await prefs.flag(kSidePanelOffFlag);
+      for (final part
+          in (await prefs.text(kPanelSectionsText) ?? '').split(',')) {
+        final i = part.lastIndexOf('=');
+        if (i <= 0) continue;
+        // What was changed while this was loading wins.
+        _sections.putIfAbsent(
+            part.substring(0, i), () => part.substring(i + 1) == '1');
+      }
     } catch (_) {
       // Unreadable settings: the defaults.
     }

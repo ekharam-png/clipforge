@@ -17,7 +17,9 @@ import '../../core/storage/documents_dir_io.dart'
     if (dart.library.ui) '../../core/storage/documents_dir_flutter.dart';
 import '../../core/transcript/transcript_store.dart';
 import '../../core/transcript/transcript_timeline.dart';
+import '../../media/media_api.dart';
 import '../../media/transcribe/transcription_service.dart';
+import '../services.dart' show mediaEngineProvider;
 
 export '../../core/transcript/transcript_timeline.dart';
 export '../../media/transcribe/transcription_service.dart';
@@ -87,14 +89,45 @@ bool speechSupportedOn(String operatingSystem) =>
 
 /// Null on phones: the UI then shows nothing about speech.
 final speechServiceProvider = Provider<SpeechService?>((ref) =>
-    speechSupportedOn(Platform.operatingSystem) ? DesktopSpeechService() : null);
+    speechSupportedOn(Platform.operatingSystem)
+        ? DesktopSpeechService(engine: ref.watch(mediaEngineProvider))
+        : null);
+
+/// Reads the sound for a speech program with the FFmpeg INSIDE the app
+/// (1.18): on a Mac or a PC without an installed FFmpeg, whisper.cpp
+/// failed late with "Reading the sound needs FFmpeg". Null when [engine]
+/// cannot (Linux: the installed FFmpeg does it, as before).
+WavExtractor? wavExtractorOf(MediaEngine? engine) {
+  if (engine is! SpeechWavEngine) return null;
+  final wav = engine as SpeechWavEngine;
+  return (input, output,
+      {required audioTrack,
+      required durationMs,
+      required onProgress,
+      required cancelled}) async {
+    try {
+      await wav.speechWav(input, output,
+          audioTrack: audioTrack,
+          durationMs: durationMs,
+          onProgress: onProgress,
+          cancelled: cancelled);
+    } on ExportException catch (e) {
+      throw SpeechException(e.message,
+          log: e.log, cancelled: e.cancelled, kind: e.cancelled ? '' : 'failed');
+    }
+  };
+}
 
 class DesktopSpeechService implements SpeechService {
   /// [rootDir]: the ClipForge folder (default `<Documents>/ClipForge`);
   /// [projectsDir]: where the projects are (default `<rootDir>/projects`).
-  DesktopSpeechService({String? rootDir, String? projectsDir})
+  DesktopSpeechService({String? rootDir, String? projectsDir, this.engine})
       : _rootGiven = rootDir,
         _projectsGiven = projectsDir;
+
+  /// The app's media engine: reads the sound when it can
+  /// ([wavExtractorOf]).
+  final MediaEngine? engine;
   final String? _rootGiven;
   final String? _projectsGiven;
   TranscriptionService? _service;
@@ -106,7 +139,9 @@ class DesktopSpeechService implements SpeechService {
     final root = _root =
         _rootGiven ?? p.join(await documentsDirectoryPath(), 'ClipForge');
     return _service = TranscriptionService(
-        rootDir: root, appVersion: BuildInfo.current.version);
+        rootDir: root,
+        appVersion: BuildInfo.current.version,
+        extractWav: wavExtractorOf(engine));
   }
 
   TranscriptStore _store(String projectId) =>

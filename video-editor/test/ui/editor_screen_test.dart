@@ -44,6 +44,7 @@ void main() {
         await tester.tap(find.text('Edit'));
         await tester.pumpAndSettle();
       }
+      await openSection(tester, 'Font and colour');
       expect(find.text('Dark box behind text'), findsOneWidget);
       await fakes.screenshot(tester, 'editor_${label}_title');
     });
@@ -247,6 +248,7 @@ void main() {
     await tapAdd(tester, 'Title');
     await tester.enterText(find.byType(TextField), 'Hello');
     await tester.pumpAndSettle();
+    await openSection(tester, 'Font and colour');
     await tester.ensureVisible(find.text('Dark box behind text'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Dark box behind text'));

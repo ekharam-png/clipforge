@@ -117,7 +117,7 @@ Linux at the top of the window), sorted by what you want to do:
 | **Clip** | Split, Start at playhead, End at playhead, Freeze frame, Remove silences…, Crop and position…, Rotate right, Move earlier, Move later, Make a short from here…, Make shorts from markers…, Good moments… |
 | **Sound** | Fit music to video, Line up voice with video, Separate sound…, Put sound back, Add sound track, Lower music under speech, Copy music credits |
 | **Text and speech** | Text window; on computers with speech to text: Transcribe speech…, Captions from speech…, Remove filler words…, Automatic cuts… |
-| **View** | Zoom in, Zoom out, Snap to playhead and edges, Show sound waves, Shape, Video size |
+| **View** | Zoom in, Zoom out, Snap to playhead and edges, Show sound waves, Show the side panel, Shape, Video size |
 | **Playback** | Play/Pause, Play backwards, Pause, Play forwards, Go to start, Go to end, Previous / Next frame, Previous / Next speech start |
 | **Help** | ClipForge Help, Keyboard shortcuts, Show the tour, What's new, Connect to Claude…, Check for updates…, Copy version info, About ClipForge |
 
@@ -456,6 +456,11 @@ exporting. One command does it:
 
 Then quit and reopen Claude. Without FFmpeg Claude can still rearrange, trim
 and title a project; it will tell you when something needs FFmpeg.
+
+ClipForge itself does not need this (it has its own FFmpeg inside); only
+the Claude helper does, on Windows and on a Mac alike. From 1.18,
+**Help > Connect to Claude…** says so when FFmpeg is missing, with the
+command and a **Copy the command** button, before anything fails.
 
 ### Step 2: connect Claude, once (Help > Connect to Claude…)
 

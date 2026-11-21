@@ -23,6 +23,7 @@ import '../help/help_screen.dart';
 import '../services.dart';
 import '../theme.dart';
 import '../widgets.dart';
+import 'import_actions.dart' show kSlowReadNote, readMedia, readProblem;
 import 'session.dart';
 
 const _uuid = Uuid();
@@ -337,22 +338,25 @@ Future<List<String>> addSoundFiles(
     {SoundRole? role, SoundRole? preselect}) async {
   final files = <SoundFile>[];
   final problems = <String>[];
-  await whileBusy(context,
+  final cancel = BusyCancel();
+  final done = await whileBusy(context,
       picked.length == 1 ? 'Reading the sound…' : 'Reading the sounds…',
-      () async {
+      cancel: cancel, slowNote: kSlowReadNote, () async {
     for (final file in picked) {
+      if (cancel.cancelled) return;
       try {
-        final info = await session.engine.probe(file.path);
+        final info = await readMedia(session, file.path);
         if (!info.hasAudio || info.durationMs <= 0) {
           problems.add('${file.name} — no sound found in this file');
           continue;
         }
         files.add(SoundFile(file, info));
-      } catch (_) {
-        problems.add('${file.name} — the file could not be read');
+      } catch (e) {
+        problems.add(readProblem(e, file.name));
       }
     }
   });
+  if (!done) return const [];
   if (files.isEmpty || !context.mounted) return problems;
   final SoundAnswer? answer = role != null
       ? SoundAnswer(role)

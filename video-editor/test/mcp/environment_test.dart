@@ -218,7 +218,7 @@ void main() {
           throwsA(isA<ToolError>().having(
               (e) => e.message,
               'message',
-              allOf(contains('ffmpeg and ffprobe'), contains('/no/such/ffmpeg'), contains(ffmpegInstallHint()),
+              allOf(contains('ffmpeg and ffprobe'), contains('/no/such/ffmpeg'), contains(ffmpegNeededMessage()),
                   contains('--ffmpeg <path>')))));
     });
 

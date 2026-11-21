@@ -6,6 +6,7 @@ import 'dart:isolate';
 import 'package:path/path.dart' as p;
 
 import 'ffmpeg_command.dart';
+import '../core/perf_log.dart';
 import '../core/model/project.dart';
 import 'media_api.dart';
 import 'silence_levels.dart';
@@ -281,3 +282,43 @@ class LogTail {
     return t.length > maxChars ? t.substring(t.length - maxChars) : t;
   }
 }
+
+// ---- a probe that cannot wait for ever (1.18) -------------------------------
+
+/// The longest a file may take to be read when it is added. A probe
+/// normally answers in well under a second (16 ms for a 138 MB video on
+/// the Mac of the 1.17 test); the same test had one that never answered
+/// for an 8.3 GiB file, with no way out of "Adding file…".
+const Duration kProbeTimeout = Duration(seconds: 45);
+
+/// A probe that did not answer within [kProbeTimeout].
+class ProbeTimeout extends ExportException {
+  ProbeTimeout(String name, Duration after)
+      : super(probeTimeoutMessage(name, after));
+}
+
+/// What the user is told when [name] could not be read in time.
+String probeTimeoutMessage(String name, Duration after) =>
+    '$name could not be read within ${after.inSeconds} seconds. If it is on '
+    'a network drive, an external disk or in a cloud folder (iCloud, '
+    'OneDrive, Dropbox) that has not finished downloading it, copy it to '
+    'this computer first and add it again.';
+
+/// [engine]`.probe` with a limit: after [timeout] the caller gets a
+/// [ProbeTimeout] (the probe itself may still be running inside FFmpeg;
+/// its answer is then dropped). Logged, so a performance log shows a
+/// probe that hung.
+Future<MediaInfo> probeWithin(MediaEngine engine, String path,
+    {Duration timeout = kProbeTimeout, PerfLog? log}) {
+  final name = p.basename(path);
+  return engine.probe(path).timeout(timeout, onTimeout: () {
+    (log ?? PerfLog.instance).note(
+        'probe gave no answer within ${timeout.inMilliseconds} ms; given up');
+    throw ProbeTimeout(name, timeout);
+  });
+}
+
+/// "8.3 GB" / "138 MB" for the performance log (a size, never a name).
+String formatProbeSize(int bytes) => bytes >= 1 << 30
+    ? '${(bytes / (1 << 30)).toStringAsFixed(1)} GB'
+    : '${(bytes / (1 << 20)).round()} MB';

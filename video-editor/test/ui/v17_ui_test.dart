@@ -100,12 +100,14 @@ void main() {
         await tester.pumpAndSettle();
       }
       await tapKey(tester, 'title-style-outline');
+      await openSection(tester, 'Font and colour');
       await tapKey(tester, 'title-font-handwritten');
       await tapKey(tester, 'title-position-top');
       await tester.ensureVisible(find.byKey(const ValueKey('title-align')));
       await tester.tap(find.descendant(
           of: find.byKey(const ValueKey('title-align')), matching: find.text('Left')));
       await tester.pumpAndSettle();
+      await openSection(tester, 'Appear and disappear');
       await tester.ensureVisible(find.byKey(const ValueKey('title-anim-in')));
       await tester.tap(find.descendant(
           of: find.byKey(const ValueKey('title-anim-in')), matching: find.text('Pop')));

@@ -34,7 +34,10 @@ void main() {
       expect(find.text('Garden'), findsOneWidget);
       expect(find.textContaining('0:18'), findsNWidgets(2));
       expect(find.textContaining('14 Nov 2026, 18:30'), findsNWidgets(2));
-      expect(find.text('New project'), findsOneWidget);
+      // 1.18: the Start row instead of the round button.
+      expect(find.text('New video'), findsOneWidget);
+      expect(find.text('Podcast'), findsOneWidget);
+      expect(find.text('Make a short'), findsOneWidget);
       await fakes.screenshot(tester, 'home_$label');
     });
   }
@@ -44,10 +47,10 @@ void main() {
     final fakes = Fakes();
     await tester.pumpWidget(fakes.app(const HomeScreen()));
     await tester.pumpAndSettle();
-    expect(find.text('No projects yet'), findsOneWidget);
+    expect(find.text('Welcome to ClipForge'), findsOneWidget);
     await fakes.screenshot(tester, 'home_empty_phone');
 
-    await tester.tap(find.text('New project'));
+    await tester.tap(find.text('New video'));
     await tester.pumpAndSettle();
     expect(fakes.store.projects, hasLength(1));
     expect(find.byType(EditorScreen), findsOneWidget);
@@ -279,9 +282,9 @@ void main() {
     final fakes = Fakes()..damaged = const [DamagedProject(id: 'broken')];
     await tester.pumpWidget(fakes.app(const HomeScreen()));
     await tester.pumpAndSettle();
-    expect(find.text('No projects yet'), findsNothing);
+    expect(find.text('Welcome to ClipForge'), findsNothing);
     expect(find.text("Can't open (damaged file)"), findsOneWidget);
-    expect(find.text('New project'), findsOneWidget);
+    expect(find.text('New video'), findsOneWidget);
     expect(find.text('Open project file'), findsOneWidget);
   });
 

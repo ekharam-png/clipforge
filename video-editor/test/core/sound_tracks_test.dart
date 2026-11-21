@@ -129,7 +129,8 @@ void main() {
       final p = project(clips: [small]);
       expect(p.canvasSize, (width: 464, height: 824));
       expect(p.copyWith(videoSize: VideoSize.p1080).canvasSize,
-          (width: 1080, height: 1918));
+          (width: 1080, height: 1920),
+          reason: '1.18: the standard width, not 1918');
       expect(p.copyWith(videoSize: VideoSize.p720).canvasSize.width, 720);
       expect(
           p

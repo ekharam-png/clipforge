@@ -9,7 +9,7 @@ not mention.
 
 Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
 1.8.0, 1.9.0, 1.10.0, 1.11.0, 1.12.0, 1.13.0, 1.14.0, 1.14.1, 1.15.0,
-1.16.0, 1.17.0.
+1.16.0, 1.17.0, 1.18.0.
 
 ## Projects
 
@@ -32,6 +32,26 @@ Versions so far: 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, 1.5.0, 1.6.0, 1.7.0,
 | Find file: Search the gallery (Android) | 1.8.0 | Looks for a missing file by its name on the phone and copies it in. |
 | Clean-up never deletes what is in use | 1.8.0 | Files the open project or its undo history still needs are always kept. |
 | "Open in the app" mark | 1.9.0 | An open project is marked, so Claude does not change it at the same time; leftovers of a crash are ignored and cleaned up. |
+
+## Folding side panel, Start row, fixes from a Mac test (1.18.0)
+
+| Feature | Since | What it does |
+|---|---|---|
+| Adding a file can be cancelled | 1.18.0 | "Adding file…" has Cancel, Esc works, File > Back to projects cancels and goes back; after 45 seconds it stops by itself with what to try. Videos and sound files are asked for their table of contents only. |
+| Groups in the side panel | 1.18.0 | Every group of settings opens and closes on its heading, by itself, and is remembered; a closed group with a changed setting shows a dot. The sheets of a title and a sound on a phone have the same groups. |
+| Show the side panel | 1.18.0 | View > Show the side panel (Ctrl+Shift+P) and the arrow on the panel hide it, so the picture gets the room. |
+| Start row | 1.18.0 | New video, Podcast (the video, then one sound file per speaker) and Make a short on the project list. |
+| Bigger project cards | 1.18.0 | Picture, length and when it was last edited; one column on a phone. |
+| What's new card and a tip a day | 1.18.0 | After an update: two or three lines and a link to all release notes. One tip a day, with Don't show tips. Nothing from the internet. |
+| Background work pauses when the app stalls | 1.18.0 | After two seconds without a response, sound waves, thumbnail strips and processed sound all pause, with Turn back on. Copy version info names what was running. |
+| The preview player never holds up the app | 1.18.0 | Questions to the player have a two-second limit and are asked apart from the app's own work. |
+| Only when speaking with hundreds of pauses | 1.18.0 | Exports of long conversations are no longer refused ("no if filter"). |
+| Move to the Applications folder (Mac) | 1.18.0 | One line when ClipForge runs from the download, also naming an older copy in Applications; Show me how. Nothing is moved. |
+| FFmpeg for Claude said up front | 1.18.0 | Connect to Claude shows when the helper has no FFmpeg, with the command and Copy the command; the self-test and the tools say the same. "Updating the helper…" right after an update. |
+| whisper.cpp without an installed FFmpeg | 1.18.0 | On a Mac or Windows PC ClipForge reads the sound itself for your own speech program. |
+| Standard sizes | 1.18.0 | A nearly 16:9 video scaled to 720p or 1080p gets the standard width (1280 × 720, not 1278 × 720). |
+| Mac keys | 1.18.0 | Cmd+? opens Help; Cmd+comma works with any keyboard layout; tooltips say Cmd. |
+| Project file name | 1.18.0 | Share project file always ends in .clipforge.zip, also with a name you typed. |
 
 ## A part of the timeline (1.17.0)
 

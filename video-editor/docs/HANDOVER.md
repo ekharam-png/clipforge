@@ -2,6 +2,12 @@
 
 Read this first in a new session. It records what was built, why, how it fits
 together, how to build and test it, and what is still open. Last updated
+21 November 2026 (1.18.0: fixes from a real test of 1.17.0 on a Mac - a
+probe that cannot wait for ever, the preview player asked from a helper
+isolate, the "if" filter refusal of "Only when speaking", the generic
+safety valve, the Claude helper and FFmpeg - plus the folding side panel
+and the new project list; see "A real Mac test; the side panel; the
+project list (1.18.0)". Before that
 20 November 2026 (1.17.0: select a part of the timeline and act on it per
 row, quiet ranges, "Only when speaking", I / O now mark a part, and the
 sound pictures moved off the app's own isolate after a stall on a real
@@ -117,7 +123,11 @@ what must not change.
   `lib/media/ffmpeg_lane.dart` (the order of FFmpeg runs inside the app,
   `Throttle`), `lib/media/kit_runner.dart` (how FFmpegKit is run: no log
   messages, quiet arguments, the plugin behind `KitPlatform`).
-- `test/core`, `test/media`, `test/ui`, `test/mcp` — 2048 tests (1.17.0 with its second pass, 2001 before it; 1931 at 1.16.0, 1888 at 1.15.0, 1827 at 1.14.1, 1796 at 1.14.0, 1690 at 1.13.0, 1611 at 1.12.0, 1516 at 1.11.0).
+- 1.18: `lib/core/background_work.dart` (the safety valve),
+  `lib/core/install_place.dart`, `lib/ui/playback/mpv_ask.dart` (asking
+  libmpv from a helper isolate), `lib/ui/editor/panel_sections.dart`,
+  `lib/ui/home/home_extras.dart`.
+- `test/core`, `test/media`, `test/ui`, `test/mcp` — 2097 tests (1.18.0; 2048 at 1.17.0 with its second pass, 2001 before it; 1931 at 1.16.0, 1888 at 1.15.0, 1827 at 1.14.1, 1796 at 1.14.0, 1690 at 1.13.0, 1611 at 1.12.0, 1516 at 1.11.0).
   `integration_test/real_app_test.dart` — drives the real app on Linux.
 
 ## What was built, and why
@@ -2292,6 +2302,251 @@ so neither class could show.
   remove list with non-ASCII paths in the cmd script (CI uses ASCII
   there); the 15 s wait on a slow PC with a scanner.
 
+## A real Mac test; the side panel; the project list (1.18.0, 21 Nov 2026)
+
+1.17.0 (build 136) was tested on a real Mac (MacBook Air, Apple silicon,
+the FFmpegKit engine inside the app, driven partly by an AI tester). Six
+findings (Part 1), two wishes from a friend (Part 2), and a proposal for
+the phone menus that was written but NOT built (Part 3: it is a file for
+the owner, not in the repository).
+
+### Part 1: what the Mac test found
+
+**1. "Adding file…" never ended (27:21, H.264/AAC, 8.3 GiB).** The
+performance log ended at `probe start`; the UI isolate was fine (longest
+gap 54 ms); a 138 MB file probed in 16 ms. ROOT CAUSE NOT PROVEN - it is
+inside FFprobeKit / the file system, and cannot be run here. What the
+code review showed:
+
+- NOT the cause, checked: nothing of ours reads or hashes a media file on
+  a computer. The content fingerprint (`mediaFingerprint`) reads 2 x
+  256 KB with 64-bit positions (now tested on a sparse 5 GiB file: 39 ms;
+  size and END of the file both count). `keepMediaCopy` copies only on
+  Android; on computers only a macOS "file promise" drop is copied. Dart
+  ints are 64-bit; the probe's JSON is parsed with `_toNum`. The probe is
+  not in the FfmpegLane and waits for no other run; on macOS the plugin
+  runs it on a concurrent global queue
+  (`FFmpegKitFlutterPlugin.m`, `mediaInformationSessionExecute`).
+- A real difference between that file and the small one that could be
+  REMOVED: our probe asked ffprobe for the first FRAME of every file
+  (`-show_frames -read_intervals %+#1`, needed only for a photo's EXIF
+  orientation). For a video that means opening every decoder and reading
+  packets from the middle of an 8 GiB file. Now `probeReadsFirstFrame`:
+  files whose ending is a known video / sound container
+  (`kProbeIndexOnly`) are asked for format and streams only.
+- Candidates that remain: the file lives on storage that delivers it
+  slowly (an external or network disk, or a cloud folder whose file is
+  not downloaded: reading then waits for the download), or macOS asked
+  for permission to read that folder in a window the tester did not see.
+  FFprobeKit has NO time limit for the run itself (its `waitTimeout` only
+  limits the wait for log lines afterwards) and an ffprobe session
+  cannot be cancelled.
+- So, whatever the cause: `probeWithin` (media_common.dart,
+  `kProbeTimeout` 45 s) gives up with `ProbeTimeout` - a sentence naming
+  the file and what to try; the abandoned ffprobe may still be running
+  inside the app, its answer is dropped. Every "add a file" path of the
+  UI uses it (`readMedia` in import_actions.dart; main track, music,
+  overlay, voices). `whileBusy` (widgets.dart) takes a `BusyCancel`: a
+  **Cancel** button, Esc / back close the window, the work is no longer
+  waited for and its result is dropped; after 6 s a line says it is
+  taking longer than usual. **File > Back to projects** during it:
+  `_backFromMenu` cancels the busy window (`BusyCancel.cancelCurrent`),
+  then goes back - a Mac's menu bar stays usable above a Flutter dialog.
+- Perf log inside the probe: `probe: log messages off start/end`,
+  `probe, 8.3 GB start` (the size, never a name), `probe: ffprobe [with
+  first frame] start` / `end` / `gave nothing`, `probe: ffprobe, plain
+  command …`, `probe gave no answer within 45000 ms; given up`, and
+  `thumbnail` / `thumbnail strip (N s)` spans for both engines.
+
+**2. 99.9 s not responding right after a saved project opened.** ROOT
+CAUSE: PROVEN IN THE CODE, with the log's timing; what made the player
+slow is NOT known. `MediaKitTimelinePlayer._waitUntilLoaded` waits
+`loadTimeout` = 4 s for the player's first position and then ASKS it
+(`getProperty('time-pos')`). media_kit's `NativePlayer.getProperty` /
+`setProperty` are direct FFI calls (`mpv_get_property_string`,
+`mpv_set_property_string`, media_kit 1.2.6 `real.dart`) on the app's own
+isolate - which is also the platform thread on macOS and Windows - and
+they wait until mpv's core answers. The log: project opened at +28.7 s,
+the watchdog's last heartbeat about 4 s later, back after 99.9 s. (The
+player's own commands - open, seek, play - are asynchronous by default,
+`PlayerConfiguration.async`; only OUR property calls were not.)
+
+- `lib/ui/playback/mpv_ask.dart` (`MpvAsk`, `LibMpvCalls`): every
+  property the app reads or sets (`time-pos`, `aid`, `af`, `track-list/…`,
+  `options/aid`, `vd-lavc-…`) is asked on a helper isolate that opens the
+  same libmpv (`NativeLibrary.path`); the app waits at most
+  `kMpvAskTimeout` (2 s). No answer = "" / not set, a line in the log
+  (`preview player: no answer to "get time-pos" within 2000 ms`), and
+  the helper that is stuck inside libmpv is left to finish while a new
+  one takes the next asks. A music player waits for open asks before its
+  core is destroyed. New direct dependency `ffi` (already used by
+  media_kit).
+- Audit of everything else that starts after a project opens (all were
+  already off the isolate or small): thumbnail strip (FFmpegKit, lane,
+  background), sound pictures (cached: 115 ms), who-is-speaking
+  (`Isolate.run` for long files), missing-media check (`existsSync` per
+  file), processed-sound cache scan (async directory listing), update
+  check (HTTP, at most daily), the Claude helper refresh (`compute`;
+  `helper_install.dart` uses sync file calls and `Process.runSync
+  chmod`, but only inside that isolate), transcripts (2 x 256 KB per
+  file), settings. None blocks for seconds.
+- `PerfLog.span` now keeps what is IN FLIGHT (`inFlight`, `track`); the
+  watchdog isolate is told on every change and its line ends "In flight
+  when it stopped: preview player open (video); thumbnail strip (290 s)";
+  every gap of 2 s or more lists it too. New spans: `open: read the
+  project`, `open: media check`, `open: settings`, `open: transcripts`,
+  `preview player open (video|sound)`, `processed-sound cache scan`,
+  `who is speaking`, `project list`, `start: tidy unused media`,
+  `start: update check`, `start: claude helper refresh`.
+- Generic safety valve: `lib/core/background_work.dart`
+  (`BackgroundWork`, `BackgroundTask` with busy / pause / resume). A gap
+  of 2 s or more while ANY registered work is busy pauses ALL of it:
+  the editor's sound pictures and processed-sound renders
+  (`EditorSession._background`, `SoundRenders.pauseAll`) and the
+  background runs of the FFmpegKit lane (`FfmpegLane.pauseBackground`:
+  thumbnail strips, sound decodes; user runs and exports go on). The
+  timeline says "Background work was paused to keep ClipForge responsive
+  · Turn back on" (or the old sound-waves line when pictures were the
+  ones). Leaving the project ends the pause. A gap with nothing in the
+  background pauses nothing (the computer slept). NOTE: a gap is measured
+  when it ENDS, so the valve acts after the stall, as in 1.17.
+
+**3. "its FFmpeg has no "if" filter" (Only when speaking, 9 minutes, two
+voices).** ROOT CAUSE PROVEN and reproduced here: `filtersInGraph`
+(sound_filters.dart) did not know quoted values, so in
+`volume=volume='if(lt(t,5),if(…),…)'` every comma ended "a filter" and a
+nested `if(` after a comma became a filter name. One or two pauses per
+track never nest after a comma (the 10 s fixture); three or more do. The
+graph itself was always right. Fix: a quoted run is skipped as one
+value. The expression stays the balanced `if(lt(t,S),..)` tree in one
+quoted value; long graphs already go through the graph file
+(`needsGraphFile`), so no argument-length limit applies. Test with the
+real ffmpeg: 132 s, 320 pauses on each of two tracks (graph 34 420
+characters, in a file), exported in 11 s; open / shut levels right at
+pause 2 and at pause 300.
+
+**4. The Claude helper could not find FFmpeg.** Windows is the same: the
+helper is a separate program (`dart compile exe`) and has always needed
+an installed ffmpeg / ffprobe (CI comment in the workflow, README);
+nothing ships one. DECISION: the minimum, said clearly, not a bridge
+from the helper to the running app (a second protocol, and the app
+would have to be running) and not a second FFmpeg in the downloads
+(size, licence text, three build jobs that cannot be tried here).
+`ffmpegNeededMessage` / `ffmpegInstallCommand` (mcp/environment.dart)
+are THE sentence and command: the Connect page shows a card "One more
+thing to install: FFmpeg" with **Copy the command** before anything
+fails (`helperFfmpegProvider` looks exactly like the helper,
+`MediaTools`), `self_test` and `requireEngine` say the same words.
+The refresh: `installAtStart` is now the FIRST thing after the project
+list loads (it sat behind the update check and its windows), one run at
+a time, with `ClaudeHelperService.refreshing`; the Connect page waits
+for a running refresh and shows "Updating the helper…".
+
+**5. App Translocation.** `lib/core/install_place.dart`
+(`macInstallAdvice`, pure): the resolved executable has
+`/AppTranslocation/` in it, or the `.app` is in neither `/Applications`
+nor `~/Applications` -> one line on the project list ("Move ClipForge to
+the Applications folder so it can update itself", + "An older ClipForge
+(1.14.1) is in the Applications folder: replace it with this one." read
+from that copy's Info.plist) with **Show me how** (help article
+`move-to-applications`) and a cross (flag `moveToApplicationsSeen`).
+Shown until closed, not only once: running from there, updates cannot
+work. Nothing is moved.
+
+**6. Smaller.** Cmd+?: macOS gives that key to the Help menu's search
+box before a menu item's own shortcut; `MacAppKeys` (app_menu.dart) is a
+second way in for Cmd+? and Cmd+comma (logical or physical key), which
+only sees keys the menu bar did not answer. `shortcutText('… (Ctrl+Left)')`
+is the one place for shortcut words outside the menus. 1278 x 720:
+`Project.snapToWide` (a size scaled to 480/720/1080/1440/2160 within
+0.5 % of 16:9 gets the standard width) in `exportSize` (small quality)
+and for a chosen Video size. Share project file: `savePathFor`
+(format.dart) keeps the whole offered ending (".clipforge.zip") and the
+empty file the save window left under the other name is removed.
+whisper.cpp: `SpeechWavEngine` (FfmpegKitMediaEngine.speechWav) through
+`wavExtractorOf`, so the WAV is made by the FFmpeg inside the app on
+Mac / Windows; Linux keeps the installed one.
+
+### Part 2
+
+**7. The side panel.** `lib/ui/editor/panel_sections.dart`
+(`PanelSection`, `kSectionsOpenByDefault`); state in `AppSettings`
+(`sectionOpen` / `setSectionOpen`, settings.json text `panelSections`
+as `id=1,id=0`). Sections: `clip.speed|look|crop|sound|transition`,
+`overlay.layout|crop|sound`, `project.fades|music|shorts`,
+`title.style|font|position|animation|time`, `sound.level|place|clean`.
+Before, the clip's groups were an accordion (exactly one open). Now each
+is independent; a section an action asks for (`EditorSession.openTool`:
+the Crop button, a transition mark) shows open without being stored.
+**Crop is the exception** (`remember: false`): a visible CropPanel puts
+the preview in crop mode, so it is open exactly while it is asked for.
+The dot: `clipToolChanged`, `overlayToolChanged`, `titleLooksChanged`.
+Hide / show: `Act.sidePanel` (View > Show the side panel, Ctrl+Shift+P,
+`EditorSession.showSidePanel`, flag `sidePanelOff`, the chevron at the
+top of the panel; hidden, a 40 px strip keeps the button). Phones: the
+title and sound sheets are the same widgets, so they have the sections;
+the clip's tools were already one sheet per tool. NOT done: sections
+inside the clip's long Sound panel.
+
+**8. The project list.** `lib/ui/home/home_extras.dart`: `StartRow`
+(New video / Podcast / Make a short), `WhatsNewCard` (replaces the
+"Updated to X" line; `changelogHighlights` takes the first three
+top-level points of the version's CHANGELOG section, first sentence
+each - so WRITE THE FIRST THREE POINTS OF A RELEASE AS HEADLINES),
+`TipLine` (`kTips`, `tipFor(day)`: one a day; "Don't show tips", flag
+`tipsOff`, Settings > Suggestions), `MoveToApplicationsLine`. Cards:
+a grid of picture-on-top cards (320 x 236) on wide windows, one column
+of rows on phones (< 600), length on the picture, "edited <date>".
+Podcast = a new project opened with `EditorStart.podcast`: a window
+explains the two steps, then the existing Add media and Add voice
+recording run one after the other. Make a short = choose one of the
+projects, opened with `EditorStart.short` ("Make a short from here").
+Dropping files on the list already started a project (1.15). The round
+"New project" button stays on phones only ("New video").
+
+### Tests (new in 1.18)
+
+`test/core/v118_test.dart` (probe arguments, the probe limit, the sparse
+5 GiB fingerprint, in-flight spans and the watchdog's line, the valve,
+the lane's pause, `MpvAsk` against a player that takes 600 ms, the Mac's
+install place), `test/media/v118_gate_export_test.dart` (the filter
+check; the 2 x 320-pause export), `test/ui/v118_ui_test.dart` (an engine
+whose probe never answers: Cancel, Esc, the 45 s limit with the message,
+the editor usable afterwards; the sections, the dot, hide / show; the
+Start row, the card, the tip; the Connect page's FFmpeg card).
+
+Updated for the new layout: `fakes.dart` (`openClipTool` closes the other
+groups so the older tests still find one "Apply to all clips";
+`openSection` / `closeSection` / `sectionIsOpen`; `neverAnswers`; the
+performance log, release notes, day and install place are fakes too),
+the home, title, crop and FFmpeg-message tests, the menu snapshot (View >
+Show the side panel), three size expectations (1080 x 1918 is now
+1080 x 1920). The Linux e2e taps "New video" instead of "New project".
+
+Verified here (Linux container, FFmpeg 6.1.1): `flutter analyze` clean;
+`flutter test` 2097 passed (49 new); `dart run tool/pure_core_check.dart`;
+`dart run tool/gen_guide.dart --check`; the three `tool/ci/*_test.py`;
+the Linux e2e passed (one run; it plays through the real libmpv, so the
+helper-isolate asks ran there). `web/content/generated` was regenerated
+(`node scripts/build-content.mjs --offline`); the website's own tests
+were not run (no node_modules here). No release or APK build (disk).
+
+### Not verified (1.18) - everything on real devices
+
+- Mac: that the 100 s stall is gone (the mechanism is proven, the fix
+  could only be run against libmpv on Linux and a stand-in); WHY mpv
+  took 100 s (hardware decoding or the sound device are the usual
+  suspects - the next log will show `preview player open` in flight);
+  the 8.3 GiB import (the probe now reads less, and ends after 45 s
+  either way); Cmd+? and Cmd+comma (whether the key reaches Flutter at
+  all when the Help menu takes it); the Applications line; the save
+  window's name; whisper.cpp with the in-app FFmpeg; the 320-pause
+  export on FFmpeg 8.1.
+- Windows: the same player calls (the UI isolate is the platform thread
+  there too); the helper's FFmpeg card.
+- Android: the section sheets and the one-column project list under a
+  thumb.
+
 ## Select a part, quiet ranges, only when speaking; the Windows stall (1.17.0, 20 Nov 2026)
 
 Owner (podcasts with one sound file per speaker, family videos, sport):
@@ -3790,7 +4045,7 @@ building** until they report results. Read the checklist marks first.
 export PATH=/opt/sdk/flutter/bin:$PATH ANDROID_HOME=/opt/sdk/android
 cd video-editor
 flutter analyze
-flutter test                                   # all tests (2048)
+flutter test                                   # all tests (2097)
 flutter build apk --release --split-per-abi --target-platform android-arm64
 python3 tool/ci/release_assets_test.py && python3 tool/ci/release_assets.py --check-links
 python3 tool/ci/links_test.py && python3 tool/ci/make_readme_html_test.py

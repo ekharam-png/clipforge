@@ -133,7 +133,7 @@ void main() {
       await tester.pumpWidget(fakes.app(const HomeScreen()));
       await tester.pumpAndSettle();
       expect(fakes.drops.activeTargets, 0);
-      expect(find.text('No projects yet'), findsOneWidget);
+      expect(find.text('Welcome to ClipForge'), findsOneWidget);
     });
   });
 

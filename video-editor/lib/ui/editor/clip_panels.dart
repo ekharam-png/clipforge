@@ -103,6 +103,26 @@ String clipToolSummary(ClipTool tool, Clip clip, Project project) {
   }
 }
 
+/// True when [tool]'s settings of [clip] are not the defaults (a closed
+/// section then shows a dot, so nothing is hidden silently).
+bool clipToolChanged(ClipTool tool, Clip clip, Project project) =>
+    switch (tool) {
+      ClipTool.speed => clip.speed != 1,
+      ClipTool.look => clipLookChanged(clip),
+      ClipTool.sound => clip.hasAudio &&
+          (clip.muted ||
+              clip.volume != 1 ||
+              clip.denoise ||
+              clip.voiceFocus > 0 ||
+              clip.quiet.isNotEmpty),
+      ClipTool.transition => clip.fadeInMs > 0 ||
+          clip.fadeOutMs > 0 ||
+          (project.clips.indexOf(clip) > 0 &&
+              clip.transition != TransitionType.none),
+      ClipTool.crop => !clip.framing.isDefault,
+      ClipTool.layout => false,
+    };
+
 /// The controls of one [tool] for [clip].
 class ClipToolPanel extends StatelessWidget {
   const ClipToolPanel({

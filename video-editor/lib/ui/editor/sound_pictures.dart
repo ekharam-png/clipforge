@@ -281,7 +281,8 @@ class SoundPictures extends ChangeNotifier {
           _done++;
           if (peaks != null) {
             // Before the timeline sees the picture.
-            await _primeSpeech(key, peaks);
+            await PerfLog.instance
+                .track('who is speaking', () => _primeSpeech(key, peaks));
             if (_disposed) return;
           }
           if (peaks == null) {

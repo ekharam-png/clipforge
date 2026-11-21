@@ -89,6 +89,7 @@ class EditorActions {
       case Act.zoomOut:
       case Act.snapping:
       case Act.soundWaves:
+      case Act.sidePanel:
       case Act.shortcuts:
       case Act.shapeAndSize:
         return null;
@@ -245,6 +246,7 @@ class EditorActions {
         Act.textWindow => s.showText.value,
         Act.snapping => s.snapping.value,
         Act.soundWaves => s.showWaves.value,
+        Act.sidePanel => s.showSidePanel.value,
         Act.history => null,
         Act.onlyWhenSpeaking => _p.soundTracks.any((t) => t.gate) ? true : null,
         _ => null,
@@ -408,6 +410,10 @@ class EditorActions {
         } else {
           hooks.setSoundWaves(on);
         }
+      case Act.sidePanel:
+        final on = !s.showSidePanel.value;
+        final set = hooks?.setSidePanel;
+        set == null ? s.showSidePanel.value = on : set(on);
       case Act.playPause:
         hooks?.stopReverse();
         s.playback.toggle();

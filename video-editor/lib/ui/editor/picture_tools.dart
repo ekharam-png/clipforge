@@ -573,6 +573,17 @@ String overlayToolSummary(ClipTool tool, OverlayClip o) => switch (tool) {
       _ => '',
     };
 
+/// True when [tool]'s settings of [o] are not the defaults.
+bool overlayToolChanged(ClipTool tool, OverlayClip o) => switch (tool) {
+      ClipTool.crop => !o.clip.framing.isDefault,
+      ClipTool.sound => o.clip.muted ||
+          o.clip.volume != 1 ||
+          o.clip.speed != 1 ||
+          o.fadeInMs > 0 ||
+          o.fadeOutMs > 0,
+      _ => false,
+    };
+
 /// The controls of one [tool] for overlay item [overlay].
 class OverlayToolPanel extends StatelessWidget {
   const OverlayToolPanel({
