@@ -32,6 +32,18 @@
 # install from ClipForge-macos.zip, Gatekeeper, the in-app update on a Mac
 # and Connect to Claude; see "round 7, Mac" below):
 #
+# Rounds 8, 8-mac and 8-phone = the same three for 1.18.0 (build 140). They
+# are derived from the round 7 ones (see "round 8" below): the update,
+# then what 1.18 changed (the long file and "Adding file…", saved projects
+# that open without a freeze, the export with Only when speaking, the
+# project list with its Start row, the side panel that folds, the FFmpeg
+# card of the Connect to Claude page, smaller things), then all of round 7
+# again as the regression. Their result files and browser storage are
+# named after the round (Round-8, Round-8-mac, Round-8-phone):
+#
+#   python3 gen_checklist.py ClipForge-Test-Round-8.html       --round 8       --build "ClipForge 1.18.0 (build 140) · 21 Nov 2026"
+#   python3 gen_checklist.py ClipForge-Test-Round-8-Mac.html   --round 8-mac   --build "..."
+#   python3 gen_checklist.py ClipForge-Test-Round-8-Phone.html --round 8-phone --build "..."
 #   python3 gen_checklist.py ClipForge-Test-Round-7.html       --round 7       --build "..."
 #   python3 gen_checklist.py ClipForge-Test-Round-7-Mac.html   --round 7-mac   --build "..."
 #   python3 gen_checklist.py ClipForge-Test-Round-7-Phone.html --round 7-phone --build "..."
@@ -2161,31 +2173,41 @@ _MAC_GROUP_TITLE = {
  "B. The long file (the freeze reported on this PC)": "B. The long file (it made an earlier version stop answering on the owner's Windows PC)",
 }
 
-def _mac_steps():
-    by_id = {st[0]: st for _, items in STEPS_7 for st in items}
+def _mac_steps(steps=None, mac_step=None, mac_a=None, titles=None, skip=(), after=None, rnd="7"):
+    """The Mac round of [steps] (default: round 7). [skip]: steps that are
+    for Windows only; [after]: Mac-only steps put after the step named."""
+    steps = STEPS_7 if steps is None else steps
+    mac_step = MAC_STEP if mac_step is None else mac_step
+    mac_a = MAC_A if mac_a is None else mac_a
+    titles = _MAC_GROUP_TITLE if titles is None else titles
+    after = after or {}
+    by_id = {st[0]: st for _, items in steps for st in items}
     used = set()
     def conv(sid):
         _, title, do, exp, tag = by_id[sid]
         title, do, exp = _mac_text(title), _mac_text(do), _mac_text(exp)
-        o = MAC_STEP.get(sid, {})
+        o = mac_step.get(sid, {})
         used.add(sid)
         for old, new in o.get("sub", []):
-            assert (old in do) + (old in exp) == 1, "round 7-mac, %s: this text is not in the step (once): %s" % (sid, old)
+            assert (old in do) + (old in exp) == 1, "round %s-mac, %s: this text is not in the step (once): %s" % (rnd, sid, old)
             do, exp = do.replace(old, new), exp.replace(old, new)
         title, do, exp = o.get("title", title), o.get("do", do), o.get("exp", exp)
         if "do_add" in o: do += " " + o["do_add"]
         if "exp_add" in o: exp += " " + o["exp_add"]
         return (sid, title, do, exp, tag)
-    first = [conv(s) if isinstance(s, str) else s for s in MAC_A[1]]
-    moved = {s for s in MAC_A[1] if isinstance(s, str)}
-    groups = [(MAC_A[0], first)]
-    for name, items in STEPS_7:
-        rest = [conv(st[0]) for st in items if st[0] not in moved]
+    def more(items):
+        return [x for st in items for x in [st] + after.get(st[0], [])]
+    first = [conv(s) if isinstance(s, str) else s for s in mac_a[1]]
+    moved = {s for s in mac_a[1] if isinstance(s, str)} | set(skip)
+    groups = [(mac_a[0], more(first))]
+    for name, items in steps:
+        rest = more([conv(st[0]) for st in items if st[0] not in moved])
         if rest:
-            groups.append((_MAC_GROUP_TITLE.get(name, _mac_text(name)), rest))
-    assert used == set(by_id), "round 7-mac must carry every round 7 step"
-    assert set(MAC_STEP) <= used, "MAC_STEP names a step round 7 does not have"
-    # Letter the groups again (round 7's group T moved into group A).
+            groups.append((titles.get(name, _mac_text(name)), rest))
+    assert used | set(skip) == set(by_id), "round %s-mac must carry every round %s step" % (rnd, rnd)
+    assert set(mac_step) <= used, "MAC_STEP names a step round %s does not have" % rnd
+    assert set(after) <= {st[0] for _, items in groups for st in items}, "round %s-mac: a Mac-only step follows a step that is not there" % rnd
+    # Letter the groups again (the Connect to Claude group moved into group A).
     return [("%s. %s" % (chr(65 + i), name.split(". ", 1)[1]), items)
             for i, (name, items) in enumerate(groups)]
 
@@ -2233,6 +2255,474 @@ BEFORE YOU START
 
 INSTR_7M = _mac_instr()
 
+# ---------------------------------------------------------------- round 8 (1.18.0)
+# The rounds for 1.18.0 (build 140): 8 = the Windows computer, 8-mac = a
+# Mac, 8-phone = the Android phone. They are DERIVED from the round 7 ones
+# the way round 7-mac is derived from round 7, so a step is written once:
+#   * every round 7 text goes through _r8_text (the version, the build, the
+#     names of the test projects and files, the line that says background
+#     work was paused);
+#   * R8_STEP / R8P_STEP change single steps: "sub" = (old, new) pairs (each
+#     old text must be in the step, so a change in round 7 is noticed here),
+#     "do_add" / "exp_add" = a sentence added at the end, "title" / "do" /
+#     "exp" / "tag" = a whole new value;
+#   * R8_LAYOUT / R8P_LAYOUT put the groups in a new order: the update, then
+#     what 1.18 changed (new steps are tuples, round 7 steps are ids), then
+#     _REST = every other round 7 group as it was: the full regression.
+#     The groups are lettered again;
+#   * round 8-mac is the Mac derivation (_mac_steps) of round 8, with the
+#     round 7 Mac table passed through _r8_text and changed by MAC_STEP_8.
+# What 1.18 changed (CHANGELOG.md 1.18.0, docs/HANDOVER.md "A real Mac
+# test; the side panel; the project list"), with the labels checked in the
+# source: lib/ui/home/home_extras.dart and home_screen.dart (the Start row,
+# the "What's new in …" card, the tip, "Welcome to ClipForge", the cards,
+# the line for a Mac that is not in Applications), lib/ui/editor/
+# panel_sections.dart, tools.dart and clip_panels.dart (the groups of the
+# side panel and of the phone's sheets, which are open at first, the dot),
+# editor_screen.dart (the panel button, the Podcast windows),
+# lib/ui/settings/settings_screen.dart, test/ui/menu_tree_snapshot.txt
+# (View > Show the side panel), lib/ui/widgets.dart and
+# lib/ui/editor/import_actions.dart ("Adding file…": Cancel, the slow
+# note), lib/media/media_common.dart (the 45-second message),
+# lib/ui/editor/timeline_view.dart ("Background work was paused…"),
+# lib/ui/claude/connect_claude.dart and lib/mcp/environment.dart (the
+# FFmpeg card and its sentence), lib/core/install_place.dart,
+# assets/help/help_en.md (the new articles).
+_R8_TEXT = [
+ ("1.17.0", "1.18.0"),
+ ("build 136", "build 140"),
+ ("Round 7", "Round 8"),
+ ("Round-7-", "Round-8-"),
+ ("r7-", "r8-"),
+ ("kit7", "kit8"),
+ ("\"Sound waves were paused to keep ClipForge responsive\"", "\"Background work was paused to keep ClipForge responsive\" (or \"Sound waves were paused to keep ClipForge responsive\")"),
+ ("\"Sound waves were paused…\"", "\"Background work was paused…\" (or \"Sound waves were paused…\")"),
+]
+
+def _r8_text(t):
+    for a, b in _R8_TEXT:
+        t = t.replace(a, b)
+    return t
+
+def _changed(st, o, rnd):
+    """The step [st] with the changes [o] (see "round 8" above)."""
+    sid, title, do, exp, tag = st
+    assert set(o) <= {"sub", "title", "do", "exp", "tag", "do_add", "exp_add"}, "round %s, %s: unknown change" % (rnd, sid)
+    for old, new in o.get("sub", []):
+        assert (old in do) + (old in exp) == 1, "round %s, %s: this text is not in the step (once): %s" % (rnd, sid, old)
+        do, exp = do.replace(old, new), exp.replace(old, new)
+    title, do, exp, tag = o.get("title", title), o.get("do", do), o.get("exp", exp), o.get("tag", tag)
+    if "do_add" in o: do += " " + o["do_add"]
+    if "exp_add" in o: exp += " " + o["exp_add"]
+    return (sid, title, do, exp, tag)
+
+_REST = "every other group of the round before, in its order"
+
+def _next_round(base, layout, changes, rnd, titles=None):
+    """The groups of [layout] built from the round [base]."""
+    titles = titles or {}
+    by_id = {st[0]: st for _, items in base for st in items}
+    used = set()
+    def conv(s):
+        if not isinstance(s, str):
+            assert s[0] not in by_id, "round %s: %s is a step of the round before" % (rnd, s[0])
+            return s
+        assert s in by_id, "round %s: the round before has no step %s" % (rnd, s)
+        sid, title, do, exp, tag = by_id[s]
+        used.add(s)
+        return _changed((sid, _r8_text(title), _r8_text(do), _r8_text(exp), tag), changes.get(s, {}), rnd)
+    placed = {s for g in layout if g is not _REST for s in g[1] if isinstance(s, str)}
+    groups = []
+    for g in layout:
+        if g is _REST:
+            for name, items in base:
+                rest = [conv(st[0]) for st in items if st[0] not in placed]
+                if rest:
+                    name = name.split(". ", 1)[1]
+                    groups.append((titles.get(name, _r8_text(name)), rest))
+        else:
+            groups.append((g[0], [conv(s) for s in g[1]]))
+    assert used == set(by_id), "round %s must carry every step of the round before" % rnd
+    assert set(changes) <= used, "round %s changes a step the round before does not have" % rnd
+    assert set(titles) <= {name.split(". ", 1)[1] for name, _ in base}, "round %s renames a group the round before does not have" % rnd
+    return [("%s. %s" % (chr(65 + i), name), items) for i, (name, items) in enumerate(groups)]
+
+def _group_of(steps, sid):
+    """The letter of the group that holds the step [sid]."""
+    for name, items in steps:
+        if any(st[0] == sid for st in items):
+            return name.split(". ", 1)[0]
+    raise KeyError(sid)
+
+def _line_of(text, start):
+    """The whole line of [text] that begins with [start] (there is one)."""
+    assert text.count("\n" + start) == 1, "not one line starts with: " + start
+    a = text.index("\n" + start) + 1
+    return text[a:text.index("\n", a)]
+
+def _next_instr(base, intro, pairs, rnd):
+    """Instructions from those of the round before: the first paragraph is
+    [intro], the rest goes through _r8_text and the (old, new) [pairs]."""
+    rest = _r8_text(base[base.index("\n\nMEDIA FOLDER: "):])
+    for old, new in pairs:
+        assert rest.count(old) == 1, "round %s: the instructions do not have this text once: %s" % (rnd, old)
+        rest = rest.replace(old, new)
+    return intro + rest
+
+# What the window "Adding file…" says and does in 1.18 (import_actions.dart,
+# media_common.dart).
+_R8_SLOW = "This is taking longer than usual. You can wait, or cancel and try again with the file copied to this computer."
+_R8_GAVE_UP = "… could not be read within 45 seconds. If it is on a network drive, an external disk or in a cloud folder (iCloud, OneDrive, Dropbox) that has not finished downloading it, copy it to this computer first and add it again."
+# The sentence of the FFmpeg card (lib/mcp/environment.dart), as on Windows.
+_R8_FFMPEG = "Claude control needs the free program FFmpeg on this PC: open PowerShell (or Terminal) and run \"winget install ffmpeg\", then quit and reopen Claude. The ClipForge app itself works without it; only Claude needs it, to read, render and export videos."
+
+R8_STEP = {
+ "up-before": dict(
+   sub=[("On a PC that still has 1.15 or 1.16:", "On a PC that still has 1.17 (or an older version):")]),
+ "st-notes": dict(
+   title="\"What's new in 1.18.0\" after the update",
+   do="Look at the top of the project list right after the first start of 1.18.0. If a card \"What's new in 1.18.0\" is there, read its lines and copy them into the note, click All release notes, close Help and look whether the card is gone (if it is still there, close it with its cross). Then open any project and look whether a window \"Two keys changed\" opens. (The card appears once. If the owner already closed it, set Not tested and write \"owner saw it: yes / no\".)",
+   exp="A card with the title \"What's new in 1.18.0\", two or three short lines taken from the release notes (adding a file always ends; the side panel folds; the project list has a Start row), a small line \"Updated to 1.18.0\", the link All release notes and a cross. All release notes opens Help on the page that starts with 1.18.0, and the card does not come back at the next start. (Until 1.17 this was one line \"Updated to …\".) The note \"Two keys changed\" was shown once by 1.17 and does not come again; only when the update came straight from 1.15 or 1.16 it shows once now: write down which. No message says that an update did not work."),
+ "lf-import": dict(
+   sub=[("On the project list click New project.", "On the project list click New video (the first of the three buttons under \"Start\"; the round New project button of 1.17 is gone)."),
+        ("Start counting seconds when you confirm.", "Start counting seconds when you confirm. While the small window \"Adding file…\" shows, click nothing: count how long it stays and read what it says.")],
+   exp_add="FIRST PRIORITY, new in 1.18: \"Adding file…\" always ends (with 1.17 it stayed for good for a video of 8 GB on a Mac, with no way out). The window has a Cancel button. Normally it closes within a second or two and the clip is there. If it stays, after about 6 seconds it also says \"" + _R8_SLOW + "\", and after 45 seconds ClipForge gives up by itself with a message that names the file: \"" + _R8_GAVE_UP + "\" If the file is NOT added: copy the message letter for letter, write down how many seconds it took, how big file L is and where it is kept (this computer's own disk, an external disk, a network or cloud folder), choose Help > Copy version info and paste ALL of it into the Crash box, set FAIL, and ask the owner to copy the file to this computer's own disk for the rest of this group."),
+ "lf-stop": dict(
+   title="The cross stops the drawing; \"Background work was paused…\"",
+   exp_add="New in 1.18: when ClipForge did not answer for two seconds or more while it was working in the background, it now pauses ALL of that work (sound waves, the strips of clip pictures, prepared sound) and the timeline says \"Background work was paused to keep ClipForge responsive\" with Turn back on; the older line about sound waves shows when only the waves were at work. Either line is a finding: write down the time and what you were doing, and do the step \"The performance log\"."),
+ "lf-perf": dict(
+   exp_add="New in 1.18: a line about a gap of two seconds or more names what was running, for example \"In flight when it stopped: preview player open (video); thumbnail strip (290 s)\", and the log has lines such as \"probe, 8.3 GB start\" (the size of a file, never its name), \"open: read the project\" and \"preview player open (video)\". Copy every line with \"In flight\" or \"no answer\" into the Summary."),
+ "pt-project": dict(
+   sub=[("New project. Choose Add > Add from a folder path…, paste the MEDIA FOLDER path", "On the project list click New video. Choose Add > Add from a folder path…, paste the MEDIA FOLDER path")]),
+ "key-slider": dict(
+   do_add="(The Volume slider and Mute are in the group Sound of the side panel: click the heading Sound if that group is closed.)"),
+ "sm-menus-1": dict(
+   exp_add="(The menu item is still called New project; on the project list the same thing is the button New video.)"),
+ "sm-menus-2": dict(
+   sub=[("Snap to playhead and edges, Show sound waves |", "Snap to playhead and edges, Show sound waves, Show the side panel (Ctrl+Shift+P; new in 1.18) |")]),
+ "pr-list": dict(
+   exp_add="In 1.18 the cards are bigger: the picture on top with the length on it, the name, \"Edited\" with the date, and the three dots."),
+ "ti-fonts": dict(
+   do_add="(In 1.18 a title's settings are in groups: Size and style, Font and colour, Position, Appear and disappear, When it shows. Click a heading to open its group; Font and colour is closed at first.)"),
+ "ti-anim": dict(
+   do_add="(Appear and Disappear are in the group \"Appear and disappear\", which is closed at first.)"),
+ "set-open": dict(
+   sub=[("Editing (Snap to playhead and edges, Show sound waves)", "Editing (Snap to playhead and edges, Show sound waves, Show the side panel)"),
+        ("Suggestions (Show suggestions, and the button", "Suggestions (Show suggestions, Show a tip on the project list, and the button")],
+   exp_add="Show the side panel and Show a tip on the project list are new in 1.18."),
+ "sg-small": dict(
+   sub=[("New project with only file S (the small clip), rename it", "Make a new project (New video) with only file S (the small clip), rename it")]),
+ "sp-foreign": dict(
+   sub=[("New project \"Round 8 language\" with R;", "Make a new project (New video), \"Round 8 language\", with R;")]),
+ "sp-run": dict(
+   exp_add="New in 1.18: when the speech program is your own whisper.cpp (whisper-cli), ClipForge reads the sound itself (\"Reading the sound…\"), so FFmpeg does not have to be installed on the computer. If it stops with \"Reading the sound needs FFmpeg, which was not found on this computer.\", copy that, set FAIL and write down which speech program the window named under \"Uses: …\"."),
+ "cl-page": dict(
+   exp_add="New in 1.18: ClipForge brings the helper up to date as the first thing after it starts. If you open the page in that moment, the first card is titled \"Updating the helper…\" instead of showing the old version, and then changes by itself; afterwards it reads Version 1.18.0 (build 140). FAIL if it still names an older version or build after a minute (copy the line)."),
+ "cl-test": dict(
+   exp_add="The Claude helper needs the free program FFmpeg installed on the computer (ClipForge itself does not). Without it the test cannot pass: the line then reads \"FAIL: the helper answered (ClipForge 1.18.0), but a check did not pass. See Details.\" and the Details give the same sentence as the card \"One more thing to install: FFmpeg\" of the step before. In that case set Partial (not FAIL) with \"no FFmpeg on this PC\", and FAIL only if the Details name another reason or the sentence is missing."),
+ "hp-tour": dict(
+   exp_add="Its step about starting points at New video in the Start row of the project list and says: Tap \"New video\" to start."),
+ "end-perf": dict(
+   do_add="Also write into the Summary, one line each: did \"Adding file…\" end for the long file (and after how many seconds); the three times from the step \"Opening saved projects: no wait, no freeze\"; did the export with Only when speaking on the long recording finish."),
+}
+
+# The new steps of round 8 (Windows wording; the Mac round converts them).
+R8_NEW = {st[0]: st for st in [
+  ("lf8-cancel", "\"Adding file…\": Cancel, Esc, and \"taking longer than usual\"",
+   "Go to the project list, click New video and rename the project \"Round 8 cancel\". Add file L once more (Add > Add from a folder path…) and watch the small window \"Adding file…\". If it is still there after two seconds, press Esc and look at the timeline. Add L again and, if the window stays, click Cancel. Then add L a third time and let it finish. If the window closes by itself in under two seconds every time, there is nothing to cancel: write down how long it stayed and set PASS with \"too quick to cancel\".",
+   "The window says \"Adding file…\" and has a Cancel button (new in 1.18). Esc and Cancel both close it at once: nothing is added, the timeline is as it was, the app answers, and the same file can be added again right away. When the window stays, after about 6 seconds it also says \"" + _R8_SLOW + "\" After 45 seconds it closes by itself with the message of the first step of this group. A file on the computer's own disk is normally read in well under a second, so on most computers only the first sentence can be checked: that is a good result, not a gap in the test.", ""),
+  ("lf8-reopen", "Opening saved projects: no wait, no freeze",
+   "Use saved projects that are 5 minutes long or longer: \"Round 8 long\", and one or two of the owner's earlier projects of that length if there are any (only open and play them; change nothing). Three times in all: go to the project list, click the project, start counting, and press Space as soon as the editor shows; stop counting when the picture moves and the time under the preview runs. Before the third time choose File > Exit and start ClipForge again. Write down the three times and the length of each project. If any wait is longer than 5 seconds, or the window stops answering (it turns pale, or \"Not responding\" shows in its title): wait until it is back, choose Help > Copy version info at once and paste ALL of it into the note.",
+   "Each time the editor shows within a second or two and the video plays within about 5 seconds; the window answers the whole time. (With 1.17 a Mac did not answer for 100 seconds right after a saved project of five minutes had opened: ClipForge asked its preview player a question and waited inside the player for the answer. Such questions now give up after two seconds. The same code runs on Windows.) FAIL for any wait over 5 seconds. A preview that stays black or does not start while the rest of the app answers is a finding too: write down what the preview says (\"Loading the video…\") and for how long. In the pasted text look for lines that end with \"In flight when it stopped: …\" and for a line like: preview player: no answer to \"get time-pos\" within 2000 ms. Copy them into the Summary.", ""),
+  ("ows8-real", "Export with Only when speaking on a real recording of several minutes (refused in 1.17)",
+   "Needs the long video with its two voice files in \"Round 8 long\" (or another recording of several minutes with one sound file per speaker; otherwise set Not tested and say so). Open \"Round 8 long\". Put the playhead at 2:00 and press I, at 10:00 and press O: a part of about 8 minutes in which both people talk, every row ticked. Choose Part > Make a short from the part… (a note about 60 seconds is expected), UNTICK Short caption look, name it \"Round 8 speaking\", click Make the short and Open it. Choose Sound > Only when speaking…, switch it on for both voice tracks, leave \"A little room sound (−18 dB)\" and close the window. Press Ctrl+E, choose Custom, Small file, and export as r8-speaking-long.mp4 into clipforge-test-output. Write down the length of the project and how long the export took. Play one minute of the file in which the speakers take turns. (If the short cannot be made, switch Only when speaking on in \"Round 8 long\" itself, export that, and switch it off again afterwards.)",
+   "The export starts, runs to 100 % and ends with \"Video saved\". With 1.17 exactly this was refused: a recording of 9 minutes with two voice tracks gave a message that ended with: its FFmpeg has no \"if\" filter. (ClipForge misread its own instructions when a voice had three or more pauses.) If ANY message stops this export, copy it letter for letter, choose Help > Copy version info, paste both into the note and set FAIL. The file has the length of the project. Ask the owner to listen to that minute with headphones: each microphone is turned down while its speaker is silent, no word is cut off at the start of a turn, the voices match the lips.", "listen"),
+  ("pl8-start", "The Start row and the bigger cards",
+   "Go to the project list (File > Back to projects). Read it from top to bottom: the heading Start with its three buttons and the line under each name, the tip under them, the heading above the projects, and one project card. Look for the round New project button with a plus that 1.17 had. Open the File menu and read its first item. Make the window narrow (about a third of the screen) and wide again.",
+   "Under \"Start\" three buttons side by side: New video (\"Put videos and photos together\"), Podcast (\"A video and one sound file per speaker\") and Make a short (\"An upright piece of a video you have here\"). Under them one line that starts with \"Tip:\". Then \"Your videos\" and the projects as cards that are bigger than in 1.17: the picture on top with the length on it, the name, \"Edited\" with the date, and the three dots. Open project file is at the top right. There is no round New project button any more; File > New project (Ctrl+N) is still in the menu and does what New video does. In a narrow window the three buttons stay side by side (smaller: an icon and the name) and the projects become one column of rows; nothing is cut off and nothing overlaps. Only if this computer has no project at all, the page says \"Welcome to ClipForge\" and \"Your videos will be listed here. Start with one of the three above, or drop a video file on this window.\" with Open project file: write that down if you see it, and NEVER delete projects to see it.", ""),
+  ("pl8-new", "New video",
+   "Click New video. Read the name at the top of the editor. Add file B (Add > Add from a folder path…). Choose File > Rename project… and call it \"Round 8 start\". Go back with File > Back to projects and read its card.",
+   "New video opens an empty project at once; its name is \"Video\" with today's date (with a number in brackets if that name is taken). Back on the list, the card \"Round 8 start\" shows a picture from B, the length of B on the picture and \"Edited\" with today's date.", ""),
+  ("pl8-podcast", "Podcast: the video, then one sound file per speaker",
+   "Click Podcast and read the window. Click Choose the video (the Windows file window opens: paste the full path of the file into its File name box and press Enter) and pick video V, or file L when there is no V. When the window \"Now the sound files\" shows, read it. With voice files (W for V, or LV1 and LV2 for L): click Choose the sound files, pick them together, type the speakers' names (Sam Taylor, Alex K) and click Add and line up. Without voice files click Later. Rename the project \"Round 8 podcast\" and go back to the projects.",
+   "A window \"Podcast\" says: \"Two steps: 1. Choose the video of the recording. 2. Choose the sound files, one for each speaker. ClipForge lines them up with the video by their sound. No separate sound files? Then step 1 is all you need.\" with the buttons Not now and Choose the video. After the video is in, a window \"Now the sound files\" (\"Choose the sound files of the speakers, all at once if you like. You can also add them later: Add > Voice recording.\") with Later and Choose the sound files, which leads to the same window as Add > Voice recording…. The new project is named \"Podcast\" with the date. At the end the video is on the timeline and each voice is on its own track, lined up with the picture. Write down any step that needed more than the two windows.", ""),
+  ("pl8-short", "Make a short: choose the video it comes from",
+   "On the project list click Make a short. Read the window and choose \"Round 8 long\". Read the window that opens then, name the short \"Round 8 from the start row\", click Make the short and then Stay here. Go back to the projects.",
+   "A window \"Make a short from which video?\" lists the projects that have a video, each with its name and length (at most twelve; with only one such project it is skipped). The chosen project opens and the window of Clip > Make a short from here… opens by itself: it says that the short is a new upright (9:16) project and that this video is not changed. Afterwards the short is in the project list and \"Round 8 long\" is as it was. (On a computer where no project has a video yet, a line says instead: A short is made from a video you already have here. Start with \"New video\", then come back to \"Make a short\".)", ""),
+  ("pl8-tip", "The tip of the day, Don't show tips, and the switch in Settings",
+   "On the project list read the line that starts with \"Tip:\" and copy it into the note. Click Don't show tips at its right and read the message. Open Settings (Ctrl+comma), find \"Show a tip on the project list\", read its line, switch it ON and close Settings. Choose File > Exit, start ClipForge again and read the tip.",
+   "One quiet line \"Tip: …\" about something that is easy to miss (for example I and O for a part, Remove silences, voices recorded separately, Q and W, the search box of Help), with Don't show tips. After the click the line is gone and a message says \"Tips are off. You can turn them back on in Settings.\" Settings > Suggestions has the switch \"Show a tip on the project list\" (\"One line about something that is easy to miss, a new one each day.\"), which is off now; switched on, the tip is back at once, and it is the same tip for the whole day (also after the restart). Nothing on the project list comes from the internet. Write down a tip whose words do not fit the app (a wrong menu, a wrong key).", ""),
+  ("sp8-sections", "The groups of a clip open and close by themselves",
+   "Open \"Round 8 start\" and click clip B. Look at the side panel at the right: write down the headings and which groups are open. Click every heading once, and once more. Then open Speed, Look and Sound at the same time. Click the heading Crop, look at the preview, and click the heading Crop again.",
+   "The settings of the clip are in groups under the headings Speed, Look, Crop, Sound and Transition and fades, each with a small arrow at its right. One click on a heading opens its group, the next closes it, and several can be open at once (in 1.17 exactly one was open). The first time, Speed and Sound are open and the others are closed. A closed group shows a few words about its setting at the right of its heading (the speed, \"100%\" or \"Muted\" for the sound, \"None\" for the transition). Crop is the exception: while it is open the preview shows the crop frame, so it is never opened from memory; its heading closes it again.", ""),
+  ("sp8-dot", "A closed group with a changed setting shows a dot",
+   "With clip B selected open Look and move Brightness a little. Close Look and look at its heading; move the pointer onto the small dot. Open Sound, switch Mute on and close Sound. Open Look again and look for the dot. Then press Ctrl+Z twice, close both groups and look at the headings.",
+   "A closed group in which something is not as it started shows a small dot next to its heading, so nothing is hidden without a sign; the pointer on the dot says \"Something here was changed\". Look shows \"Adjusted\" and Sound shows \"Muted\" at the right. An open group shows no dot (the setting itself is in view). After the two undos the dots are gone.", ""),
+  ("sp8-remember", "The groups are remembered; the groups of a title, a sound and the whole video",
+   "For clip B leave Look open and Speed closed. Choose Add > Title, type Round 8, and click the title on the timeline: read its headings and open Font and colour. Put the playhead at 0:00, add music M (Add > Music or sound…, My files; Music), click the music and read its headings. Click an empty place of the timeline and read the headings. Choose File > Exit, start ClipForge, open \"Round 8 start\" and click clip B, then the title. Open one other project and click a clip there.",
+   "A title: the Text box, then Size and style, Font and colour, Position, Appear and disappear, When it shows (Size and style and Position are open at first). Music: Volume and fades; Where it plays, fit, voice; Clean up, voice focus, quiet parts. Nothing selected: Fade in and out, Music under speech, Shorts and publishing. After the restart every group is as you left it: for the clip Look open and Speed closed, for the title Font and colour open. It is remembered for the app, not for one project: the other project shows the same groups open.", ""),
+  ("sp8-hide", "Hide and show the whole side panel: the menu, the key, the button, Settings",
+   "In \"Round 8 start\" choose View > Show the side panel and look at the window; open the View menu and read the item; choose it again. Press Ctrl+Shift+P twice. Move the pointer onto the small arrow at the top of the panel, read its tooltip and click it; do the same with the button that stays at the right edge. Open Settings, switch Show the side panel off, close Settings and look; switch it on again. Hide the panel once more, choose File > Exit, start ClipForge, open the project, and show the panel again. Then press F1, search for: side panel, and open the article.",
+   "Hidden, the whole panel is gone and the picture and the timeline get its width; a narrow strip with one button stays at the right edge. The menu item View > Show the side panel (Ctrl+Shift+P) has its tick only while the panel shows. The tooltips read \"Hide the side panel (Ctrl+Shift+P)\" and \"Show the side panel (Ctrl+Shift+P)\". The menu item, the key, the button and the switch in Settings > Editing (\"The settings at the right of the editor. Hidden, the picture gets the room; View > Show the side panel brings it back.\") do the same thing and always agree. The choice is kept over a restart. Write down what happens when you click a clip while the panel is hidden. The help article \"The side panel and its groups\" is found and fits what you saw (headings, several open at once, remembered, the dot, Crop as the exception, Ctrl+Shift+P).", ""),
+  ("cl8-ffmpeg", "The card \"One more thing to install: FFmpeg\"",
+   "On the Connect to Claude page look for a card \"One more thing to install: FFmpeg\". If it is there: read it, click Copy the command, paste the command into the note and read the message. Do NOT run the command and install nothing: tell the owner what the card says. If the card is not there, ask the owner whether FFmpeg is installed on this PC and write the answer down.",
+   "The card shows only when the Claude helper would find no FFmpeg on this computer (ClipForge looks in the same places as the helper), and it shows BEFORE anything fails. It says: \"" + _R8_FFMPEG + "\", shows the command on a line of its own and has the buttons Copy the command (\"The command was copied.\") and \"I installed it: check again\". The pasted text is exactly: winget install ffmpeg. With FFmpeg installed there is no such card. FAIL if the owner says FFmpeg is not installed and the page has no card, or if the Test of the next step fails for want of FFmpeg while the page said nothing.", ""),
+  ("sm8-whatsapp", "WhatsApp / Telegram and Video size 720p: exactly 1280 × 720",
+   "Open \"Round 8 start\" (file B, filmed wide). Press Ctrl+E, click WhatsApp / Telegram and copy the size it shows; export as r8-whatsapp.mp4 into clipforge-test-output and check the file (right-click > Properties > Details > Frame width / height). Choose View > Video size > 720p, press Ctrl+E, choose Custom, copy the size and cancel. Put View > Video size back to Same as the first clip. Ask the owner whether one of the test videos is only ALMOST wide (for example 1916 × 1080, from a screen recording or a phone): if yes, do the same with it in a new project and write down its own size.",
+   "A wide video comes out at exactly 1280 × 720 for WhatsApp / Telegram and with Video size 720p, in the window and in the file. With 1.17 a video that was almost 16:9 came out at 1278 × 720. Any width other than 1280 for a wide video is a FAIL: write down the size of the source video too. (An upright video gives 720 × 1280.)", ""),
+  ("sm8-share", "Share project file: your own file name still ends in .clipforge.zip",
+   "On the project list open the three dots of \"Round 8 start\" and choose Share project file. In the save window go to clipforge-test-output, read the name it offers, REPLACE it by r8-own-name (type no ending) and save. Look into the folder with Explorer. Then choose File > Open project file… and pick the file.",
+   "The offered name ends in .clipforge.zip. The file that is written is r8-own-name.clipforge.zip although you typed the name without an ending (1.17 could save it without the ending, and such a file was not offered when opening), and no second, empty file named r8-own-name is left next to it. A message says \"Project file saved: …\". Open project file… takes the file and adds a project with a free name (\"Round 8 start (2)\").", ""),
+  ("win8-delete", "Delete a test project: the exact message if it cannot be deleted",
+   "Use ONLY a project this round made: the copy \"Round 8 start (2)\" that the step before added (if there is none: three dots of \"Round 8 start\" > Duplicate, and use that copy). NEVER one of the owner's projects. Click its three dots > Delete, read the question and click Delete. Wait ten seconds and read the list. If any message appears, copy it letter for letter. Then, in Explorer, open Documents > ClipForge (change nothing there) and copy the path from the address bar into the note.",
+   "The question \"Delete project?\" names the project and says that copies the app made for it are deleted too, and that files in your own folders are not touched. After Delete the card is gone, and it is still gone after ClipForge was closed and started again. If instead a message starts with \"Could not delete the project.\", copy ALL of it (the part in brackets is what the maker needs), write down whether the card is still in the list, and whether the path of the projects folder has \"OneDrive\" in it (Windows may keep Documents inside OneDrive, which can hold on to files). This step is a note for the maker: PASS when the project was deleted, Partial with the copied message when it was not. Do not try other ways to delete it, and delete nothing in Explorer.", ""),
+]}
+
+R8_LAYOUT = [
+ ("Update and start", ["up-before", "up-run", "st-version", "st-notes", "st-projects"]),
+ ("The long file: adding it always ends, saved projects open without a freeze, Only when speaking exports (FIRST PRIORITY)",
+  ["lf-import", R8_NEW["lf8-cancel"], "lf-responsive", "lf-restart", R8_NEW["lf8-reopen"], "lf-voices", "lf-voices-restart", R8_NEW["ows8-real"],
+   "lf-stop", "lf-waves-off", "lf-silences", "lf-perf"]),
+ ("The project list (new in 1.18)", [R8_NEW[s] for s in ("pl8-start", "pl8-new", "pl8-podcast", "pl8-short", "pl8-tip")]),
+ ("The side panel folds (new in 1.18)", [R8_NEW[s] for s in ("sp8-sections", "sp8-dot", "sp8-remember", "sp8-hide")]),
+ ("Connect to Claude page (the FFmpeg card and \"Updating the helper…\" are new in 1.18)", ["cl-page", R8_NEW["cl8-ffmpeg"], "cl-test", "cl-connect"]),
+ ("Smaller things changed in 1.18", [R8_NEW[s] for s in ("sm8-whatsapp", "sm8-share", "win8-delete")]),
+ _REST,
+]
+
+STEPS_8 = _next_round(STEPS_7, R8_LAYOUT, R8_STEP, "8")
+
+# What "make a new project" and "the side panel" mean in 1.18: one more line
+# of the instructions (the Mac round reads it with Cmd).
+_R8_TIP = _line_of(INSTR_7, "- A thin line with a tip") + "\n"
+_R8_NEW_LINES = (
+  "- NEW IN 1.18, for every step: the project list has no round New project button any more. \"Make a new project\" means: click New video in the Start row of the project list (or File > New project, Ctrl+N), then name it with File > Rename project…. Under the Start row a line \"Tip: …\" may show: that is the tip of the day, not a fault.\n"
+  "- NEW IN 1.18, for every step: the settings in the side panel are in groups that open and close with a click on their heading (Speed, Look, Sound, Transition and fades; for a title Size and style, Font and colour, Position, …). If a step names a setting you do not see, open its group. If the whole panel is gone, View > Show the side panel (Ctrl+Shift+P) brings it back.\n")
+_R8_STOPS = "- Then check whether the last thing you did was saved, and go on with the next step."
+_R8_ADDING = "- If the window \"Adding file…\" stays: wait and click nothing. After about 6 seconds it says that this is taking longer than usual; after 45 seconds ClipForge stops by itself with a message. Copy that message, then paste Help > Copy version info into the Crash box. Only if nothing has happened after 60 seconds press Cancel (or Esc), and write that down.\n"
+_R8_SUMMARY = ("fill in the Summary box (the long file first, then the most important problems)",
+               "fill in the Summary box (first group %s: did adding the long file end, how long did saved projects take to open, did the export with Only when speaking finish; then the most important problems)")
+
+def _instr8():
+    new_last = _group_of(STEPS_8, "sm8-share")
+    long = _group_of(STEPS_8, "lf-import")
+    intro = ("You are testing ClipForge 1.18.0 (build 140), a video editor, on the owner's Windows PC. Problems are expected; your job is to find them and write them down precisely. "
+             "Version 1.18 repairs what a real test of 1.17 found (adding a very large video never ended; the app stopped answering for 100 seconds after a saved project opened; an export with Only when speaking was refused) and brings a project list with a Start row, a side panel whose groups fold away, and a note about FFmpeg on the Connect to Claude page. "
+             "This round has __NSTEPS__ numbered steps in __NGROUPS__ groups (A to %s). Groups A to %s are the update and everything 1.18 changed: THEY MATTER MOST. If time runs out, do those, and group %s (the long file) before all others. The groups after %s are the whole of round 7 again, as a full regression test of every feature. "
+             "The Android phone has its own page (Round 8 phone) and the Claude tools their own document (Claude control test 6)."
+             % (chr(64 + len(STEPS_8)), new_last, long, new_last))
+    return _next_instr(INSTR_7, intro, [
+        (_line_of(_r8_text(INSTR_7), "- Do the groups in order:"),
+         "- Do the groups in order: later steps build on the projects made earlier (\"Round 8 long\", \"Round 8 start\", \"Round 8 test\", \"Round 8 two voices\", \"Round 8 basics\"). If time runs out: groups A to %s matter most (the update and what 1.18 changed), group %s first; the groups after them repeat round 7. Say in the Summary where you stopped." % (new_last, long)),
+        (_R8_TIP, _R8_TIP + _R8_NEW_LINES),
+        (_R8_STOPS, _R8_ADDING + _R8_STOPS),
+        (_R8_SUMMARY[0], _R8_SUMMARY[1] % long),
+    ], "8")
+
+INSTR_8 = _instr8()
+
+# ---------------------------------------------------------------- round 8, phone (1.18.0)
+# Round 7-phone for 1.18.0: the update, the long video ("Adding file…"
+# ends, saved projects open), the project list with its Start row in one
+# column, the sheets of a title and of a sound with their groups, Only when
+# speaking in the export; then every other group of round 7-phone.
+R8P_STEP = {
+ "p-before": dict(
+   sub=[("On a phone that still has 1.15 or 1.16:", "On a phone that still has 1.17 (or an older version):")]),
+ "p-updated": dict(
+   title="\"What's new in 1.18.0\" after the update",
+   do="Look at the top of the project list. If a card \"What's new in 1.18.0\" is there, read its lines and write them down, tap All release notes, go back, and look whether the card is gone (if not, tap its cross). (It appears once. If the owner already closed it, ask what it said and set Not tested with the answer.)",
+   exp="A card with the title \"What's new in 1.18.0\", two or three short lines from the release notes, a small line \"Updated to 1.18.0\", the link All release notes and a cross; all of it fits the width of the phone. All release notes opens Help on the page that starts with 1.18.0. (Until 1.17 this was one line \"Updated to …\".) No message says that an update did not work. (The note \"Two keys changed\" is for computers: it should NOT appear on the phone. Write it down if it does.)"),
+ "p-long-import": dict(
+   sub=[("Tap New project, choose it in the picker and confirm.", "Tap New video (the first of the three buttons under \"Start\"; the round New project button of 1.17 is gone), choose it in the picker and confirm.")],
+   exp_add="FIRST PRIORITY, new in 1.18: \"Adding file…\" always ends. The small window has a Cancel button, and the phone's back button closes it too. If it stays, after about 6 seconds it also says \"" + _R8_SLOW + "\", and after 45 seconds ClipForge gives up by itself with a message that names the file (\"" + _R8_GAVE_UP + "\"). If the video is NOT added: copy the message, write down how many seconds it took and how big the file is, do the step \"The performance log\" at once and set FAIL."),
+ "p-new": dict(
+   sub=[("Tap New project. In the phone's picker choose video A", "Tap New video. In the phone's picker choose video A")]),
+ "p-ows-on": dict(
+   sub=[("New project \"Round 8 phone voices\" with the video;", "Tap New video, add the video and rename the project to Round 8 phone voices;")],
+   do_add="(If the step \"Make a short and Podcast from the Start row\" already made \"Round 8 phone podcast\" with the voices in it, use that project and do not make a new one.)"),
+ "p-shm-short": dict(
+   sub=[("New project with video B only (shorter than 45 seconds), rename it", "Make a new project (New video) with video B only (shorter than 45 seconds), rename it")]),
+ "p-title": dict(
+   do_add="(In 1.18 the sheet has groups: the fonts are under Font and colour and Appear is under Appear and disappear, both closed at first: tap the heading.)"),
+ "p-music": dict(
+   exp_add="In 1.18 these settings are under three headings: Volume and fades; Where it plays, fit, voice; Clean up, voice focus, quiet parts."),
+ "p-settings": dict(
+   sub=[("Suggestions (Show suggestions; ", "Suggestions (Show suggestions, Show a tip on the project list; ")],
+   exp_add="Show a tip on the project list is new in 1.18. There is no switch \"Show the side panel\" on the phone (a phone has no side panel)."),
+ "p-exp-dest": dict(
+   exp_add="Write down the exact numbers. (Fixed in 1.18: a video that is almost 16:9 comes out 1280 wide for WhatsApp / Telegram, not 1278.)"),
+}
+
+R8P_NEW = {st[0]: st for st in [
+  ("p8-reopen", "Opening saved projects: no wait, no freeze",
+   "Three times in all: on the project list tap \"Round 8 phone long\" (or another saved project of 5 minutes or more; only open and play it), and tap Play as soon as the editor shows. Count the seconds until the picture moves. Go back each time. Before the third time close ClipForge completely (recent apps, swipe it away) and open it again. If a wait is longer than 5 seconds, or the app does not react to taps, do the step \"The performance log\" right afterwards.",
+   "Each time the editor shows within a second or two and the video plays within about 5 seconds; taps are answered the whole time (mirroring adds its own delay: ask the owner how it felt on the phone itself). Write down the three times. (With 1.17 a computer did not answer for 100 seconds right after a saved project had opened; the cause was a question to the preview player, which now gives up after two seconds. This step checks that the phone is fine too.) FAIL for any wait over 5 seconds.", ""),
+  ("p8-list", "The Start row, the cards in one column, the tip",
+   "Go to the project list and read it from the top: \"Start\" with its three buttons, the tip, \"Your videos\" and the cards. Long-press Podcast and then Make a short and read the small text that appears (if a long-press cannot be done through mirroring, say so). Look for the round New project button with a plus that 1.17 had. Scroll to the end of the list and back.",
+   "Under \"Start\" three buttons side by side, each with an icon and a name: New video, Podcast, Make a short. A long-press shows one line for each (\"A video and one sound file per speaker\", \"An upright piece of a video you have here\"). Under them one line \"Tip: …\" with Don't show tips. Then \"Your videos\" and the projects in ONE column: each row with its picture and the length on it, the name, \"Edited\" with the date and the three dots. There is no round New project button any more. Nothing is cut off or overlaps, and the Start row scrolls away with the list. Ask the owner, with a thumb on the phone: are the three buttons and the three dots easy to hit? (On a phone without any project the page says \"Welcome to ClipForge\" and \"Your videos will be listed here. Start with one of the three above.\" with Open project file: NEVER delete projects to see it.)", ""),
+  ("p8-start", "Make a short and Podcast from the Start row",
+   "Tap Make a short. If a list \"Make a short from which video?\" shows, choose \"Round 8 phone long\". Read what opens and tap Cancel; go back to the project list. Tap Podcast, read the window and tap Not now; go back to the list and delete the empty project this made, if one is there (its three dots > Delete; it is named Podcast with today's date). Only if the phone has a video with one sound file per speaker (ask the owner): tap Podcast again, tap Choose the video and pick it, then Choose the sound files and pick them, name the speakers Sam Taylor and Alex K, tap Add and line up, and rename the project to Round 8 phone podcast.",
+   "Make a short: a list \"Make a short from which video?\" with the name and the length of every project that has a video (with only one such project the list is skipped); the chosen project opens and the window of Make a short from here… opens by itself. Podcast: a window \"Podcast\" with two steps (1. Choose the video of the recording. 2. Choose the sound files, one for each speaker; ClipForge lines them up with the video by their sound) and \"No separate sound files? Then step 1 is all you need.\", with Not now and Choose the video. After the video a window \"Now the sound files\" with Later and Choose the sound files leads to the same sheet as Add > Voice recording. The new project is named \"Podcast\" with the date, and the voices are lined up, each on its own row.", ""),
+  ("p8-tip", "Don't show tips, and the switch in Settings",
+   "On the project list write the tip down. Tap Don't show tips and read the message. Tap the three dots > Settings, find \"Show a tip on the project list\", read its line, switch it on and go back.",
+   "The tip is about something that is easy to miss; if it names a key or a menu of the computer, write it down. After the tap the line is gone and a message says \"Tips are off. You can turn them back on in Settings.\" Settings > Suggestions has the switch \"Show a tip on the project list\" (\"One line about something that is easy to miss, a new one each day.\"), off now; switched on, the tip is back on the list.", ""),
+  ("p8-title-sheet", "The sheet of a title has groups",
+   "In \"Round 8 phone\" tap the title on the timeline and tap Edit. Read the sheet from top to bottom: write down the headings and which groups are open. Tap every heading once, and once more. Open Font and colour, choose another font, close the group and look at its heading. Close the sheet, tap a caption, tap Edit and look which groups are open. Close ClipForge completely, open it again, open the project and tap the title > Edit.",
+   "The sheet has the Text box and under it five headings: Size and style, Font and colour, Position, Appear and disappear, When it shows. At first Size and style and Position are open. A tap on a heading opens or closes its group, and several can be open. A closed group shows a few words about its setting at the right (the size, the font, the times), and a small dot next to the heading when something in it was changed: Font and colour has the dot after another font was chosen. Everything can be reached with little scrolling and the keyboard does not hide the Text box. Which groups are open is remembered: the caption's sheet shows the same, and so does the title's sheet after ClipForge was closed and opened again.", ""),
+  ("p8-sound-sheet", "The sheet of a sound has groups",
+   "Tap the music on its row and open its settings (Edit). Read the headings; tap each one once, and once more. Close \"Volume and fades\", close the sheet and open it again. Open \"Volume and fades\", set Volume to about half, close the group and read its heading. Set Volume back.",
+   "Three headings: Volume and fades; Where it plays, fit, voice; Clean up, voice focus, quiet parts. All three are open at first. They open and close with a tap and are as you left them when the sheet opens again. Closed, Volume and fades shows the volume at its right (\"50%\"). Every setting that 1.17 had is still there, inside one of the groups (Volume, Fade in, Fade out, Fit music to video, Track, Credits, Quiet parts): write down any that you cannot find.", ""),
+  ("p8-ows-export", "Only when speaking is in the export too (refused in 1.17 for a long recording)",
+   "Only with the project of the step before (voice files, Only when speaking on); a recording of several minutes is best. Tap Export > Custom > Small file (or WhatsApp / Telegram) and export. Write down the length of the project and how long the export took. Play 30 seconds of the video from the gallery in which the speakers take turns.",
+   "The export runs to 100 % and ends with \"Video saved\". With 1.17 a computer refused such an export when the recording was several minutes long, with a message that ended with: its FFmpeg has no \"if\" filter. If ANY message stops the export, copy it exactly and set FAIL. Ask the owner to listen on the phone: it sounds like the preview with Only when speaking on.", "listen"),
+]}
+
+R8P_LAYOUT = [
+ ("Update", ["p-before", "p-update", "p-version", "p-updated", "p-keeps"]),
+ ("A long video: adding it always ends, saved projects open without a freeze (FIRST PRIORITY)",
+  ["p-long-import", "p-long-use", "p-long-reopen", R8P_NEW["p8-reopen"], "p-perf"]),
+ ("The project list (new in 1.18)", [R8P_NEW[s] for s in ("p8-list", "p8-start", "p8-tip")]),
+ ("The test project; the sheets of a title and of a sound have groups (new in 1.18)", ["p-new", R8P_NEW["p8-title-sheet"], R8P_NEW["p8-sound-sheet"]]),
+ ("Only when speaking, also in the export", ["p-ows-none", "p-ows-on", R8P_NEW["p8-ows-export"]]),
+ _REST,
+]
+
+STEPS_8P = _next_round(STEPS_7P, R8P_LAYOUT, R8P_STEP, "8-phone")
+
+def _instr8p():
+    new_last = _group_of(STEPS_8P, "p8-ows-export")
+    long = _group_of(STEPS_8P, "p-long-import")
+    intro = ("You are testing ClipForge 1.18.0 (build 140), a video editor, on the owner's Android phone. You work on the owner's Windows PC and see and touch the phone through \"Link to Windows\" (the PC app is called Phone Link): the phone's screen is shown in a window on the PC. This checklist page is open in a browser on the PC. Problems are expected; your job is to find them and write them down precisely. "
+             "Version 1.18 repairs what a real test of 1.17 found (adding a very large video never ended; the app stopped answering after a saved project opened; an export with Only when speaking was refused) and brings a project list with a Start row and sheets whose groups fold away. "
+             "This round has __NSTEPS__ numbered steps in __NGROUPS__ groups (A to %s). Groups A to %s are the update and everything 1.18 changed on a phone: THEY MATTER MOST. If time runs out, do those, and group %s (the long video) before all others. The groups after %s are the whole of round 7 phone again, as a full regression test. "
+             "Speech to text and Claude control are computer only and are not part of this page."
+             % (chr(64 + len(STEPS_8P)), new_last, long, new_last))
+    stops = _line_of(_r8_text(INSTR_7P), "- Then tap the three dots on the project list > Copy version info")
+    sheets = "- Sheets open from the bottom; swipe them down or tap outside to close them."
+    return _next_instr(INSTR_7P, intro, [
+        ("HOW THE PHONE APP IS LAID OUT IN 1.17 (names as on the screen)", "HOW THE PHONE APP IS LAID OUT IN 1.18 (names as on the screen)"),
+        ("- Project list: New project and Open project file; ? (Help) and three dots",
+         "- Project list (new in 1.18): under \"Start\" the three buttons New video, Podcast and Make a short, then one line \"Tip: …\", then \"Your videos\" in one column. The round New project button is gone: \"make a new project\" means New video. Open project file, ? (Help) and three dots"),
+        (sheets, sheets + " The sheets of a title and of a sound have groups under headings (new in 1.18): tap a heading to open or close its group, and if a step names a setting you do not see, open its group."),
+        (_line_of(_r8_text(INSTR_7P), "- Do the groups in order:"),
+         "- Do the groups in order: later steps build on the projects \"Round 8 phone long\" and \"Round 8 phone\". If time runs out: groups A to %s matter most (the update and what 1.18 changed), group %s first; the groups after them repeat round 7 phone. Say in the Summary where you stopped." % (new_last, long)),
+        (stops, "- If the window \"Adding file…\" stays: wait. After about 6 seconds it says that this is taking longer than usual; after 45 seconds ClipForge stops by itself with a message. Write the message down. Only if nothing has happened after 60 seconds tap Cancel (or the back button), and write that down.\n" + stops),
+        ("fill in the Summary box (the long video first, then the most important problems;",
+         "fill in the Summary box (first group %s: did adding the long video end, how long did saved projects take to open; then the most important problems;" % long),
+    ], "8-phone")
+
+INSTR_8P = _instr8p()
+
+# ---------------------------------------------------------------- round 8, Mac (1.18.0)
+# Round 8 on a Mac: the Mac derivation of round 8 (as round 7-mac is of
+# round 7). The Mac table of round 7 (MAC_STEP, MAC_A) goes through
+# _r8_text; MAC_STEP_8 then replaces single keys of a step (None takes a
+# key away) and adds the changes for the new round 8 steps; MAC_A_STEP_8
+# changes the Mac's own steps of group A. New for the Mac in 1.18: the line
+# "Move ClipForge to the Applications folder" with its help article, Cmd+?
+# opens Help, tooltips say Cmd, Cmd+comma with any keyboard layout, and
+# whisper.cpp without an installed FFmpeg. The round 7 Mac test ran 1.17
+# from the download (macOS ran it from a temporary place) and skipped the
+# install and update steps, so the in-app update has still never run on a
+# real Mac: it can only work for the copy in Applications.
+_MAC_FFMPEG = "Claude control needs the free program FFmpeg on this Mac: open Terminal and run \"brew install ffmpeg\" (this needs Homebrew from https://brew.sh), then quit and reopen Claude. The ClipForge app itself works without it; only Claude needs it, to read, render and export videos."
+
+MAC_STEP_8 = {
+ "up-before": dict(
+   sub=[("Start ClipForge from the Windows Start menu.", "Only in case (2) of the first step: an OLDER ClipForge is in Applications. Otherwise set Not tested for this step and the next two and say why. Start ClipForge from Applications (that copy, not one in the Downloads folder: the update only works for the copy in Applications)."),
+        ("On a PC that still has 1.17 (or an older version):", "On a Mac with a version older than 1.18.0:"),
+        ("(ask the owner: in-app update or the installer)", "(ask the owner)")]),
+ "up-run": dict(
+   title="The in-app update to 1.18.0, from the copy in Applications (never run on a real Mac before)",
+   exp_add=_r8_text(MAC_STEP["up-run"]["exp_add"]) + " (The round 7 test on a Mac skipped this step: ClipForge 1.17 had been opened from the download, which macOS runs from a hidden temporary place, and from there no update can work. Since 1.18 the project list says so: see the step about the Applications folder below.)"),
+ "st-notes": dict(
+   do_add="After a fresh install from the zip (no update) no card is expected: set Not tested and write \"fresh install\", or write down what did appear."),
+ "key-comma": dict(
+   exp="Settings opens each time, also when nothing on the page has the keyboard, and (fixed in 1.18 for the Mac) also with a keyboard layout on which that key types another letter. On the Mac this key belongs to the menu item File > Settings… (Cmd+,); since 1.18 ClipForge also answers the key itself when the menu bar did not. Write down exactly what happened with the second layout. Without a second layout set Partial and say so."),
+ "sm-menus-2": dict(
+   sub=[p for p in [(_r8_text(a), _r8_text(b)) for a, b in MAC_STEP["sm-menus-2"]["sub"]] if not p[0].startswith("View: Zoom in")]
+       + [("Show the side panel (Cmd+Shift+P; new in 1.18) |", "Show the side panel (Cmd+Shift+P; new in 1.18; a switched-on item has a ✓ after its name) |")]),
+ "so-waves": dict(
+   sub=None,
+   exp_add="On a Mac press Cmd+Right and Cmd+Left: Ctrl with an arrow key usually belongs to macOS (it switches desktops). Since 1.18 the tooltips name Cmd on a Mac (in 1.17 they said Ctrl): write down any that still says Ctrl."),
+ "sp-run": dict(
+   exp_add="New in 1.18 for the Mac: with whisper.cpp ClipForge reads the sound with the FFmpeg inside the app (\"Reading the sound…\"), so no ffmpeg has to be installed. If it stops with \"Reading the sound needs FFmpeg, which was not found on this computer.\", copy that and set FAIL (that message was right in 1.17 and should not come any more with whisper.cpp)."),
+ "lf8-cancel": dict(
+   do_add="On the Mac also try this, the next time the window stays: choose File > Back to projects in the menu bar while \"Adding file…\" shows (the menu bar of a Mac stays usable above such a window).",
+   exp_add="File > Back to projects cancels the adding and goes back to the project list; nothing is added. (In the round 7 test on a Mac neither Esc nor Back to projects led out, and there was no Cancel.)"),
+ "lf8-reopen": dict(
+   sub=[("(it turns pale, or \"Not responding\" shows in its title)", "(the pointer becomes the spinning coloured wheel and clicks do nothing)"),
+        ("The same code runs on Windows.)", "This is the step that shows whether that is repaired: use the same project and the same video as then if the owner still has them.)")]),
+ "pl8-podcast": dict(
+   sub=[("(the Windows file window opens: paste the full path of the file into its File name box and press Enter)", "(the macOS file window opens: press Cmd+Shift+G, paste the full path of the file, press Return and then Open)")]),
+ "cl8-ffmpeg": dict(
+   sub=[("\"" + _mac_text(_R8_FFMPEG) + "\"", "\"" + _MAC_FFMPEG + "\""),
+        ("The pasted text is exactly: winget install ffmpeg.", "The pasted text is exactly: brew install ffmpeg.")],
+   exp_add="In the round 7 test on a Mac the helper's self-test failed for want of FFmpeg and nothing on the page had said so: this card is the repair. Do not open Terminal on your own."),
+}
+
+# The Mac's own new steps.
+MAC8_NEW = {st[0]: st for st in [
+  ("mac8-applications", "The line \"Move ClipForge to the Applications folder\" and its help article",
+   "Look at the top of the project list. If a line that starts with \"Move ClipForge to the Applications folder\" is there: copy ALL of its text into the note, click Show me how, read the article and close Help. Do not close the line with its cross and move nothing yet: tell the owner what it says. If no such line is there, read the \"Folder:\" line of Help > Copy version info once more. In both cases press Cmd+?, search for: applications folder, and open the article \"Move ClipForge to the Applications folder (Mac)\".",
+   "The line shows ONLY when this ClipForge does not run from the Applications folder (/Applications, or Applications in the home folder), or when macOS runs it from a hidden temporary copy (the \"Folder:\" line then has \"/AppTranslocation/\" in it). It reads \"Move ClipForge to the Applications folder so it can update itself.\"; when another copy is in Applications it goes on with \"An older ClipForge (its version) is in the Applications folder: replace it with this one.\" It has Show me how and a cross, and it stays until it is closed with the cross (it is not shown only once). ClipForge moves nothing by itself. When the \"Folder:\" line is /Applications/ClipForge.app there is NO such line: after the install steps of this group that is the expected case, and the step is PASS when the line is absent and the article is found. The article has numbered steps (quit with Cmd+Q, Finder, drag ClipForge into Applications, Replace) and says that projects and videos are not touched. FAIL if ClipForge does not run from Applications and no line says so, or if the line shows although it does.", ""),
+  ("mac8-keys", "Cmd+? opens Help; tooltips say Cmd",
+   "On the project list press Cmd+? (that is Cmd+Shift+/). Close Help. Open a project, click a clip and press Cmd+? again; close Help. Open the Help menu with the mouse and read the key next to ClipForge Help. Then move the pointer onto the two double arrows next to Play (the speech starts) and onto the small arrow at the top of the side panel, and read the tooltips.",
+   "Cmd+? opens ClipForge Help each time, on the project list and in a project. (In 1.17 it did nothing that could be seen on a Mac: macOS gives that key to the search box of the Help menu before the menu item gets it.) If the Help menu with its search box opens instead, or nothing happens, set FAIL and write down exactly what you see. The tooltips name Cmd, never Ctrl: \"Previous speech start (Cmd+Left)\", \"Next speech start (Cmd+Right)\", \"Hide the side panel (Cmd+Shift+P)\". Write down every tooltip, note or message that still says Ctrl. (The help article \"Keyboard shortcuts\" is written with Ctrl and says so at its top: that one is not a finding.)", ""),
+]}
+
+MAC_A_STEP_8 = {
+ "mac-before": dict(
+   exp_add="If the ClipForge that is normally opened on this Mac is NOT the one in Applications (for example a newer one that was opened from the Downloads folder while an older one is still in Applications), write down both versions and where each one is. That is case (2): the in-app update is tested with the copy in Applications."),
+}
+
+def _mac8_table():
+    t = {}
+    for sid, o in MAC_STEP.items():
+        t[sid] = {k: ([(_r8_text(a), _r8_text(b)) for a, b in v] if k == "sub" else _r8_text(v)) for k, v in o.items()}
+    for sid, o in MAC_STEP_8.items():
+        t[sid] = {k: v for k, v in dict(t.get(sid, {}), **o).items() if v is not None}
+    return t
+
+def _mac8_a():
+    own = {s[0] for s in MAC_A[1] if not isinstance(s, str)}
+    assert set(MAC_A_STEP_8) <= own, "MAC_A_STEP_8 names a step group A of round 7-mac does not have"
+    items = []
+    for s in MAC_A[1]:
+        if not isinstance(s, str):
+            s = _changed((s[0], _r8_text(s[1]), _r8_text(s[2]), _r8_text(s[3]), s[4]), MAC_A_STEP_8.get(s[0], {}), "8-mac")
+        items.append(s)
+        if s == "st-version": items.append(MAC8_NEW["mac8-applications"])
+        if s == "cl-page": items.append("cl8-ffmpeg")
+    assert MAC8_NEW["mac8-applications"] in items and "cl8-ffmpeg" in items
+    return ("A. Install, update and Claude on this Mac (the install and the update have never run on a real Mac)", items)
+
+STEPS_8M = _mac_steps(STEPS_8, _mac8_table(), _mac8_a(), {}, skip=("win8-delete",),
+                      after={"sm8-share": [MAC8_NEW["mac8-keys"]]}, rnd="8")
+
+def _instr8m():
+    new_last = _group_of(STEPS_8M, "sm8-share")
+    long = _group_of(STEPS_8M, "lf-import")
+    intro = ("You are testing ClipForge 1.18.0 (build 140), a video editor, on the owner's Mac (a MacBook Air with an Apple chip). You work on the Mac itself; this checklist page is open in a browser on the Mac. Problems are expected; your job is to find them and write them down precisely. "
+             "Version 1.17 was tested on a real Mac, and 1.18 repairs what that test found: \"Adding file…\" never ended for a video of 8 GB; ClipForge did not answer for 100 seconds after a saved project opened; an export with Only when speaking was refused; the Claude helper could not find FFmpeg and nothing said so; ClipForge ran from the download instead of the Applications folder, where it cannot update itself; Cmd+? did nothing. Check each of these with care and write down exactly what you see, also when it works. The install from the zip and the in-app update were skipped in that test and have still never run on a real Mac. 1.18 also brings a project list with a Start row and a side panel whose groups fold away. "
+             "This round has __NSTEPS__ numbered steps in __NGROUPS__ groups (A to %s). Groups A to %s are the install or update and everything 1.18 changed: THEY MATTER MOST. If time runs out, do those, and group %s (the long file) before all others. The groups after %s are the whole of round 7 again, as a full regression test of every feature. It is the Windows round 8 adapted for macOS. The Claude tools have their own document (Claude control test 6)."
+             % (chr(64 + len(STEPS_8M)), new_last, long, new_last))
+    return _next_instr(INSTR_7M, intro, [
+        (_line_of(_r8_text(INSTR_7M), "- Do the groups in order:"),
+         "- Do the groups in order: later steps build on the projects made earlier (\"Round 8 long\", \"Round 8 start\", \"Round 8 test\", \"Round 8 two voices\", \"Round 8 basics\"). If time runs out: groups A to %s matter most (the install or update, the Claude page and what 1.18 changed), group %s first; then the export (group %s) and speech to text (group %s); the other groups repeat round 7. Say in the Summary where you stopped."
+         % (new_last, long, _group_of(STEPS_8M, "ex-full"), _group_of(STEPS_8M, "sp-open"))),
+        (_R8_TIP, _R8_TIP + _mac_text(_R8_NEW_LINES)),
+        (_R8_STOPS, _R8_ADDING.replace("press Cancel (or Esc)", "press Cancel (or Esc, or choose File > Back to projects)") + _R8_STOPS),
+        (_R8_SUMMARY[0], _R8_SUMMARY[1] % long),
+    ], "8-mac")
+
+INSTR_8M = _instr8m()
+
+# Every entry of the round 8 text table must still find something in round 7.
+for _a, _b in _R8_TEXT:
+    assert any(_a in t for t in [INSTR_7, INSTR_7P, INSTR_7M] + [x for S in (STEPS_7, STEPS_7P) for _, items in S for st in items for x in st[1:4]]), "round 8: round 7 no longer has the text: " + _a
+
 ROUNDS = {
  "3": dict(steps=STEPS_3, instr=INSTR_3,
          opts=["", "Works", "Problem", "Partial", "Not tested", "Needs a person"], result="Status",
@@ -2252,6 +2742,24 @@ ROUNDS = {
          device="e.g. Windows 11 laptop, RTX 4070",
          note="What happened? Copy texts and numbers the step asks for; Owner: for what the owner saw or heard",
          crash="If the app closed by itself or froze: what were you doing?"),
+ "8": dict(steps=STEPS_8, instr=INSTR_8, numbered=True,
+         opts=["", "PASS", "FAIL", "Partial", "Not tested", "Needs the owner"], result="Result",
+         tags={"listen": "ask the owner to listen", "watch": "ask the owner to watch"},
+         device="e.g. Windows 11 laptop, RTX 4070",
+         note="What happened? Copy texts and numbers the step asks for; Owner: for what the owner saw or heard",
+         crash="If the app closed by itself, froze or stopped answering: the time, the step, what was on screen. Then paste Help > Copy version info here (it carries the performance log)."),
+ "8-mac": dict(steps=STEPS_8M, instr=INSTR_8M, numbered=True, title="ClipForge test round 8: Mac",
+         opts=["", "PASS", "FAIL", "Partial", "Not tested", "Needs the owner"], result="Result",
+         tags={"listen": "ask the owner to listen", "watch": "ask the owner to watch"},
+         device="e.g. MacBook Air M3, macOS 15.6",
+         note="What happened? Copy texts and numbers the step asks for; Owner: for what the owner saw or heard",
+         crash="If the app closed by itself, froze or stopped answering: the time, the step, what was on screen. Then paste Help > Copy version info here (it carries the performance log), and the text of the Report… button if macOS said that ClipForge quit unexpectedly."),
+ "8-phone": dict(steps=STEPS_8P, instr=INSTR_8P, numbered=True, title="ClipForge test round 8: Android phone",
+         opts=["", "PASS", "FAIL", "Partial", "Not tested", "Needs the owner"], result="Result",
+         tags={"listen": "ask the owner to listen", "watch": "ask the owner to watch"},
+         device="e.g. Samsung Galaxy S23, Android 15, via Link to Windows",
+         note="What happened? Start with Owner: for what the owner saw or heard",
+         crash="If the app closed by itself, froze or stopped answering: the time, the step, what was on screen (include any message Android showed, and what Copy version info gave)."),
  "7": dict(steps=STEPS_7, instr=INSTR_7, numbered=True,
          opts=["", "PASS", "FAIL", "Partial", "Not tested", "Needs the owner"], result="Result",
          tags={"listen": "ask the owner to listen", "watch": "ask the owner to watch"},
@@ -2289,7 +2797,7 @@ ap = argparse.ArgumentParser(description="Generate a ClipForge test checklist.")
 ap.add_argument("output", help="the HTML file to write")
 ap.add_argument("--build", required=True, help='the build to test, e.g. "ClipForge 1.4.0 (build 21) · 16 Nov 2026, 07:20 UTC · 877e482"')
 ap.add_argument("--round", default=DEFAULT_ROUND, choices=sorted(ROUNDS), help="test round (default: %s); picks the steps, title and browser storage" % DEFAULT_ROUND)
-ap.add_argument("--media-folder", default="", help='rounds 7, 7-mac and 7-phone: the folder with the test files, written into the line "MEDIA FOLDER: ..." of the instructions (default: the placeholder stays)')
+ap.add_argument("--media-folder", default="", help='rounds 7 and 8 (also -mac and -phone): the folder with the test files, written into the line "MEDIA FOLDER: ..." of the instructions (default: the placeholder stays)')
 args = ap.parse_args()
 R = ROUNDS[args.round]
 MEDIA_LINE = "MEDIA FOLDER: <owner fills in>"
